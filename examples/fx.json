@@ -1,0 +1,10 @@
+{
+  "schema": "monitoring.fx.v1",
+  "base": "USD",
+  "as_of": "2026-11-02T00:00:00Z",
+  "provenance": "fictional-rate",
+  "rates": {
+    "EUR": "0.9",
+    "INR": "80"
+  }
+}

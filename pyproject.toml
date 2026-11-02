@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "monitoring-ai"
+version = "0.1.0a1"
+description = "Local AI session and usage observatory with a reusable read contract"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [{name = "Pradeep Tathineni"}]
+dependencies = []
+
+[project.scripts]
+monitoring-ai = "monitoring_ai.cli:main"
+
+[tool.setuptools.package-data]
+monitoring_ai = ["web/*"]
+
+[tool.setuptools.packages.find]
+include = ["monitoring_ai*"]

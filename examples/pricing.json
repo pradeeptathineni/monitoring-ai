@@ -1,0 +1,17 @@
+{
+  "schema": "monitoring.pricing.v1",
+  "rates": [
+    {
+      "provider": "openai",
+      "model": "demo-reasoner",
+      "currency": "USD",
+      "from": "2026-01-01T00:00:00Z",
+      "until": "2027-01-01T00:00:00Z",
+      "provenance": "fictional-price",
+      "input": "2.5",
+      "cache_read": "0.25",
+      "cache_write": "3",
+      "output": "10"
+    }
+  ]
+}

@@ -1,0 +1,366 @@
+{
+  "schema": "monitoring.featuresets.v1",
+  "observed_at": "2026-11-02",
+  "scope": "Bounded comparison of eight public projects with dated maintenance facts, plus one license exclusion. Not exhaustive.",
+  "ranking": "Filter by category and workflow first, then compare popularity, maintenance, exact functionality, license and compatibility. Stars alone do not choose the implementation.",
+  "sources": [
+    {
+      "repo": "langfuse/langfuse",
+      "revision": "0ca8994b00d4854fa9e8af3b9f8a90503e0b08d6",
+      "stars": 36898,
+      "observed_at": "2026-11-02",
+      "pushed_at": "2026-11-02T19:27:03Z",
+      "archived": false,
+      "license": "MIT outside excluded enterprise directories",
+      "inspected_paths": [
+        "ee/LICENSE",
+        "packages/shared/src/server/repositories/trace-sessions.ts",
+        "packages/shared/src/features/model-pricing/validation.ts"
+      ],
+      "copy_scope": "No application code or assets copied. Design and semantic reference only.",
+      "runtime_evidence": "Source review only. Upstream applications not exercised."
+    },
+    {
+      "repo": "steipete/CodexBar",
+      "revision": "897bff31731bb4b21b105f6e8bf4c32a8a8bf095",
+      "stars": 22952,
+      "observed_at": "2026-11-02",
+      "pushed_at": "2026-10-31T10:17:33Z",
+      "archived": false,
+      "license": "MIT",
+      "inspected_paths": [
+        "Sources/CodexBarCore/Providers/Codex/CodexAdditionalRateLimitMapper.swift",
+        "Sources/CodexBar/LastKnownUsagePresentation.swift"
+      ],
+      "copy_scope": "No application code or assets copied. Design and semantic reference only.",
+      "runtime_evidence": "Source review only. Upstream applications not exercised."
+    },
+    {
+      "repo": "ccusage/ccusage",
+      "revision": "8995f3b7fd7110b8f37564f7d0468acc7a7d6b20",
+      "stars": 19301,
+      "observed_at": "2026-11-02",
+      "pushed_at": "2026-11-02T18:15:20Z",
+      "archived": false,
+      "license": "MIT",
+      "inspected_paths": [
+        "docs/guide/cost-modes.md",
+        "rust/crates/ccusage-core/src/cost.rs",
+        "rust/adapters/codex/src/aggregate.rs",
+        "rust/adapters/codex/src/parser.rs"
+      ],
+      "copy_scope": "No application code or assets copied. Design and semantic reference only.",
+      "runtime_evidence": "Source review only. Upstream applications not exercised."
+    },
+    {
+      "repo": "getagentseal/codeburn",
+      "revision": "f846b6309741fd2813d7ac651ede5861bd3f2ae3",
+      "stars": 11664,
+      "observed_at": "2026-11-02",
+      "pushed_at": "2026-11-02T19:26:57Z",
+      "archived": false,
+      "license": "MIT",
+      "inspected_paths": [
+        "src/sessions-report.ts",
+        "src/parser.ts",
+        "src/live-sessions.ts"
+      ],
+      "copy_scope": "No application code or assets copied. Design and semantic reference only.",
+      "runtime_evidence": "Source review only. Upstream applications not exercised."
+    },
+    {
+      "repo": "Maciek-roboblog/Claude-Code-Usage-Monitor",
+      "revision": "c59a83bf943f329f0e61f1a29c760353ee1860a5",
+      "stars": 8789,
+      "observed_at": "2026-11-02",
+      "pushed_at": "2026-07-05T04:52:21Z",
+      "archived": false,
+      "license": "MIT",
+      "inspected_paths": [
+        "src/claude_monitor/ui/session_display.py",
+        "src/claude_monitor/monitoring/session_monitor.py"
+      ],
+      "copy_scope": "No application code or assets copied. Design and semantic reference only.",
+      "runtime_evidence": "Source review only. Upstream applications not exercised."
+    },
+    {
+      "repo": "Helicone/helicone",
+      "revision": "7720d286110391c3e3776bb46a18fb2a13f7567c",
+      "stars": 6254,
+      "observed_at": "2026-11-02",
+      "pushed_at": "2026-10-28T15:59:52Z",
+      "archived": false,
+      "license": "Apache-2.0",
+      "inspected_paths": [
+        "valhalla/jawn/src/controllers/public/sessionController.ts",
+        "packages/cost/usage/openAIUsageProcessor.ts"
+      ],
+      "copy_scope": "No application code or assets copied. Design and semantic reference only.",
+      "runtime_evidence": "Source review only. Upstream applications not exercised."
+    },
+    {
+      "repo": "graykode/abtop",
+      "revision": "4b96568666c1f3b887202d14b0a1c6171315e520",
+      "stars": 3792,
+      "observed_at": "2026-11-02",
+      "pushed_at": "2026-09-14T04:45:00Z",
+      "archived": false,
+      "license": "MIT",
+      "inspected_paths": [
+        "src/ui/sessions.rs",
+        "src/model/session.rs"
+      ],
+      "copy_scope": "No application code or assets copied. Design and semantic reference only.",
+      "runtime_evidence": "Source review only. Upstream applications not exercised."
+    },
+    {
+      "repo": "openlit/openlit",
+      "revision": "4f095b5abf4ca19127d907fcd9f169b7da5ee56b",
+      "stars": 2899,
+      "observed_at": "2026-11-02",
+      "pushed_at": "2026-11-02T19:50:40Z",
+      "archived": false,
+      "license": "Apache-2.0",
+      "inspected_paths": [
+        "src/client/src/lib/platform/coding-agents/queries.ts",
+        "cli/internal/coding/hook/codex/handle.go"
+      ],
+      "copy_scope": "No application code or assets copied. Design and semantic reference only.",
+      "runtime_evidence": "Source review only. Upstream applications not exercised."
+    }
+  ],
+  "feature_sets": [
+    {
+      "id": "local-usage-ledger",
+      "name": "Local usage reconstruction",
+      "category": "ingestion",
+      "type": "foundation",
+      "tags": [
+        "local",
+        "tokens",
+        "deduplication",
+        "cost-provenance"
+      ],
+      "workflow": "Select authorized source \u2192 parse provider usage \u2192 deduplicate \u2192 normalize deltas \u2192 retain history",
+      "subfeatures": [
+        "provider adapters",
+        "cumulative counter deltas",
+        "cache buckets",
+        "replay refusal",
+        "cost provenance"
+      ],
+      "dependencies": [
+        "explicit source identity",
+        "provider token semantics",
+        "immutable event identity"
+      ],
+      "candidates": [
+        "getagentseal/codeburn",
+        "ccusage/ccusage",
+        "Helicone/helicone"
+      ],
+      "decision": "Implemented original normalized and Claude/Codex file pipeline. Additional native tools and correction protocol deferred.",
+      "evidence": [
+        "tests/test_monitoring.py",
+        "monitoring_ai/adapters.py",
+        "docs/contract.md"
+      ]
+    },
+    {
+      "id": "agent-observatory",
+      "name": "Sessions, workers and live observation",
+      "category": "sessions",
+      "type": "user-workflow",
+      "tags": [
+        "local",
+        "hierarchy",
+        "timeline",
+        "terminal",
+        "web"
+      ],
+      "workflow": "Receive lifecycle evidence \u2192 relate sessions and children \u2192 follow in terminal or web \u2192 inspect chronology \u2192 retain stale observations",
+      "subfeatures": [
+        "session-agent-worker tree",
+        "status evidence age",
+        "recorded timeline",
+        "tool outcomes",
+        "live refresh",
+        "read-loss handling"
+      ],
+      "dependencies": [
+        "local-usage-ledger",
+        "authoritative lifecycle source",
+        "explicit evidence freshness"
+      ],
+      "candidates": [
+        "graykode/abtop",
+        "getagentseal/codeburn",
+        "openlit/openlit",
+        "langfuse/langfuse"
+      ],
+      "decision": "Implemented normalized metadata hierarchy and stale-state behavior. OS process ownership and full native lifecycle adapters deferred.",
+      "evidence": [
+        "tests/browser/dashboard.spec.mjs",
+        "tests/test_monitoring.py",
+        "monitoring_ai/server.py"
+      ]
+    },
+    {
+      "id": "usage-analytics",
+      "name": "Qualified token and cost analysis",
+      "category": "analytics",
+      "type": "user-workflow",
+      "tags": [
+        "filters",
+        "models",
+        "projects",
+        "currency",
+        "costs",
+        "history"
+      ],
+      "workflow": "Filter usage \u2192 compare model/provider/surface/project/date \u2192 inspect token composition \u2192 qualify cost coverage \u2192 view explicit currency conversion",
+      "subfeatures": [
+        "grouped views",
+        "token charts",
+        "dated price matching",
+        "estimated versus billed",
+        "unknown coverage",
+        "dated FX"
+      ],
+      "dependencies": [
+        "local-usage-ledger",
+        "exact price applicability",
+        "explicit FX provenance"
+      ],
+      "candidates": [
+        "getagentseal/codeburn",
+        "ccusage/ccusage",
+        "openlit/openlit",
+        "langfuse/langfuse",
+        "Helicone/helicone"
+      ],
+      "decision": "Implemented original grouped tables and token charts. Hourly heatmaps, latency percentiles, richer cost charts and comparisons deferred.",
+      "evidence": [
+        "monitoring_ai/metrics.py",
+        "tests/test_monitoring.py",
+        "tests/browser/dashboard.spec.mjs"
+      ]
+    },
+    {
+      "id": "provider-quota",
+      "name": "Provider quota and reset awareness",
+      "category": "quota",
+      "type": "connected-source",
+      "tags": [
+        "quota",
+        "reset",
+        "provider",
+        "model",
+        "last-known"
+      ],
+      "workflow": "Use authorized supported quota source \u2192 capture named windows and reset times \u2192 show current or last-known usage with age",
+      "subfeatures": [
+        "account and model windows",
+        "reset times",
+        "capture provenance",
+        "last-known fallback",
+        "allowance measures"
+      ],
+      "dependencies": [
+        "separate quota snapshot schema",
+        "authorized source",
+        "no credential extraction"
+      ],
+      "candidates": [
+        "steipete/CodexBar",
+        "graykode/abtop"
+      ],
+      "decision": "Planned. Quotas are separate from dollar costs and lifecycle. No account collector or credentials installed.",
+      "evidence": [
+        "docs/roadmap.md"
+      ]
+    },
+    {
+      "id": "pace-and-budgets",
+      "name": "Pace, forecasts and budget notifications",
+      "category": "forecasting",
+      "type": "analysis-workflow",
+      "tags": [
+        "burn-rate",
+        "forecasts",
+        "budgets",
+        "uncertainty",
+        "notifications"
+      ],
+      "workflow": "Observe supported usage windows \u2192 estimate pace with explicit assumptions \u2192 compare budget \u2192 explain forecast or issue an authorized notification",
+      "subfeatures": [
+        "burn rate",
+        "projected exhaustion",
+        "budget thresholds",
+        "forecast uncertainty",
+        "notifications"
+      ],
+      "dependencies": [
+        "provider-quota",
+        "usage-analytics",
+        "validated forecast assumptions",
+        "notification authorization"
+      ],
+      "candidates": [
+        "Maciek-roboblog/Claude-Code-Usage-Monitor",
+        "steipete/CodexBar"
+      ],
+      "decision": "Planned after quota and uncertainty qualification. No automatic reset, paid overage or background automation.",
+      "evidence": [
+        "docs/roadmap.md"
+      ]
+    },
+    {
+      "id": "connected-tracing",
+      "name": "Connected and distributed agent tracing",
+      "category": "tracing",
+      "type": "connected-source",
+      "tags": [
+        "OpenTelemetry",
+        "cloud",
+        "SDK",
+        "spans",
+        "latency",
+        "subagents"
+      ],
+      "workflow": "Configure authorized producer \u2192 ingest metadata spans \u2192 preserve causal hierarchy \u2192 inspect calls and failures across connected systems",
+      "subfeatures": [
+        "SDK or OpenTelemetry ingestion",
+        "trace/session hierarchy",
+        "cloud exports",
+        "latency metrics",
+        "structured filters",
+        "failure analysis"
+      ],
+      "dependencies": [
+        "local-usage-ledger",
+        "causal IDs",
+        "source overlap reconciliation",
+        "authorized transport"
+      ],
+      "candidates": [
+        "openlit/openlit",
+        "langfuse/langfuse",
+        "Helicone/helicone"
+      ],
+      "decision": "Metadata producer contract implemented. Receivers, cloud accounts and distributed tracing UI planned.",
+      "evidence": [
+        "docs/contract.md",
+        "docs/roadmap.md"
+      ]
+    }
+  ],
+  "exclusions": [
+    {
+      "repo": "AgentOps-AI/agentops",
+      "scope": "app/dashboard",
+      "reason": "app/LICENSE is Elastic License 2.0 despite root README MIT wording. Not permissive dashboard reuse.",
+      "url": "https://github.com/AgentOps-AI/agentops/blob/main/app/LICENSE"
+    }
+  ]
+}
