@@ -144,7 +144,9 @@ def entity_key(event):
     return (event["source"], event["session"], event["entity"])
 
 
-def snapshot(revision, events, query=None, pricing=None, fx=None, now=None):
+def snapshot(revision, events, query=None, pricing=None, fx=None, now=None, quota_book=None):
+    from .insights import build_insights
+
     query = filters(query or {})
     pricing, fx, now = pricing or Pricing(), fx or Exchange(), now or now_iso()
     by_entity = defaultdict(list)
@@ -198,4 +200,5 @@ def snapshot(revision, events, query=None, pricing=None, fx=None, now=None):
                      active=sum(r["state"] == "running" for r in rows),
                      attention=sum(r["state"] in {"waiting", "blocked"} for r in rows)),
         entities=rows[:500], groups=groups, facets=facets, events=recent,
+        insights=build_insights(matched, now=now, pricing=pricing, fx=fx, quota_book=quota_book),
     )

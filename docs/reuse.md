@@ -29,8 +29,14 @@ AgentOps was screened separately. Its dashboard's [`app/LICENSE`](https://github
 | Sessions, agents, workers and chronology | abtop, CodeBurn, OpenLIT, Langfuse | Implemented metadata hierarchy and recorded spans. Live OS ownership and full distributed traces remain planned. |
 | Terminal live observation | abtop, Claude Code Usage Monitor | Implemented terminal refresh over the shared ledger. No inferred active state from recent usage. |
 | Web cost and token analytics | CodeBurn, OpenLIT, Langfuse, Helicone | Implemented grouped token/cost tables and token charts. Rich time-series comparisons and latency percentiles remain planned. |
-| Provider quota windows and reset times | CodexBar, abtop | Planned as a separate snapshot type with source and capture time. No automatic credential access. |
-| Burn-rate forecasts and budget notifications | Claude Code Usage Monitor, CodexBar | Planned after quota and uncertainty semantics are validated. No subscription-balance estimate from API prices. |
+| Provider quota windows and reset times | CodexBar, abtop | Implemented separate normalized snapshots and an opt-in native Codex allowance collector, with capture age, unknown values and reset-passed state. Other collectors remain planned. No automatic credential access. |
+| Burn-rate forecasts and budget notifications | Claude Code Usage Monitor, CodexBar | Implemented recorded-window token pace and qualified linear scenarios with sample span and heuristic confidence. Budget notifications and quota-exhaustion predictions remain planned. No subscription-balance estimate from API prices. |
 | SDK, cloud and OpenTelemetry ingestion | OpenLIT, Langfuse, Helicone | Normalized producer contract implemented. Network receivers and authenticated cloud adapters remain planned. |
 | Streaming replay and usage overlap | ccusage, CodeBurn, OpenLIT | Implemented immutable event replay and Codex cumulative deltas. General corrections and cross-source reconciliation remain planned. |
 | Multi-currency qualified cost | CodeBurn/ccusage cost modes as starting point | Implemented distinct estimated/billed coverage and explicit dated display conversion. No current FX or invoice accuracy claim. |
+
+## Second working slice
+
+The quota and pace increment keeps those features together as one interpretation workflow. CodexBar informed named quota windows, capture age and last-known presentation. Claude Code Usage Monitor informed terminal pace and forecast presentation. The implementation remains original. It does not import credential collectors, hook installers, native UI components or forecast algorithms from either project.
+
+The native source uses the [Codex app-server protocol](https://developers.openai.com/codex/app-server/) through the installed CLI's existing login. One real metadata-only read qualified the allowance path without session reads or inference. Public examples, captures and tests contain no account observations. A bounded project-only Claude subscription review identified burst ambiguity and retained-observation presentation risks. The increment consequently exposes sample span and heuristic confidence, preserves stale quota values, and labels account-wide quota independently from filtered event usage. Tests cover timeout cleanup without terminating an unrelated process.

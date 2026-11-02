@@ -5,6 +5,7 @@ const $$ = (selector) => [...document.querySelectorAll(selector)];
 const number = new Intl.NumberFormat("en-US");
 const compact = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
 const bucketNames = { input: "Input", cache_read: "Cache read", cache_write: "Cache write", output: "Output" };
+const insightUnavailable = "Insights are unavailable in this snapshot.";
 const titles = { overview: ["Every session. One place.", "Follow the work, understand the usage, keep the evidence."],
   sessions: ["See the whole working tree.", "Sessions, agents and workers, with evidence behind every state."],
   usage: ["Understand every token.", "Compare models and surfaces without losing cost qualifications."],
@@ -52,7 +53,7 @@ function metric(label, value, note, symbol) {
 }
 
 function fillFacets() {
-  for (const dimension of ["provider", "model", "surface", "project"]) {
+  for (const dimension of ["provider", "model", "surface", "project", "source", "session"]) {
     const select = $(`[name=${dimension}]`);
     const current = select.value;
     const desired = data.facets[dimension];
@@ -63,6 +64,71 @@ function fillFacets() {
       }
       select.value = current;
     }
+  }
+}
+
+function insight() {
+  const value = data?.insights;
+  return value?.schema === "monitoring.insights.v1" ? value : null;
+}
+
+function confidenceRow(label, value) {
+  const row = node("div", null, "confidence-row"); row.append(node("span", label), node("strong", value)); return row;
+}
+
+function renderInsights() {
+  const value = insight(), freshness = $("#freshness"), pace = $("#pace"), quotas = $("#quotas");
+  freshness.replaceChildren(); pace.replaceChildren(); quotas.replaceChildren();
+  if (!value) {
+    freshness.append(node("p", insightUnavailable, "empty"));
+    pace.append(node("p", insightUnavailable, "empty"));
+    quotas.append(node("p", insightUnavailable, "empty")); return;
+  }
+  const sources = Array.isArray(value.source_freshness) ? value.source_freshness : [];
+  if (!sources.length) freshness.append(node("p", "No source freshness observations for this filter.", "empty"));
+  for (const item of sources) {
+    const row = node("div", null, "confidence-row freshness-row");
+    const label = node("span", item.source); label.append(node("small", `${item.events} events${item.last_event_at ? ` · last ${item.last_event_at.replace("T", " ").replace("Z", " UTC")}` : " · no event time"}`));
+    const age = Number.isFinite(item.age_seconds) ? `${number.format(Math.max(0, Math.round(item.age_seconds)))}s` : "Unknown age";
+    row.append(label, node("strong", `${item.state || "unknown"} · ${age}`)); row.classList.add(`freshness-${item.state || "unknown"}`); freshness.append(row);
+  }
+  const windowMinutes = Number.isFinite(value.window?.minutes) ? value.window.minutes : null;
+  const p = value.pace || {}, f = value.forecast || {};
+  const duration = windowMinutes === null ? "selected window" : `selected ${number.format(windowMinutes)} minute window`;
+  const tokenPace = p.tokens_per_minute == null || p.tokens_per_minute === "" ? null : Number(p.tokens_per_minute);
+  pace.append(confidenceRow("Observed records", Number.isFinite(p.records) ? number.format(p.records) : "Unknown"));
+  pace.append(confidenceRow("Observed tokens", Number.isFinite(p.tokens) ? compact.format(p.tokens) : "Unknown"));
+  pace.append(confidenceRow("Token pace", Number.isFinite(tokenPace) ? `${number.format(tokenPace)} tokens/min` : "Unknown"));
+  pace.append(confidenceRow("Estimated cost rate", p.estimated_cost_per_hour == null ? "Unknown" : `${cash(p.estimated_cost_per_hour)} / hour`));
+  pace.append(confidenceRow("Priced / unknown / unconverted", `${p.estimated_priced_records ?? "?"} / ${p.unknown_cost_records ?? "?"} / ${p.unconverted_cost_records ?? "?"}`));
+  const forecastValue = f.tokens == null ? "Unknown" : compact.format(f.tokens);
+  const forecastCost = f.estimated_cost == null ? "Unknown" : cash(f.estimated_cost);
+  const sampleCount = Number.isFinite(p.records) ? `${number.format(p.records)} usage records` : "Unknown sample count";
+  const observedSpan = Number.isFinite(f.observed_span_seconds) && f.observed_span_seconds >= 0
+    ? `${Math.floor(f.observed_span_seconds / 60)}m ${Math.round(f.observed_span_seconds % 60)}s observed span` : "observed span unavailable";
+  const confidence = ["insufficient", "low", "limited"].includes(f.confidence) ? `confidence ${f.confidence} (heuristic)` : "";
+  pace.append(node("p", `${f.state === "available" ? "Linear selected-window projection" : f.state === "partial" ? "Linear selected-window projection · partial priced coverage" : "Linear selected-window projection unavailable"} for the next ${f.horizon_minutes ?? 60} minutes: ${forecastValue} tokens · estimated cost ${forecastCost}. ${[sampleCount, observedSpan, confidence].filter(Boolean).join(" · ")}. ${f.assumption || ""} This is not predicted provider exhaustion or billed spend.`, "confidence-note"));
+  pace.append(node("p", `Rate from ${duration}. Estimate projection coverage: ${p.estimated_priced_records ?? 0} priced records; ${p.unknown_cost_records ?? 0} unknown cost and ${p.unconverted_cost_records ?? 0} unconverted cost records. ${p.billed_records ?? 0} billed records are excluded from the estimate projection.`, "confidence-note"));
+
+  const q = value.quotas || {}, windows = Array.isArray(q.windows) ? q.windows : [];
+  const readStatus = q.read_status || {};
+  const status = q.state === "ready" ? "Supplied quota observations configured" : q.state === "unavailable" ? "Quota observations unavailable" : "Quota observations unconfigured";
+  const readLabel = readStatus.state === "unavailable" ? "Quota source unavailable" : readStatus.state === "following" ? "Quota source following" : readStatus.state === "reading" ? "Quota source reading" : readStatus.state === "static" ? "Quota source static" : readStatus.state === "unconfigured" ? "Quota source unconfigured" : "";
+  const readDetail = [readLabel, readStatus.last_success_at ? `last successful read ${readStatus.last_success_at.replace("T", " ").replace("Z", " UTC")}` : "", readStatus.error || ""].filter(Boolean).join(" · ");
+  quotas.append(node("p", `${status}. ${[q.note || "Quota observations are independent of usage filters and token costs.", readDetail].filter(Boolean).join(" ")}`, "prose"));
+  if (!windows.length) quotas.append(node("p", "No provider quota windows are available. Unknown quota stays unknown.", "empty"));
+  for (const item of windows) {
+    const freshnessState = item.freshness || "unknown";
+    const row = node("div", null, "quota-row");
+    const head = node("div", null, "quota-head");
+    const detail = [item.provider, item.account, item.label].filter(Boolean).join(" · ");
+    head.append(node("strong", detail || item.source || "Provider window"), node("span", freshnessState));
+    row.append(head);
+    row.append(node("p", `${item.used_percent == null ? "Used: unknown" : `Used: ${number.format(item.used_percent)}%`} · ${item.remaining_percent == null ? "Remaining: unknown" : `Remaining: ${number.format(item.remaining_percent)}%`}${Number.isFinite(item.window_minutes) ? ` · ${number.format(item.window_minutes)} min window` : ""}`));
+    row.append(node("p", `${item.source || "Source unknown"}${item.captured_at ? ` · captured ${item.captured_at.replace("T", " ").replace("Z", " UTC")}` : " · capture time unknown"}${item.resets_at ? ` · resets ${item.resets_at.replace("T", " ").replace("Z", " UTC")}` : " · reset time unknown"}${item.provenance ? ` · ${item.provenance}` : ""}`));
+    if (freshnessState === "reset-passed") row.append(node("p", "Reset time has passed; replenishment has not been observed.", "quota-caveat"));
+    else if (freshnessState !== "current") row.append(node("p", "This quota observation is not current.", "quota-caveat"));
+    quotas.append(row);
   }
 }
 
@@ -156,6 +222,30 @@ function renderUsage() {
   ]));
 }
 
+function retainInsights(reason) {
+  const value = data?.insights;
+  if (!value) return;
+  const now = Date.now();
+  for (const source of value.source_freshness || []) {
+    const at = Date.parse(source.last_event_at);
+    if (!Number.isFinite(at)) continue;
+    const age = (now - at) / 1000;
+    source.age_seconds = Math.trunc(age);
+    source.state = age < 0 ? "future" : age <= 60 ? "recent" : "stale";
+  }
+  const quotas = value.quotas;
+  if (!quotas) return;
+  quotas.read_status = { ...quotas.read_status, state: "unavailable", error: reason };
+  for (const window of quotas.windows || []) {
+    const at = Date.parse(window.captured_at);
+    if (!Number.isFinite(at)) continue;
+    const age = (now - at) / 1000;
+    window.age_seconds = Math.trunc(age);
+    window.freshness = window.resets_at && Date.parse(window.resets_at) <= now ? "reset-passed"
+      : age < 0 ? "future" : age <= 300 ? "current" : "stale";
+  }
+}
+
 function render() {
   fillFacets();
   const summary = data.summary, coverage = data.coverage;
@@ -177,6 +267,7 @@ function render() {
     const row = node("div", null, "confidence-row"); row.append(node("span", label), node("strong", number.format(value))); confidence.append(row);
   }
   confidence.append(node("p", "Known amounts cover only their labeled records. Estimates and billed amounts are never added for the same event. Lifecycle evidence expires after 60 seconds.", "confidence-note"));
+  renderInsights();
   table("#entity-table", ["Entity / hierarchy", "State", "Model / surface", "Tokens", "Estimated", "Billed", "Last evidence · UTC"], data.entities.map((row) => {
     const name = node("button", (row.parent ? "↳ " : "") + row.entity, "entity-button");
     name.addEventListener("click", () => inspect(row));
@@ -215,6 +306,7 @@ async function refresh() {
     if (data) {
       // A failed browser read must not leave a running badge looking current
       for (const row of data.entities) if (!["completed", "failed", "cancelled"].includes(row.state)) { row.state = "unknown"; row.stale = true; }
+      retainInsights("Monitoring owner unavailable; showing retained dated quota observations.");
       data.summary.active = 0; data.summary.attention = 0; render();
     }
   } finally { clearTimeout(timer); busy = false; }
@@ -228,7 +320,15 @@ $("#state-filter").addEventListener("change", refresh);
 $("#group").addEventListener("change", () => { if (data) renderUsage(); });
 $("#pause").addEventListener("click", () => {
   paused = !paused; $("#pause").textContent = paused ? "Resume refresh" : "Pause refresh";
-  if (paused) { $("#connection").textContent = "Refresh paused"; $("#connection").classList.add("offline"); }
+  if (paused) {
+    $("#connection").textContent = "Refresh paused"; $("#connection").classList.add("offline");
+    if (data) {
+      for (const row of data.entities) if (!["completed", "failed", "cancelled"].includes(row.state)) { row.state = "unknown"; row.stale = true; }
+      data.summary.active = 0; data.summary.attention = 0;
+    }
+    retainInsights("Dashboard refresh paused; showing retained dated quota observations.");
+    if (data) render();
+  }
   else refresh();
 });
 $("#clear-entity").addEventListener("click", () => { entity = null; $("#event-selection").textContent = ""; $("#clear-entity").hidden = true; renderEvents(); });
@@ -238,4 +338,9 @@ document.addEventListener("keydown", (event) => {
 window.addEventListener("hashchange", () => showView(location.hash.slice(1) || "overview"));
 showView(location.hash.slice(1) || "overview");
 refresh();
-setInterval(refresh, 2000);
+setInterval(() => {
+  if (paused && data) {
+    retainInsights("Dashboard refresh paused; showing retained dated quota observations.");
+    renderInsights();
+  } else refresh();
+}, 2000);

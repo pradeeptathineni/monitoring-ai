@@ -9,10 +9,11 @@ import time
 
 from . import __version__
 from .adapters import load
-from .demo import demo_events, stream_demo, write_demo
+from .demo import demo_events, demo_quotas, stream_demo, write_demo
 from .metrics import DIMENSIONS, Exchange, Pricing, snapshot
 from .server import Observatory, serve
 from .store import Store
+from .quota_sources import codex_book, quota_export, quota_file, read_codex_quota
 
 
 def parser():
@@ -26,6 +27,12 @@ def parser():
             command.add_argument("--pricing", type=Path, help="Explicit dated per-million price book")
             command.add_argument("--fx", type=Path, help="Explicit dated USD-based exchange rates")
             command.add_argument("--currency", default="USD")
+            quota = command.add_mutually_exclusive_group()
+            quota.add_argument("--quota-file", type=Path, help="Explicit normalized quota observations")
+            quota.add_argument("--codex-quota", action="store_true", help="Read existing Codex account allowance, no sessions or model calls")
+            command.add_argument("--quota-account", default="default", help="Local account alias, independent of usage filters")
+            command.add_argument("--quota-source-id", default="codex-quota")
+            command.add_argument("--codex-executable", type=Path, help="Optional absolute installed Codex executable")
         if name != "top":
             command.add_argument("--file", type=Path, required=name == "import")
             command.add_argument("--format", choices=["normalized", "claude", "codex"], default="normalized")
@@ -42,6 +49,15 @@ def parser():
     demo = sub.add_parser("demo", help="Write fictional normalized JSONL, optionally keep appending")
     demo.add_argument("file", type=Path)
     demo.add_argument("--stream", action="store_true")
+    quota = sub.add_parser("quota", help="Read one quota source as normalized JSON without persisting it")
+    source = quota.add_mutually_exclusive_group(required=True)
+    source.add_argument("--codex", action="store_true", help="Use existing native Codex login through account/rateLimits/read")
+    source.add_argument("--file", type=Path)
+    quota.add_argument("--format", choices=["normalized", "codex"], default="normalized")
+    quota.add_argument("--captured-at", help="Required original response time for a Codex JSON export")
+    quota.add_argument("--source-id", default="codex-quota")
+    quota.add_argument("--account", default="default")
+    quota.add_argument("--executable", type=Path)
     return cli
 
 
@@ -58,10 +74,39 @@ def terminal(value):
     for row in value["entities"]:
         lines.append(f"{row['entity'][:22]:<22} {row['state']:<12} {row['model'][:24]:<24} {row['metrics']['total_tokens']:>12,} {money(row['metrics']['costs']['estimated']['amount']):>12}")
     lines.extend(["", "Coverage: explicitly supplied events. Lifecycle ages independently of usage."])
+    insights = value.get("insights", {})
+    pace = insights.get("pace", {})
+    forecast = insights.get("forecast", {})
+    lines.append(f"Selected-window pace: {pace.get('tokens_per_minute', 'unknown')} tokens/min; forecast {forecast.get('state', 'unknown')} ({forecast.get('confidence', 'unknown')} heuristic confidence)")
+    lines.append(f"Estimated cost rate: {money(pace.get('estimated_cost_per_hour'))} {value['currency']}/hour; billed records excluded")
+    for window in insights.get("quotas", {}).get("windows", []):
+        remaining = window["remaining_percent"]
+        lines.append(f"Quota {window['provider']}/{window['account']} {window['label']}: {'unknown' if remaining is None else str(remaining) + '% remaining'} · {window['freshness']} · captured {window['captured_at']}")
     return "\n".join(lines)
 
 
+def quota_loader(args):
+    if args.quota_file:
+        return lambda: quota_file(args.quota_file)
+    if args.codex_quota:
+        return lambda: read_codex_quota(executable=args.codex_executable,
+                                       source=args.quota_source_id, account=args.quota_account)
+    return None
+
+
 def run(args):
+    if args.command == "quota":
+        if args.codex:
+            value = read_codex_quota(executable=args.executable, source=args.source_id, account=args.account)
+        elif args.format == "normalized":
+            value = quota_file(args.file)
+        else:
+            if not args.captured_at:
+                raise ValueError("Codex exports require their original --captured-at response time")
+            value = codex_book(quota_export(args.file), captured_at=args.captured_at,
+                               source=args.source_id, account=args.account)
+        print(json.dumps(value, indent=2))
+        return
     if args.command == "demo":
         (stream_demo if args.stream else write_demo)(args.file)
         return
@@ -83,17 +128,31 @@ def run(args):
                 raise ValueError("Demo seeding requires an empty ledger")
             store.ingest(demo_events())
         loader = (lambda: load(args.file, args.format, args.source_id, args.project, live=True)) if args.file else None
-        serve(Observatory(store, pricing, fx, loader), args.port)
+        serve(Observatory(store, pricing, fx, loader, quota_loader=quota_loader(args),
+                          quota_book=demo_quotas() if args.demo and not args.quota_file and not args.codex_quota else None), args.port)
     else:
         if args.watch and (args.json or not sys.stdout.isatty()):
             raise ValueError("--watch needs an interactive terminal and cannot combine with --json")
         query = {key: getattr(args, key) for key in (*DIMENSIONS, "since", "until", "state") if getattr(args, key)}
+        quota_read = quota_loader(args)
+        book, last_quota_read = None, float("-inf")
+        quota_error = False
         while True:
+            if quota_read and time.monotonic() - last_quota_read >= 60:
+                try:
+                    book = quota_read()
+                    quota_error = False
+                except (ValueError, OSError):
+                    quota_error = True
+                last_quota_read = time.monotonic()
             revision, rows = store.read()
-            value = snapshot(revision, rows, query, pricing, fx)
+            value = snapshot(revision, rows, query, pricing, fx, quota_book=book)
+            value["insights"]["quotas"]["read_status"] = dict(state="unavailable" if quota_error else "following" if quota_read else "unconfigured")
             if args.watch:
                 print("\033[2J\033[H", end="")
             print(json.dumps(value, indent=2) if args.json else terminal(value), flush=True)
+            if quota_error and not args.json:
+                print("Quota read unavailable; retained dated observations may be stale.", flush=True)
             if not args.watch:
                 break
             time.sleep(2)

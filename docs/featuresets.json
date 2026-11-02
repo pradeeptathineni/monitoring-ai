@@ -202,7 +202,8 @@
       "evidence": [
         "tests/browser/dashboard.spec.mjs",
         "tests/test_monitoring.py",
-        "monitoring_ai/server.py"
+        "monitoring_ai/server.py",
+        "monitoring_ai/insights.py"
       ]
     },
     {
@@ -239,7 +240,7 @@
         "langfuse/langfuse",
         "Helicone/helicone"
       ],
-      "decision": "Implemented original grouped tables and token charts. Hourly heatmaps, latency percentiles, richer cost charts and comparisons deferred.",
+      "decision": "Implemented grouped tables, token charts, source/session filters and source age. Hourly heatmaps, latency percentiles and richer comparisons remain planned.",
       "evidence": [
         "monitoring_ai/metrics.py",
         "tests/test_monitoring.py",
@@ -275,9 +276,13 @@
         "steipete/CodexBar",
         "graykode/abtop"
       ],
-      "decision": "Planned. Quotas are separate from dollar costs and lifecycle. No account collector or credentials installed.",
+      "decision": "Implemented normalized quota imports and opt-in installed Codex account/rateLimits/read. Native source qualified through an existing authorized login. Values retain age, reset state and unknown coverage. No hooks, login changes or credentials copied.",
       "evidence": [
-        "docs/roadmap.md"
+        "monitoring_ai/quota_sources.py",
+        "monitoring_ai/insights.py",
+        "tests/test_quota_sources.py",
+        "tests/browser/insights.spec.mjs",
+        "docs/contract.md"
       ]
     },
     {
@@ -310,9 +315,11 @@
         "Maciek-roboblog/Claude-Code-Usage-Monitor",
         "steipete/CodexBar"
       ],
-      "decision": "Planned after quota and uncertainty qualification. No automatic reset, paid overage or background automation.",
+      "decision": "Implemented selected-window token pace and linear one-hour scenarios with observed span, sample count, heuristic confidence and partial price coverage. Budget notifications and quota-exhaustion forecasting remain planned. No automatic reset or paid overage.",
       "evidence": [
-        "docs/roadmap.md"
+        "monitoring_ai/insights.py",
+        "tests/test_insights.py",
+        "tests/browser/insights.spec.mjs"
       ]
     },
     {

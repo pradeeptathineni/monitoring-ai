@@ -52,6 +52,18 @@ def write_demo(path):
             stream.write(json.dumps(event) + "\n")
 
 
+def demo_quotas(now=None):
+    now = now or datetime.now(timezone.utc)
+    return dict(schema="monitoring.quotas.v1", snapshots=[dict(
+        source="synthetic-quota", provider="example", account="fictional-account",
+        captured_at=now.isoformat(), provenance="fictional-quota",
+        windows=[dict(id="five-hour", label="five-hour", used_percent=42,
+                      window_minutes=300, resets_at=(now + timedelta(hours=2)).isoformat()),
+                 dict(id="weekly", label="weekly", used_percent=None,
+                      window_minutes=10080, resets_at=None)],
+    )])
+
+
 def stream_demo(path, interval=3):
     write_demo(path)
     print("Synthetic producer running. Ctrl-C stops only this producer.", flush=True)

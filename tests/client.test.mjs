@@ -39,3 +39,16 @@ test("owner failures remain unavailable instead of producing empty data", async 
   context.mock.method(globalThis, "fetch", async () => ({ ok: false, status: 503 }));
   await assert.rejects(monitoringOwner("http://127.0.0.1:5274").snapshot(), /unavailable/);
 });
+
+test("optional insight data rejects impossible quota percentages and preserves unknown", () => {
+  const value = structuredClone(snapshot);
+  value.insights = { schema: "monitoring.insights.v1", window: { minutes: 60 },
+    pace: { records: 0, tokens: 0, tokens_per_minute: "0", estimated_cost_per_hour: null,
+      estimated_priced_records: 0, unknown_cost_records: 0, unconverted_cost_records: 0, billed_records: 0 },
+    forecast: { horizon_minutes: 60, state: "insufficient-data", confidence: "insufficient", tokens: null, estimated_cost: null },
+    source_freshness: [], quotas: { windows: [{ used_percent: null, remaining_percent: null,
+      captured_at: "2026-11-02T20:00:00Z", freshness: "stale" }] } };
+  assert.equal(decodeSnapshot(value).insights.quotas.windows[0].remaining_percent, null);
+  value.insights.quotas.windows[0].used_percent = 101;
+  assert.throws(() => decodeSnapshot(value), /incompatible/);
+});

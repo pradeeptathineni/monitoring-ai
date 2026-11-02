@@ -1,0 +1,28 @@
+{
+  "schema": "monitoring.quotas.v1",
+  "snapshots": [
+    {
+      "source": "synthetic-quota",
+      "provider": "example",
+      "account": "fictional-account",
+      "captured_at": "2026-11-02T20:00:00+00:00",
+      "provenance": "fictional-quota",
+      "windows": [
+        {
+          "id": "five-hour",
+          "label": "five-hour",
+          "used_percent": 42,
+          "window_minutes": 300,
+          "resets_at": "2026-11-02T22:00:00+00:00"
+        },
+        {
+          "id": "weekly",
+          "label": "weekly",
+          "used_percent": null,
+          "window_minutes": 10080,
+          "resets_at": null
+        }
+      ]
+    }
+  ]
+}

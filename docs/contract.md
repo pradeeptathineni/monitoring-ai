@@ -51,3 +51,43 @@ Costs are decimal strings. Estimated and billed amounts are disjoint subsets of 
 Prices apply per million disjoint tokens over a `[from, until)` interval. Overlapping exact model intervals refuse. The producer is responsible for choosing a rate that fits the actual tier, cache policy and contract. This alpha has no automatic tier, discount or subscription billing engine. Converted views use an explicit USD-based rate book with `as_of` and `provenance`. These are display rates, not historical invoice rates. There is no automatic current-rate claim.
 
 No prompts, model responses, account credentials, raw tool arguments or arbitrary metadata enter the normalized ledger. Native imports discard those fields before storage. Dimension aliases still reveal operational information, so metadata is private by default. This service neither launches nor cancels agents. Observation IDs must never be treated as execution authority.
+
+## Usage insights and quota observations
+
+Snapshot v1 now includes an additive `insights` object with schema `monitoring.insights.v1`. Older consumers may ignore it. New consumers must handle its absence when connected to an older owner. The supplied Deep reader preserves that compatibility.
+
+`window` is a trailing 60-minute interval ending at snapshot observation time. Only matching recorded usage within that interval contributes to `pace`. Future records do not contribute. The token rate divides recorded volume by the complete configured window, including quiet periods. `forecast` projects that rate for 60 minutes only when two distinct usage times span at least a minute. It reports observed span, record count and heuristic confidence. Spans below ten minutes receive `low` confidence. Longer spans receive `limited`, never statistical certainty. Sparse sampling and bursts can make the scenario unrepresentative.
+
+Estimated cost rate includes only the priced estimated subset. Coverage counters separately identify estimated-priced, unknown, unconverted and billed records. Billed records never become forecast spend. The estimated cost projection stays null if pricing is incomplete, any conversion is missing, or billed records are excluded. Token projection can still be available with partial cost coverage. Source freshness derives from latest matching event time and does not establish process ownership or live workers.
+
+Quota input is a separate JSON object:
+
+```json
+{
+  "schema": "monitoring.quotas.v1",
+  "snapshots": [{
+    "source": "example-import",
+    "provider": "example",
+    "account": "fictional-account",
+    "captured_at": "2026-11-02T20:00:00Z",
+    "provenance": "fictional-quota",
+    "windows": [{
+      "id": "five-hour",
+      "label": "five-hour",
+      "used_percent": 42,
+      "window_minutes": 300,
+      "resets_at": "2026-11-02T22:00:00Z"
+    }]
+  }]
+}
+```
+
+Snapshot/window fields are closed. Dimension values are identifier aliases. Used percentage is in 0–100 units or null, duration is a positive integer in minutes or null, and reset is a timezone-qualified timestamp or null. Unknown never becomes zero. Repeated source/provider/account/window identities refuse, as do more than 100 snapshots or 500 total windows. Quota files are bounded to 1 MiB and require an explicitly selected regular file. Reading a file does not advance its supplied capture time.
+
+`insights.quotas` keeps these windows independent of event-source IDs and usage filters. There is no inferred mapping between an account quota and a project or session. Freshness is `current` within five minutes, `stale` afterward, `future` for later capture times, or `reset-passed` when the reported reset has passed. Values remain visible in all states. A passed reset does not establish new capacity. `remaining_percent` is arithmetic from the supplied used percentage, not permission to start work.
+
+`read_status` independently reports source configuration, a read in progress, last successful receipt and unavailable reads. A successful read does not make an old imported observation current. A failed source retains the prior dated book. Browser disconnection or paused refresh marks retained observations as unavailable for new reads and continues aging their displayed capture times.
+
+The opt-in installed Codex collector launches its own stdio app-server process, performs `initialize`, `initialized` and `account/rateLimits/read`, then cleans only that owned process group. The protocol exchange has a deadline and a 1 MiB output bound. It never sends thread, turn, login or mutation methods, reads credentials itself, or copies account IDs. Native `captured_at` records local receipt time because the response has no qualified upstream sample timestamp. A present rate-limit map takes precedence over the legacy view, including an empty map. Unknown fields such as paid credits are discarded rather than reinterpreted as subscription allowance. Server shutdown waits for the bounded quota worker to clean up.
+
+A raw Codex account response can also be normalized with `quota --file response.json --format codex --captured-at ORIGINAL_RESPONSE_TIME`. The original time is required. This conversion does not establish a live connection. Claude quota data can be imported through the same normalized contract, but no Claude account collector or hook ships here.

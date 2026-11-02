@@ -37,6 +37,8 @@ The producer appends usage and lifecycle evidence. The server imports complete l
 - Dated model price books and explicit currency conversion. USD is the default. No exchange rate or provider price is silently fetched.
 - Atomic SQLite imports, replay deduplication, changed-identity refusal, hierarchy validation and retained observations when a followed source fails.
 - A versioned read contract and a [server-side Deep AI consumer](integrations/deep-ai). Deep integration is supplied for review, not deployed by this repository.
+- Source-age views, trailing-window token pace and cautious linear forecasts with observed span, sample count and explicit cost coverage.
+- Independent quota observations from an explicit file or an opt-in installed Codex allowance read. Stale values and passed reset times retain their last supplied values.
 
 ## Connect your data
 
@@ -62,9 +64,33 @@ Use the same source ID and project alias when replaying or following a file. Dif
 
 For pricing, adapt [the fictional price book](examples/pricing.json) to your verified rates and validity dates. All four rates are amounts per million tokens. Add `--pricing /path/to/pricing.json` to `serve` or `top`. Reported event costs take precedence. To convert, supply `--currency EUR --fx /path/to/fx.json` with a dated [FX book](examples/fx.json). Example prices and exchange rates are deliberately fictional.
 
+## Usage pace and quotas
+
+Overview shows recorded usage over the trailing 60-minute window. Its one-hour projection uses that full window as the denominator. The view shows sample count, observed span and a heuristic confidence label. Estimates with incomplete pricing remain qualified, and billed amounts are excluded from projected estimates. This is a linear scenario, not a prediction of provider exhaustion or a future invoice.
+
+Quota is a separate account-wide observation. Usage filters do not make a quota project-specific. An imported snapshot can be read without any account connection:
+
+```sh
+python3 -m monitoring_ai serve --db /tmp/my-observatory.sqlite --quota-file examples/quotas.json
+python3 -m monitoring_ai quota --file examples/quotas.json
+```
+
+The example is fictional and becomes stale according to its original timestamp. Demo mode seeds fresh **fictional** quota observations, with an unknown weekly value to demonstrate missing evidence. No account connection is made by default.
+
+If the installed Codex CLI already has an authorized login, opt in to its supported account allowance interface:
+
+```sh
+python3 -m monitoring_ai quota --codex --account work
+python3 -m monitoring_ai serve --db /tmp/my-observatory.sqlite --codex-quota --quota-account work
+```
+
+The first command reads once and prints quota-only JSON. The server reads at most once a minute in a separate worker, so a slow quota read does not block usage views. It sends only initialization and `account/rateLimits/read` to its own finite app-server process. It does not inspect conversations, change login, start inference, reset allowance or enable overage. `captured_at` is local response-receipt time, not a provider sample timestamp. Unsupported or unavailable sources retain prior observations with a visible failure state. Use `--codex-executable /absolute/path/to/codex` if the installed executable is not on PATH.
+
+Quota evidence becomes stale after five minutes. Future timestamps and passed reset times are explicit. A passed reset never implies replenishment. The collector was qualified against an existing authorized Codex login, while public examples and tests remain synthetic. [The quota and insight contract](docs/contract.md#usage-insights-and-quota-observations) documents the format and limits.
+
 ## Limits
 
-Cloud producers can write normalized metadata through an authorized export or collector, but no cloud account adapter, remote authentication, OpenTelemetry receiver, quota reader, hardware/process sampler, alerts, forecasts or execution controls ship yet. Subscription quotas and API-equivalent costs are different measures. This alpha does not derive one from the other.
+Cloud producers can write normalized metadata through an authorized export or collector. Cloud account adapters, remote authentication, OpenTelemetry receivers, hardware/process sampling, budget alerts and execution controls remain planned. Quota collection currently supports the installed Codex account interface and explicit normalized files. Subscription quotas and API-equivalent costs are different measures. This alpha does not derive one from the other.
 
 The server binds to loopback and rejects cross-origin browser reads. It has no write API. The local ledger is private operational data, not encrypted storage. Use a private working directory with appropriate filesystem permissions. Never commit your ledger, source files or real session exports. The repository contains only fictional examples and screenshots.
 

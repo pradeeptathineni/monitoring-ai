@@ -31,6 +31,23 @@ export type Snapshot = {
   source_status: { state: "static" | "following" | "unavailable"; last_success_at: string | null; error: string | null };
   summary: Metrics & { sessions: number; entities: number; active: number; attention: number };
   entities: Entity[];
+  insights?: {
+    schema: "monitoring.insights.v1";
+    window: { minutes: number; from: string; until: string };
+    pace: { records: number; tokens: number; tokens_per_minute: string;
+      estimated_cost_per_hour: string | null; estimated_priced_records: number;
+      unknown_cost_records: number; unconverted_cost_records: number; billed_records: number };
+    forecast: { state: "insufficient-data" | "partial" | "available"; tokens: number | null;
+      estimated_cost: string | null; horizon_minutes: number; assumption: string;
+      observed_span_seconds: number; confidence: "insufficient" | "low" | "limited" };
+    source_freshness: Array<{ source: string; last_event_at: string; age_seconds: number;
+      state: "recent" | "stale" | "future" | "unknown"; events: number }>;
+    quotas: { state: string; note: string; windows: Array<{
+      source: string; provider: string; account: string; provenance: string; captured_at: string;
+      id: string; label: string; used_percent: number | null; remaining_percent: number | null;
+      window_minutes: number | null; resets_at: string | null; freshness: string; age_seconds: number;
+    }>; read_status?: { state: string; last_success_at: string | null; error: string | null } };
+  };
 };
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -48,6 +65,30 @@ function metrics(value: unknown): value is Metrics {
     (cost.amount === null || (typeof cost.amount === "string" && /^\d+(\.\d+)?$/.test(cost.amount))));
 }
 
+function decimal(value: unknown): boolean {
+  return value === null || (typeof value === "string" && /^\d+(\.\d+)?$/.test(value));
+}
+
+function insights(value: unknown): boolean {
+  if (!record(value) || value.schema !== "monitoring.insights.v1" || !record(value.window) ||
+      !record(value.pace) || !record(value.forecast) || !record(value.quotas) ||
+      !Array.isArray(value.source_freshness) || !Array.isArray(value.quotas.windows) || value.quotas.windows.length > 500) return false;
+  const pace = value.pace, forecast = value.forecast;
+  if (![pace.records, pace.tokens, pace.estimated_priced_records, pace.unknown_cost_records,
+    pace.unconverted_cost_records, pace.billed_records, forecast.horizon_minutes]
+      .every((n) => Number.isSafeInteger(n) && (n as number) >= 0) ||
+      typeof pace.tokens_per_minute !== "string" || !decimal(pace.tokens_per_minute) ||
+      !decimal(pace.estimated_cost_per_hour) || !decimal(forecast.estimated_cost) ||
+      !["insufficient-data", "partial", "available"].includes(String(forecast.state)) ||
+      !["insufficient", "low", "limited"].includes(String(forecast.confidence)) ||
+      !(forecast.tokens === null || (Number.isSafeInteger(forecast.tokens) && (forecast.tokens as number) >= 0))) return false;
+  return value.quotas.windows.every((row) => record(row) &&
+    [row.used_percent, row.remaining_percent].every((n) => n === null ||
+      (typeof n === "number" && Number.isFinite(n) && n >= 0 && n <= 100)) &&
+    ["current", "stale", "future", "reset-passed"].includes(String(row.freshness)) &&
+    typeof row.captured_at === "string" && Number.isFinite(Date.parse(row.captured_at)));
+}
+
 /** Refuse incompatible data rather than making an unavailable owner look empty. */
 export function decodeSnapshot(value: unknown): Snapshot {
   if (!record(value) || value.schema !== "monitoring.snapshot.v1" ||
@@ -61,6 +102,7 @@ export function decodeSnapshot(value: unknown): Snapshot {
       ![value.summary.sessions, value.summary.entities, value.summary.active, value.summary.attention]
         .every((n) => Number.isSafeInteger(n) && (n as number) >= 0) ||
       !Array.isArray(value.entities) || value.entities.length > 500 ||
+      (value.insights !== undefined && !insights(value.insights)) ||
       !value.entities.every((row) => record(row) && typeof row.source === "string" &&
         typeof row.session === "string" && typeof row.entity === "string" &&
         (row.parent === null || typeof row.parent === "string") && typeof row.stale === "boolean" &&

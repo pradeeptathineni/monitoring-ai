@@ -4,22 +4,42 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
 import sqlite3
+import signal
 import threading
 from urllib.parse import parse_qs, urlsplit
 import uuid
 
 from . import __version__
 from .metrics import filters, now_iso, selected, snapshot
+from .insights import validate_quota_book
 
 WEB = Path(__file__).with_name("web")
 
 
 class Observatory:
-    def __init__(self, store, pricing, fx, loader=None):
+    def __init__(self, store, pricing, fx, loader=None, quota_loader=None, quota_book=None):
         self.store, self.pricing, self.fx, self.loader = store, pricing, fx, loader
         self.lock = threading.Lock()
         self.identity = str(uuid.uuid4())
         self.source_status = {"state": "static", "last_success_at": None, "error": None}
+        self.quota_loader = quota_loader
+        self.quota_book = validate_quota_book(quota_book) if quota_book else None
+        self.quota_status = dict(state="static" if quota_book else "unconfigured", last_success_at=None, error=None)
+
+    def refresh_quotas(self):
+        if self.quota_loader is None:
+            return
+        with self.lock:
+            self.quota_status["state"] = "reading"
+        try:
+            book = validate_quota_book(self.quota_loader())
+            with self.lock:
+                self.quota_book = book
+                self.quota_status = dict(state="following", last_success_at=now_iso(), error=None)
+        except (ValueError, OSError):
+            with self.lock:
+                self.quota_status = dict(state="unavailable", last_success_at=self.quota_status["last_success_at"],
+                                         error="Quota source unavailable. Last supplied observations are retained.")
 
     def refresh(self):
         if self.loader is None:
@@ -38,7 +58,8 @@ class Observatory:
     def read(self, query):
         with self.lock:
             revision, events = self.store.read()
-            value = snapshot(revision, events, query, self.pricing, self.fx)
+            value = snapshot(revision, events, query, self.pricing, self.fx, quota_book=self.quota_book)
+            value["insights"]["quotas"]["read_status"] = dict(self.quota_status)
             value.update(identity=self.identity, source_status=dict(self.source_status))
             return value
 
@@ -83,6 +104,7 @@ def handler(observatory):
                         schema="monitoring.capabilities.v1", version=__version__,
                         identity=observatory.identity, read_only=True,
                         snapshot="/api/v1/snapshot", events="/api/v1/events",
+                        insights="monitoring.insights.v1", quota_observations="monitoring.quotas.v1",
                         filters=["provider", "model", "surface", "project", "source", "session", "since", "until", "state"],
                         limits={"read_events": 100000, "snapshot_entities": 500, "event_page": 500},
                     ))
@@ -106,7 +128,8 @@ def handler(observatory):
                             revision=revision, events=page, total=len(matched),
                             next_offset=after + limit if after + limit < len(matched) else None))
                 elif parsed.path == "/health":
-                    self.send(200, dict(schema="monitoring.health.v1", status="ok", source_status=observatory.source_status))
+                    self.send(200, dict(schema="monitoring.health.v1", status="ok", source_status=observatory.source_status,
+                                        quota_status=observatory.quota_status))
                 else:
                     files = {"/": ("index.html", "text/html; charset=utf-8"),
                              "/app.js": ("app.js", "text/javascript; charset=utf-8"),
@@ -128,15 +151,30 @@ def serve(observatory, port):
     server = ThreadingHTTPServer(("127.0.0.1", port), handler(observatory))
     server.daemon_threads = True
     stop = threading.Event()
+    previous_term = None
+    if threading.current_thread() is threading.main_thread():
+        def interrupt(signum, frame):
+            raise KeyboardInterrupt
+        previous_term = signal.signal(signal.SIGTERM, interrupt)
 
     def follow():
         while not stop.wait(2):
             observatory.refresh()
 
+    def quotas():
+        while not stop.is_set():
+            observatory.refresh_quotas()
+            if stop.wait(60):
+                break
+
     observatory.refresh()
     worker = threading.Thread(target=follow, daemon=True)
     if observatory.loader:
         worker.start()
+    quota_worker = None
+    if observatory.quota_loader:
+        quota_worker = threading.Thread(target=quotas)
+        quota_worker.start()
     print(f"Monitoring AI → http://127.0.0.1:{server.server_port}", flush=True)
     try:
         server.serve_forever(poll_interval=0.25)
@@ -145,3 +183,7 @@ def serve(observatory, port):
     finally:
         stop.set()
         server.server_close()
+        if quota_worker:
+            quota_worker.join(timeout=15)
+        if previous_term is not None:
+            signal.signal(signal.SIGTERM, previous_term)
