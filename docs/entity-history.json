@@ -1,0 +1,12 @@
+{
+  "schema": "monitoring.history-demo.v1",
+  "version": "0.8.0a1",
+  "synthetic": true,
+  "source_records": 270,
+  "target_records": 145,
+  "loaded_records": 145,
+  "pages": 2,
+  "latest_snapshot_excludes_target": true,
+  "mobile_overflow": false,
+  "page_errors": 0
+}

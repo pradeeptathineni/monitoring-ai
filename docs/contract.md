@@ -42,6 +42,10 @@ Snapshot filters are exact `provider`, `model`, `surface`, `project`, `source`, 
 
 Event pages accept the same filters except state, plus `limit` (1–500, default 100), `after` (nonnegative offset) and `expected_revision`. Start at offset zero, then pass the returned revision on later pages. A changed ledger returns HTTP 409. Restart paging instead of concatenating pages from different revisions. Ordering is timestamp/source/event ID. Events arriving late can change chronological positions.
 
+From 0.8.0a1, event pages also accept `entity` when both `source` and `session` are supplied. All three are exact identifier aliases. This scopes an entity within its source/session identity, rather than combining unrelated workers that share a name. Snapshot and report filters are unchanged. Capabilities advertises the event route's supported filters separately as `event_filters`. Older owners may omit that field and reject `entity`.
+
+The dashboard's entity history reads pages from the beginning in chronological order. It preserves the current usage dimensions and date bounds but omits the current-state filter. Its page count is the selected entity's recorded history within those filters, not all machine activity. The first page must match the displayed snapshot's process identity. Later pages must retain that identity and the first page's revision. A changed ledger, restarted owner or failed read requires an explicit history restart or retry. Loaded pages remain dated observations and never establish a live worker or task acceptance. Ordinary Events mode continues to show the snapshot's latest 100 matching records.
+
 The process instance `identity` changes when the server restarts. `revision` is the ledger's committed event sequence. Neither establishes process liveness or accepted task completion. Consumers should pin the instance identity and deliberately reconnect after it changes. A successful read updates `observed_at`, never event timestamps. HTTP 400 reports invalid filters or read limits, 403 a host/origin mismatch, 404 a missing route and 503 an unavailable ledger.
 
 ## Managed input health

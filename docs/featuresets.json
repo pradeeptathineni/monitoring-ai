@@ -200,7 +200,7 @@
         "openlit/openlit",
         "langfuse/langfuse"
       ],
-      "decision": "Implemented metadata hierarchy, evidence aging, explicit multi-file health/coverage, private setup checks and read-only ingestion readiness against a disposable ledger copy. Shared contextual navigation is adopted without runtime authority. Native usage still supplies no live worker lifecycle; process discovery and full native lifecycle adapters remain deferred.",
+      "decision": "Implemented metadata hierarchy, evidence aging, explicit multi-file health/coverage, private setup checks and read-only ingestion readiness against a disposable ledger copy. Scoped chronological entity-history pages preserve process identity and one ledger revision. Shared contextual navigation is adopted without runtime authority. Native usage still supplies no live worker lifecycle; process discovery and full native lifecycle adapters remain deferred.",
       "evidence": [
         "tests/browser/dashboard.spec.mjs",
         "tests/test_monitoring.py",
@@ -214,7 +214,9 @@
         "tests/test_source_setup.py",
         "monitoring_ai/source_readiness.py",
         "monitoring_ai/ledger_preview.py",
-        "tests/test_readiness_journey.py"
+        "tests/test_readiness_journey.py",
+        "tests/test_entity_events.py",
+        "tests/browser/entity-history.spec.mjs"
       ]
     },
     {

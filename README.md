@@ -41,6 +41,7 @@ The producer appends usage and lifecycle evidence. The server imports complete l
 - Independent quota observations from an explicit file or an opt-in installed Codex allowance read. Stale values and passed reset times retain their last supplied values.
 - A detailed Report view with UTC period presets, adjacent equal-length comparisons, project/model/day breakdowns and categorized tool activity. Unknown timing and unsupported workflow measures stay explicit.
 - An explicit multi-file manifest with independent input health, replay counts and retained history when one source fails. Input aliases and event-source filters remain distinct.
+- [Entity history](docs/session-history.md) with chronological pages scoped to its source and session. Pages retain one ledger revision, with an explicit restart when history changes.
 
 ## Connect your data
 
@@ -190,7 +191,7 @@ Cloud producers can write normalized metadata through an authorized export or co
 
 The server binds to loopback and rejects cross-origin browser reads. It has no write API. The local ledger is private operational data, not encrypted storage. Use a private working directory with appropriate filesystem permissions. Never commit your ledger, source files or real session exports. The repository contains only fictional examples and screenshots.
 
-Each source is limited to 32 MiB and 50,000 records per import. Snapshot reads are limited to 100,000 stored events and 500 displayed entities. File following rereads the bounded file and deduplicates it. This is suitable for a small local observatory, not a high-throughput ingestion service. The limits fail visibly instead of silently omitting usage. Latest-event drill-down is bounded to the snapshot's latest 100 events. The paged API can read older events with revision checks.
+Each source is limited to 32 MiB and 50,000 records per import. Snapshot reads are limited to 100,000 stored events and 500 displayed entities. File following rereads the bounded file and deduplicates it. This is suitable for a small local observatory, not a high-throughput ingestion service. The limits fail visibly instead of silently omitting usage. Ordinary Events mode shows the snapshot's latest 100 records. Selecting an entity opens chronological history in pages of 100, scoped to its source and session and pinned to one ledger revision. Current usage/date filters still apply. A changed ledger requires an explicit restart, and loaded history is not live-worker evidence.
 
 ## Development
 

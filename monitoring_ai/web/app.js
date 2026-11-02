@@ -14,6 +14,7 @@ const titles = { overview: ["Overview", "Status evidence and usage from the sour
   settings: ["Settings", "Appearance preferences and setup guidance for explicitly selected sources."] };
 let data, paused = false, busy = false, view = "overview", entity = null;
 let settingsCategory = "all";
+let entityHistory = null;
 let lastSuccess = 0;
 let snapshotReadUnavailable = false;
 let reportController = null, reportRequestId = 0, reportData = null;
@@ -42,6 +43,7 @@ function showView(route) {
   const target = parseRoute(route), next = target.next;
   if (view === next && settingsCategory === target.category && location.hash.slice(1) === target.hash) return;
   if (view === "report" && next !== "report") cancelReport();
+  if (view === "events" && next !== "events" && entityHistory?.pending) cancelEntityHistory("Entity history read canceled because you left the Event stream. Loaded pages are retained.");
   view = next;
   settingsCategory = target.category;
   $("#metrics").hidden = next === "report" || next === "settings";
@@ -578,8 +580,54 @@ function timeline() {
 
 function state(row) {
   const status = node("span", row.state, "state " + row.state);
-  status.title = `Reported: ${row.reported_state}. Evidence: ${row.status_at || "not supplied"}. Stale: ${row.stale}.`;
+  const age = lifecycleAgeText(row), stale = age.includes("stale");
+  status.title = `Reported: ${row.reported_state}. Evidence: ${row.status_at || "not supplied"}. ${age}. Stale: ${stale}.`;
+  status.append(node("small", age, "state-evidence-age"));
   return status;
+}
+
+function evidenceAgeSeconds(timestamp) {
+  const eventAt = Date.parse(timestamp || ""), observedAt = Date.parse(data?.observed_at || "");
+  if (!Number.isFinite(eventAt) || !Number.isFinite(observedAt)) return null;
+  const elapsed = lastSuccess ? Math.max(0, Date.now() - lastSuccess) : 0;
+  return (observedAt - eventAt + elapsed) / 1000;
+}
+
+function evidenceAgeText(timestamp, label) {
+  const age = evidenceAgeSeconds(timestamp);
+  if (age === null) return `${label} age unknown`;
+  const qualifier = age > 60 || age < -5 ? " · stale" : "";
+  if (age < 0) return `${label} ${number.format(Math.ceil(Math.abs(age)))} seconds in the future${qualifier}`;
+  return `${label} ${number.format(Math.floor(age))} seconds old${qualifier}`;
+}
+
+function lifecycleAgeText(row) {
+  const age = evidenceAgeSeconds(row.status_at);
+  if (age === null) return `Lifecycle evidence age unknown${row.stale ? " · stale" : ""}`;
+  const qualifier = row.stale || age > 60 || age < -5 ? " · stale" : "";
+  if (age < 0) return `Lifecycle evidence ${number.format(Math.ceil(Math.abs(age)))} seconds in the future${qualifier}`;
+  return `Lifecycle evidence ${number.format(Math.floor(age))} seconds old${qualifier}`;
+}
+
+function updateLifecycleEvidenceAges() {
+  if (!data) return;
+  const updateStates = (labels, rows) => labels.forEach((label, index) => {
+    const row = rows[index];
+    if (!row) return;
+    label.textContent = lifecycleAgeText(row);
+    const state = label.closest(".state");
+    if (state) state.title = `Reported: ${row.reported_state}. Evidence: ${row.status_at || "not supplied"}. ${lifecycleAgeText(row)}. Stale: ${lifecycleAgeText(row).includes("stale")}.`;
+  });
+  updateStates($$("#entity-table .state-evidence-age"), data.entities);
+  updateStates($$("#timeline .state-evidence-age"), data.entities.slice(0, 8));
+  $$("#timeline .timeline-row").forEach((line, index) => {
+    const row = data.entities[index];
+    if (!row) return;
+    const eventAge = evidenceAgeText(row.last_event_at, "Latest event evidence");
+    const name = line.querySelector(".timeline-name"), track = line.querySelector(".timeline-track");
+    if (name) name.title = eventAge;
+    if (track) track.title = `${row.started_at} to ${row.last_event_at} · ${eventAge}`;
+  });
 }
 
 function table(target, headers, rows) {
@@ -602,14 +650,214 @@ function table(target, headers, rows) {
 }
 
 function inspect(row) {
+  cancelEntityHistory();
   entity = row;
-  $("#event-selection").textContent = `${row.entity_type}: ${row.entity} · source ${row.source} · session ${row.session}. The latest matching 100 events may not include its entire history.`;
+  entityHistory = {
+    entityKey: JSON.stringify([row.source, row.session, row.entity]), identity: data?.identity ?? null,
+    revision: Number.isSafeInteger(data?.revision) ? data.revision : null,
+    filterSignature: historyFilterSignature(), pages: [], total: null, nextOffset: null,
+    pending: false, controller: null, requestId: 0, phase: "idle", message: "",
+    error: false, filtersChanged: false, serverRevision: null, started: true,
+  };
+  $("#event-selection").textContent = `${row.entity_type}: ${row.entity} · source ${row.source} · session ${row.session}. Entity history is scoped to this exact identity.`;
+  $("#event-description").textContent = "Paged history for this exact entity · usage deltas, status evidence and tool outcomes";
   $("#clear-entity").hidden = false;
-  showView("events"); renderEvents();
+  showView("events");
+  $("#subtitle").textContent = "Paged history for this exact entity · the latest 100 records remain available when selection is cleared.";
+  if (paused) {
+    entityHistory.phase = "paused";
+    entityHistory.message = "Refresh is paused. Entity history did not start; resume refresh, then choose Restart history to read it.";
+    renderEvents();
+  } else startEntityHistory();
+}
+
+function historyFilterSignature() {
+  const params = query();
+  params.delete("state");
+  return params.toString();
+}
+
+function historyParams(after, state, selectedEntity) {
+  const params = query();
+  params.delete("state");
+  params.set("source", selectedEntity.source);
+  params.set("session", selectedEntity.session);
+  params.set("entity", selectedEntity.entity);
+  params.set("limit", "100");
+  if (after > 0) params.set("after", String(after));
+  if (state.revision !== null) params.set("expected_revision", String(state.revision));
+  return params;
+}
+
+function cancelEntityHistory(message = "") {
+  if (!entityHistory) return;
+  entityHistory.requestId += 1;
+  if (entityHistory.controller) entityHistory.controller.abort();
+  if (entityHistory.timeoutTimer) clearTimeout(entityHistory.timeoutTimer);
+  entityHistory.controller = null;
+  entityHistory.timeoutTimer = null;
+  entityHistory.pending = false;
+  if (message) {
+    entityHistory.phase = "cancelled";
+    entityHistory.message = message;
+    entityHistory.error = false;
+  }
+  renderEntityHistory();
+}
+
+function startEntityHistory() {
+  if (!entity || !entityHistory) return;
+  if (paused) {
+    entityHistory.phase = "paused";
+    entityHistory.message = "Refresh is paused. Entity history did not start; resume refresh, then choose Restart history to read it.";
+    renderEntityHistory(); return;
+  }
+  const previousId = entityHistory.requestId;
+  if (entityHistory.controller) entityHistory.controller.abort();
+  if (entityHistory.timeoutTimer) clearTimeout(entityHistory.timeoutTimer);
+  entityHistory = {
+    entityKey: JSON.stringify([entity.source, entity.session, entity.entity]),
+    identity: data?.identity ?? null,
+    revision: null,
+    filterSignature: historyFilterSignature(), pages: [], total: null, nextOffset: null,
+    pending: false, controller: null, timeoutTimer: null, timedOut: false,
+    requestId: previousId + 1, phase: "idle", message: "",
+    error: false, filtersChanged: false, serverRevision: null, started: true,
+  };
+  if (entityHistory.identity === null) {
+    entityHistory.phase = "error";
+    entityHistory.error = true;
+    entityHistory.message = "The current snapshot lacks an owner identity. No entity history was requested.";
+    renderEntityHistory(); return;
+  }
+  fetchEntityHistoryPage(0);
+}
+
+async function fetchEntityHistoryPage(after) {
+  if (!entity || !entityHistory || paused || entityHistory.pending || entityHistory.filtersChanged) return;
+  const currentKey = JSON.stringify([entity.source, entity.session, entity.entity]);
+  if (entityHistory.entityKey !== currentKey) return;
+  if (historyFilterSignature() !== entityHistory.filterSignature) { markEntityHistoryFiltersChanged(); return; }
+  const state = entityHistory, requestId = ++state.requestId, controller = new AbortController();
+  state.controller = controller; state.pending = true; state.phase = "loading"; state.error = false;
+  state.timedOut = false;
+  state.timeoutTimer = setTimeout(() => { state.timedOut = true; controller.abort(); }, 8000);
+  state.message = after === 0 ? "Loading the oldest matching entity events…" : "Loading the next entity events page…";
+  renderEntityHistory();
+  try {
+    const response = await fetch(`/api/v1/events?${historyParams(after, state, entity)}`, { signal: controller.signal, cache: "no-store" });
+    if (entityHistory !== state || requestId !== state.requestId || view !== "events" || state.entityKey !== currentKey) return;
+    if (response.status === 409) {
+      const conflict = await response.json().catch(() => ({}));
+      if (entityHistory !== state || requestId !== state.requestId || view !== "events" || state.entityKey !== currentKey) return;
+      state.serverRevision = Number.isSafeInteger(conflict.revision) ? conflict.revision : null;
+      state.phase = "conflict"; state.error = true;
+      state.message = "The ledger changed while this history was loading. Loaded pages remain pinned to the original revision; restart history to begin a new page set.";
+      return;
+    }
+    if (!response.ok) throw new Error("History read failed.");
+    const value = await response.json();
+    if (entityHistory !== state || requestId !== state.requestId || view !== "events" || state.entityKey !== currentKey) return;
+    if (value.schema !== "monitoring.events.v1" || value.identity !== state.identity || !Number.isSafeInteger(value.revision) || value.revision < 0 || (state.revision !== null && value.revision !== state.revision)) {
+      state.phase = "conflict"; state.error = true;
+      state.message = "The history response did not match the owner identity and revision in the snapshot. No page was added; restart history after the snapshot updates.";
+      return;
+    }
+    if (!Array.isArray(value.events) || !Number.isSafeInteger(value.total) || (value.next_offset !== null && !Number.isSafeInteger(value.next_offset))) {
+      throw new Error("History response was incomplete.");
+    }
+    state.pages.push(value.events);
+    if (state.revision === null) state.revision = value.revision;
+    state.total = value.total;
+    state.nextOffset = value.next_offset;
+    state.phase = "loaded";
+    state.message = "Entity history page loaded oldest first.";
+  } catch (error) {
+    if (entityHistory !== state || requestId !== state.requestId || view !== "events") return;
+    state.phase = "error"; state.error = true;
+    state.message = state.timedOut
+      ? "Entity history read timed out. Any loaded pages remain available; use Restart history to retry."
+      : error.name === "AbortError" ? "Entity history read was canceled. Loaded pages remain available; restart explicitly to try again."
+        : "Entity history could not be read. Any loaded pages remain available; use Restart history to retry.";
+  } finally {
+    if (entityHistory === state && requestId === state.requestId) {
+      clearTimeout(state.timeoutTimer); state.timeoutTimer = null;
+      state.pending = false; state.controller = null;
+      renderEntityHistory();
+    }
+  }
+}
+
+function markEntityHistoryFiltersChanged(force = false) {
+  if (!entityHistory || !entity || (!force && historyFilterSignature() === entityHistory.filterSignature)) return;
+  if (entityHistory.controller) cancelEntityHistory();
+  entityHistory.filtersChanged = true;
+  entityHistory.phase = "filters-changed";
+  entityHistory.message = "Filters changed. Loaded pages remain under the previous filter set; restart history to apply current filters.";
+  renderEntityHistory();
+}
+
+function entityHistoryRestartReason() {
+  if (entityHistory?.filtersChanged) return "Filters changed. Loaded pages remain under the previous filter set; restart history to apply current filters.";
+  if (entityHistory?.phase === "conflict") return "History revision or owner changed. Loaded pages remain pinned; restart history to begin a new page set.";
+  return "";
+}
+
+function entityHistorySnapshotNote() {
+  if (!entityHistory || !data) return "";
+  if (data.identity !== entityHistory.identity) return `The current snapshot comes from a different owner instance. These pages remain pinned to revision ${entityHistory.revision ?? "unknown"}. Restart history to begin again.`;
+  if (entityHistory.revision !== null && data.revision !== entityHistory.revision) return `The current snapshot is revision ${data.revision}; these pages remain pinned to revision ${entityHistory.revision}. Restart history to begin a new page set.`;
+  return "";
+}
+
+function entityHistoryRows() {
+  return entityHistory?.pages.flat() || [];
+}
+
+function historyEventCells(row) {
+  const id = node("div", row.entity); id.append(node("small", `${row.source} · ${row.surface}`));
+  const detail = row.kind === "status" ? row.state : row.kind === "tool" ? `${row.tool} · ${row.outcome} · ${row.duration_ms ?? "?"} ms` : `${number.format(Object.values(row.tokens || {}).reduce((a, b) => a + b, 0))} tokens · ${row.model}`;
+  const cost = row.cost;
+  const literalCost = cost && cost.amount !== undefined && cost.currency && cost.basis
+    ? `${cost.amount} ${cost.currency} · ${cost.basis}${cost.provenance ? ` · ${cost.provenance}` : ""}`
+    : row.kind === "usage" ? "No recorded cost" : "—";
+  return [row.timestamp.replace("T", " ").replace("Z", ""), id, row.kind, detail, literalCost];
+}
+
+function renderEntityHistory() {
+  const panel = $("#entity-history-panel");
+  panel.hidden = !entity;
+  if (!entity || !entityHistory) return;
+  const rows = entityHistoryRows(), status = $("#entity-history-status");
+  status.classList.toggle("error", entityHistory.error);
+  const snapshotNote = entityHistorySnapshotNote();
+  status.textContent = [entityHistory.message, snapshotNote].filter(Boolean).join(" ");
+  $("#entity-history-scope").textContent = `Exact entity key: source ${entity.source} · session ${entity.session} · entity ${entity.entity}. Pages are oldest first, up to 100 events. Provider, model, surface, project and date filters apply; state is omitted. Recorded costs stay in original currency; no price book or conversion is applied.`;
+  $("#entity-history-count").textContent = entityHistory.total === null
+    ? "No history page has been loaded yet."
+    : entityHistory.total === 0
+      ? "No matching events were recorded for this entity and filter set."
+      : `Showing ${number.format(rows.length)} of ${number.format(entityHistory.total)} matching events · owner revision ${entityHistory.revision}.`;
+  const load = $("#load-more-events"), restart = $("#restart-entity-history");
+  load.hidden = entityHistory.nextOffset === null;
+  load.disabled = paused || entityHistory.pending || entityHistory.filtersChanged || entityHistory.phase === "conflict" || entityHistory.nextOffset === null;
+  restart.hidden = !entityHistory.started && !rows.length;
+  restart.disabled = paused || entityHistory.pending;
+  const target = $("#event-table");
+  target.classList.add("entity-history-table");
+  if (rows.length) table("#event-table", ["Time · UTC", "Entity / source", "Kind", "Details", "Recorded cost · original currency"], rows.map(historyEventCells));
+  else {
+    const emptyText = entityHistory.pending ? "Loading matching events…" : entityHistory.total === 0 ? "No matching entity events." : "No history page is loaded.";
+    target.replaceChildren(node("p", emptyText, "empty"));
+  }
 }
 
 function renderEvents() {
-  const rows = data.events.filter((row) => !entity || (row.entity === entity.entity && row.source === entity.source && row.session === entity.session));
+  if (entity) { renderEntityHistory(); return; }
+  $("#entity-history-panel").hidden = true;
+  $("#event-description").textContent = "Latest 100 matching records · usage deltas, status evidence and tool outcomes";
+  const target = $("#event-table"); target.classList.remove("entity-history-table");
+  const rows = data.events;
   table("#event-table", ["Time · UTC", "Entity / source", "Kind", "Details", "Cost / basis"], rows.map((row) => {
     const id = node("div", row.entity); id.append(node("small", `${row.source} · ${row.surface}`));
     const detail = row.kind === "status" ? row.state : row.kind === "tool" ? `${row.tool} · ${row.outcome} · ${row.duration_ms ?? "?"} ms` : `${number.format(Object.values(row.tokens).reduce((a,b) => a+b, 0))} tokens · ${row.model}`;
@@ -721,11 +969,12 @@ async function refresh() {
 
 $$("[data-view]").forEach((button) => button.addEventListener("click", () => showView(button.dataset.view)));
 $("#filters").addEventListener("change", (event) => {
+  markEntityHistoryFiltersChanged();
   if (event.target?.name === "since" || event.target?.name === "until") $("#report-period").value = "custom";
   refresh(); if (view === "report") loadReport();
 });
 $("#filters").addEventListener("submit", (event) => event.preventDefault());
-$("#filters").addEventListener("reset", () => { $("#state-filter").value = ""; setTimeout(() => { $("#report-period").value = "custom"; refresh(); if (view === "report") loadReport(); }, 0); });
+$("#filters").addEventListener("reset", () => { markEntityHistoryFiltersChanged(true); $("#state-filter").value = ""; setTimeout(() => { $("#report-period").value = "custom"; refresh(); if (view === "report") loadReport(); }, 0); });
 $("#report-period").addEventListener("change", () => applyReportPeriod($("#report-period").value));
 $("#state-filter").addEventListener("change", () => { refresh(); if (view === "report") loadReport(); });
 $("#group").addEventListener("change", () => { if (data) renderUsage(); });
@@ -734,6 +983,14 @@ $("#pause").addEventListener("click", () => {
   if (paused) {
     $("#connection").textContent = "Refresh paused"; $("#connection").classList.add("offline");
     if (view === "report") cancelReport();
+    if (entityHistory?.pending) cancelEntityHistory("Entity history read canceled because refresh was paused. Loaded pages are retained; resume and retry explicitly.");
+    else if (entityHistory) {
+      const restartReason = entityHistoryRestartReason();
+      entityHistory.message = restartReason
+        ? `${restartReason} Refresh is paused; loaded pages are retained.`
+        : "Refresh is paused. Loaded entity pages are retained; resume before loading more or restarting history.";
+      renderEntityHistory();
+    }
     if (data) {
       for (const row of data.entities) if (!["completed", "failed", "cancelled"].includes(row.state)) { row.state = "unknown"; row.stale = true; }
       data.summary.active = 0; data.summary.attention = 0;
@@ -744,10 +1001,30 @@ $("#pause").addEventListener("click", () => {
       $("#report-status").textContent = `Report refresh is paused.${last}`;
     }
     if (data) render();
+  } else {
+    if (entityHistory) {
+      const restartReason = entityHistoryRestartReason();
+      entityHistory.message = restartReason
+        ? `${restartReason} Refresh resumed.`
+        : "Refresh resumed. Loaded pages are retained; choose Load more events or Restart history to continue.";
+      renderEntityHistory();
+    }
+    refresh(); if (view === "report") loadReport();
   }
-  else { refresh(); if (view === "report") loadReport(); }
 });
-$("#clear-entity").addEventListener("click", () => { entity = null; $("#event-selection").textContent = ""; $("#clear-entity").hidden = true; renderEvents(); });
+$("#load-more-events").addEventListener("click", () => {
+  if (!entityHistory || paused || entityHistory.pending || entityHistory.filtersChanged || entityHistory.nextOffset === null) return;
+  fetchEntityHistoryPage(entityHistory.nextOffset);
+});
+$("#restart-entity-history").addEventListener("click", () => {
+  if (!entityHistory || !entity || paused || entityHistory.pending) return;
+  startEntityHistory();
+});
+$("#clear-entity").addEventListener("click", () => {
+  cancelEntityHistory(); entity = null; entityHistory = null;
+  $("#event-selection").textContent = ""; $("#clear-entity").hidden = true;
+  $("#subtitle").textContent = titles.events[1]; renderEvents();
+});
 document.addEventListener("keydown", (event) => {
   if (!event.ctrlKey && !event.metaKey && !event.altKey && !["INPUT", "SELECT", "TEXTAREA"].includes(event.target.tagName) && ["1", "2", "3", "4", "5", "6"].includes(event.key)) showView(Object.keys(titles)[Number(event.key) - 1]);
 });
@@ -755,6 +1032,7 @@ window.addEventListener("hashchange", () => showView(location.hash.slice(1) || "
 showView(location.hash.slice(1) || "overview");
 refresh();
 setInterval(() => {
+  if (data) updateLifecycleEvidenceAges();
   if (paused && data) {
     retainInsights("Dashboard refresh paused; showing retained dated quota observations.");
     renderInsights();

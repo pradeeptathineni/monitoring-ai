@@ -10,6 +10,7 @@ from urllib.parse import parse_qs, urlsplit
 import uuid
 
 from . import __version__
+from .events import label as event_label
 from .metrics import filters, now_iso, selected, snapshot
 from .insights import validate_quota_book
 from .reporting import detailed_report
@@ -141,6 +142,7 @@ def handler(observatory):
                         source_coverage="monitoring.source-coverage.v1",
                         insights="monitoring.insights.v1", quota_observations="monitoring.quotas.v1",
                         filters=["provider", "model", "surface", "project", "source", "session", "since", "until", "state"],
+                        event_filters=["provider", "model", "surface", "project", "source", "session", "since", "until", "entity"],
                         limits={"read_events": 100000, "snapshot_entities": 500, "event_page": 500},
                     ))
                 elif parsed.path == "/api/v1/snapshot":
@@ -153,7 +155,14 @@ def handler(observatory):
                     expected = query.pop("expected_revision", None)
                     if not 1 <= limit <= 500 or after < 0 or "state" in query:
                         raise ValueError("Use limit 1–500 and a nonnegative offset. State is snapshot-only")
+                    entity = query.pop("entity", None)
+                    if entity is not None:
+                        if not query.get("source") or not query.get("session"):
+                            raise ValueError("Entity filters require exact source and session scope")
+                        entity = event_label(entity, "entity")
                     query = filters(query)
+                    if entity is not None:
+                        query["entity"] = entity
                     with observatory.lock:
                         revision, events = observatory.store.read()
                         if expected is not None and int(expected) != revision:
