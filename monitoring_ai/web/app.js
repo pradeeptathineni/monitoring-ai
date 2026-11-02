@@ -361,6 +361,53 @@ function renderInsights() {
   }
 }
 
+function inputTimestamp(value) {
+  const timestamp = Date.parse(value || "");
+  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString().replace("T", " ").replace(".000Z", " UTC") : "Not recorded";
+}
+
+function inputCount(value) {
+  return Number.isFinite(value) ? number.format(value) : "Unknown";
+}
+
+function renderInputHealth() {
+  const root = $("#input-health"), status = $("#input-health-status"), inventory = data?.inputs;
+  root.replaceChildren(); status.classList.remove("partial");
+  if (inventory?.schema !== "monitoring.inputs.v1") {
+    status.textContent = "Input inventory is unavailable in this snapshot. Explicit event history remains available.";
+    root.append(node("p", "Connect an explicitly selected input to see read health here.", "empty"));
+    return;
+  }
+  const inputs = Array.isArray(inventory.inputs) ? inventory.inputs : [];
+  if (!inventory.configured) {
+    status.textContent = `No explicit input manifest is configured. Snapshot observed ${inputTimestamp(data.observed_at)}.`;
+    root.append(node("p", "No managed inputs to monitor.", "empty")); return;
+  }
+  const count = (reported, test) => Number.isFinite(reported) ? reported : inputs.filter(test).length;
+  const healthy = count(inventory.healthy_inputs, (item) => item.state === "following");
+  const unavailable = count(inventory.unavailable_inputs, (item) => item.state === "unavailable");
+  const unread = count(inventory.unread_inputs, (item) => item.state === "unread");
+  const partial = Boolean(inventory.degraded) || unavailable > 0 || unread > 0;
+  status.textContent = partial
+    ? `Partial input availability · ${inputCount(healthy)} following · ${inputCount(unavailable)} unavailable · ${inputCount(unread)} unread. Failed reads retain previously accepted event history. Snapshot observed ${inputTimestamp(data.observed_at)}.`
+    : `${inputCount(healthy)} configured inputs following. Snapshot observed ${inputTimestamp(data.observed_at)}.`;
+  status.classList.toggle("partial", partial);
+  if (!inputs.length) { root.append(node("p", "No managed inputs are listed in the configured manifest.", "empty")); return; }
+  for (const input of inputs) {
+    const row = node("article", null, `input-health-row input-${input.state || "unknown"}`);
+    const head = node("div", null, "input-health-head");
+    const label = node("div", null, "input-health-label");
+    label.append(node("strong", typeof input.id === "string" && input.id ? input.id : "Managed input"));
+    const alias = [input.format, input.project].filter((value) => typeof value === "string" && value).join(" · ");
+    if (alias) label.append(node("small", alias));
+    const stateName = input.state === "following" ? "Following" : input.state === "unavailable" ? "Unavailable" : input.state === "unread" ? "Not yet read" : "Unknown";
+    head.append(label, node("span", stateName, "input-state")); row.append(head);
+    const dates = node("p", `Last attempt: ${inputTimestamp(input.last_attempt_at)} · Last success: ${inputTimestamp(input.last_success_at)}`, "input-health-dates"); row.append(dates);
+    const counts = node("p", `${inputCount(input.records_seen)} records seen · ${inputCount(input.added)} added · ${inputCount(input.replayed)} replayed`, "input-health-counts"); row.append(counts);
+    root.append(row);
+  }
+}
+
 function bars(target, rows, split = false) {
   const root = $(target); root.replaceChildren();
   const sorted = [...rows].sort((a, b) => b.total_tokens - a.total_tokens).slice(0, 8);
@@ -497,6 +544,7 @@ function render() {
   }
   confidence.append(node("p", "Known amounts cover only their labeled records. Estimates and billed amounts are never added for the same event. Lifecycle evidence expires after 60 seconds.", "confidence-note"));
   renderInsights();
+  renderInputHealth();
   table("#entity-table", ["Entity / hierarchy", "State", "Model / surface", "Tokens", "Estimated", "Billed", "Last evidence · UTC"], data.entities.map((row) => {
     const name = node("button", (row.parent ? "↳ " : "") + row.entity, "entity-button");
     name.addEventListener("click", () => inspect(row));

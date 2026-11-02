@@ -40,6 +40,7 @@ The producer appends usage and lifecycle evidence. The server imports complete l
 - Source-age views, trailing-window token pace and cautious linear forecasts with observed span, sample count and explicit cost coverage.
 - Independent quota observations from an explicit file or an opt-in installed Codex allowance read. Stale values and passed reset times retain their last supplied values.
 - A detailed Report view with UTC period presets, adjacent equal-length comparisons, project/model/day breakdowns and categorized tool activity. Unknown timing and unsupported workflow measures stay explicit.
+- An explicit multi-file manifest with independent input health, replay counts and retained history when one source fails. Input aliases and event-source filters remain distinct.
 
 ## Connect your data
 
@@ -65,7 +66,33 @@ Use the same source ID and project alias when replaying or following a file. Dif
 
 Claude imports also retain metadata from complete structured tool-use/result pairs: tool aliases, error outcomes and recognized native categories. Incomplete pairs are uncounted. Inputs, result text and shell arguments are discarded. A `Bash` or `Skill` record identifies that invocation, not its private command or skill arguments. The adapter never infers duration from gaps between messages.
 
+### Follow several selected files
+
+Keep a private JSON manifest outside the repository. Each entry names one authorized absolute file path. For example:
+
+```json
+{
+  "schema": "monitoring.sources.v1",
+  "sources": [
+    {"id": "orchestrator-export", "format": "normalized", "path": "/absolute/path/to/events.jsonl"},
+    {"id": "selected-codex-session", "format": "codex", "path": "/absolute/path/to/session.jsonl", "project": "my-app"}
+  ]
+}
+```
+
+```sh
+python3 -m monitoring_ai serve --sources /path/to/private-sources.json --db /tmp/my-observatory.sqlite
+```
+
+The manifest is loaded once at startup and admits at most 32 files. Restart deliberately to change that selection. File paths stay in the private configuration; the read API and dashboard show only aliases, format, project and read outcomes. Native inputs require a project alias. Normalized inputs retain their supplied source and project dimensions, so a managed input alias is not necessarily an event-source filter.
+
+Each input is read and imported independently. Missing files, malformed data or changed event identities mark that input unavailable; other inputs continue and accepted history stays in the ledger. Recovery replays safely. A changed identity rejects the whole attempted batch for that input. Replacing or truncating a file never deletes earlier observations. The panel shows counts for the latest read attempt, not lifetime ingestion totals. Last successful read describes polling freshness, not worker liveness or completeness of session coverage.
+
+Duplicate selected paths and IDs refuse at startup. Copies of the same native session under different paths and aliases can still double-count; choose one collector per activity. Final-file symlinks, directories, unknown manifest fields and relative paths refuse. There is no directory discovery, browser configuration editor or automatic admission of newly added manifest entries. `--sources`, `--file` and `--demo` are mutually exclusive.
+
 For pricing, adapt [the fictional price book](examples/pricing.json) to your verified rates and validity dates. All four rates are amounts per million tokens. Add `--pricing /path/to/pricing.json` to `serve` or `top`. Reported event costs take precedence. To convert, supply `--currency EUR --fx /path/to/fx.json` with a dated [FX book](examples/fx.json). Example prices and exchange rates are deliberately fictional.
+
+[Desktop input-health example](docs/inputs.png) · [Mobile panel](docs/inputs-mobile.png). Both show fictional sources, including an intentionally missing demo input.
 
 ## Usage pace and quotas
 

@@ -200,12 +200,15 @@
         "openlit/openlit",
         "langfuse/langfuse"
       ],
-      "decision": "Implemented normalized metadata hierarchy and stale-state behavior. OS process ownership and full native lifecycle adapters deferred.",
+      "decision": "Implemented normalized metadata hierarchy, stale-state behavior, explicit multi-file configuration and independent input health/recovery. OS process ownership, directory discovery and full native lifecycle adapters remain deferred.",
       "evidence": [
         "tests/browser/dashboard.spec.mjs",
         "tests/test_monitoring.py",
         "monitoring_ai/server.py",
-        "monitoring_ai/insights.py"
+        "monitoring_ai/insights.py",
+        "monitoring_ai/source_observer.py",
+        "monitoring_ai/sources.py",
+        "tests/test_multi_sources.py"
       ]
     },
     {

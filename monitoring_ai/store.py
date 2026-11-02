@@ -91,6 +91,9 @@ class Store:
 
     def read(self):
         with self.connect() as db:
+            # Independent input writers may commit while a dashboard is reading.
+            # Pin revision and rows to the same SQLite snapshot in WAL mode.
+            db.execute("BEGIN")
             revision = db.execute("SELECT COALESCE(MAX(sequence),0) FROM events").fetchone()[0]
             rows = [json.loads(row[0]) for row in db.execute(
                 "SELECT payload FROM events ORDER BY timestamp, source, event_id LIMIT 100001"

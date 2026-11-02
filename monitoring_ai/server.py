@@ -18,8 +18,11 @@ WEB = Path(__file__).with_name("web")
 
 
 class Observatory:
-    def __init__(self, store, pricing, fx, loader=None, quota_loader=None, quota_book=None):
+    def __init__(self, store, pricing, fx, loader=None, quota_loader=None, quota_book=None, source_observer=None):
+        if loader is not None and source_observer is not None:
+            raise ValueError("Choose one input configuration")
         self.store, self.pricing, self.fx, self.loader = store, pricing, fx, loader
+        self.source_observer = source_observer
         self.lock = threading.Lock()
         self.identity = str(uuid.uuid4())
         self.source_status = {"state": "static", "last_success_at": None, "error": None}
@@ -43,18 +46,33 @@ class Observatory:
                                          error="Quota source unavailable. Last supplied observations are retained.")
 
     def refresh(self):
+        if self.source_observer is not None:
+            value = self.source_observer.refresh(self.store)
+            complete = value["healthy_inputs"] == len(value["inputs"])
+            with self.lock:
+                self.source_status = dict(
+                    state="following" if complete else "unavailable",
+                    degraded=bool(value["healthy_inputs"]) and not complete,
+                    last_success_at=now_iso() if complete else self.source_status["last_success_at"],
+                    error=None if complete else "Some configured inputs are unavailable. Accepted history is retained.",
+                )
+            return
         if self.loader is None:
             return
-        with self.lock:
-            try:
-                result = self.store.ingest(self.loader())
+        try:
+            result = self.store.ingest(self.loader())
+            with self.lock:
                 self.source_status = dict(state="following", last_success_at=now_iso(), error=None, **result)
-            except (ValueError, OSError, sqlite3.Error):
+        except (ValueError, OSError, sqlite3.Error):
+            with self.lock:
                 # Diagnostics never echo a native source path or a malformed record
                 self.source_status = dict(
                     state="unavailable", last_success_at=self.source_status["last_success_at"],
                     error="Source read or validation failed. Last accepted events are retained.",
                 )
+
+    def input_status(self):
+        return self.source_observer.snapshot() if self.source_observer is not None else None
 
     def read(self, query):
         with self.lock:
@@ -62,6 +80,8 @@ class Observatory:
             value = snapshot(revision, events, query, self.pricing, self.fx, quota_book=self.quota_book)
             value["insights"]["quotas"]["read_status"] = dict(self.quota_status)
             value.update(identity=self.identity, source_status=dict(self.source_status))
+            if self.source_observer is not None:
+                value["inputs"] = self.input_status()
             return value
 
     def report(self, query):
@@ -69,6 +89,8 @@ class Observatory:
             revision, events = self.store.read()
             value = detailed_report(revision, events, query, self.pricing, self.fx)
             value.update(identity=self.identity, source_status=dict(self.source_status))
+            if self.source_observer is not None:
+                value["inputs"] = self.input_status()
             return value
 
 
@@ -113,6 +135,7 @@ def handler(observatory):
                         identity=observatory.identity, read_only=True,
                         snapshot="/api/v1/snapshot", events="/api/v1/events",
                         report="/api/v1/report", event_features=["tool-categories.v1"],
+                        input_observations="monitoring.inputs.v1",
                         insights="monitoring.insights.v1", quota_observations="monitoring.quotas.v1",
                         filters=["provider", "model", "surface", "project", "source", "session", "since", "until", "state"],
                         limits={"read_events": 100000, "snapshot_entities": 500, "event_page": 500},
@@ -139,8 +162,13 @@ def handler(observatory):
                             revision=revision, events=page, total=len(matched),
                             next_offset=after + limit if after + limit < len(matched) else None))
                 elif parsed.path == "/health":
-                    self.send(200, dict(schema="monitoring.health.v1", status="ok", source_status=observatory.source_status,
-                                        quota_status=observatory.quota_status))
+                    with observatory.lock:
+                        value = dict(schema="monitoring.health.v1", status="ok", source_status=dict(observatory.source_status),
+                                     quota_status=dict(observatory.quota_status))
+                    inputs = observatory.input_status()
+                    if inputs is not None:
+                        value["inputs"] = inputs
+                    self.send(200, value)
                 else:
                     files = {"/": ("index.html", "text/html; charset=utf-8"),
                              "/app.js": ("app.js", "text/javascript; charset=utf-8"),
@@ -180,7 +208,7 @@ def serve(observatory, port):
 
     observatory.refresh()
     worker = threading.Thread(target=follow, daemon=True)
-    if observatory.loader:
+    if observatory.loader or observatory.source_observer is not None:
         worker.start()
     quota_worker = None
     if observatory.quota_loader:

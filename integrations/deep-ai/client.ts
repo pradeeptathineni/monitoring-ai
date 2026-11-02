@@ -27,6 +27,7 @@ export type Report = {
   range: { from: string | null; until: string };
   previous_range: { from: string; until: string } | null;
   fx?: { base: string; as_of: string; provenance: string; rates: Record<string, string | number> } | null;
+  inputs?: ManagedInputs;
   summary: Metrics & { observed_sessions: number; estimated_session_count: number;
     known_estimate_per_priced_session: string | null; cache_read_share_percent: string | null };
   breakdowns: Record<"projects" | "models" | "daily", { rows: Array<{
@@ -46,7 +47,8 @@ export type Snapshot = {
   observed_at: string;
   currency: string;
   coverage: { scope: string; event_count: number; matched_events: number; entities_truncated: boolean };
-  source_status: { state: "static" | "following" | "unavailable"; last_success_at: string | null; error: string | null };
+  source_status: { state: "static" | "following" | "unavailable"; last_success_at: string | null; error: string | null; degraded?: boolean };
+  inputs?: ManagedInputs;
   summary: Metrics & { sessions: number; entities: number; active: number; attention: number };
   entities: Entity[];
   insights?: {
@@ -68,6 +70,28 @@ export type Snapshot = {
   };
 };
 
+export type ManagedInput = {
+  id: string;
+  format: "normalized" | "claude" | "codex";
+  project: string | null;
+  state: "following" | "unavailable" | "unread";
+  last_attempt_at: string | null;
+  last_success_at: string | null;
+  records_seen: number | null;
+  added: number;
+  replayed: number;
+  error: string | null;
+};
+
+export type ManagedInputs = {
+  schema: "monitoring.inputs.v1";
+  configured: true;
+  inputs: ManagedInput[];
+  healthy_inputs: number;
+  unavailable_inputs: number;
+  unread_inputs: number;
+};
+
 function record(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
@@ -85,6 +109,58 @@ function metrics(value: unknown): value is Metrics {
 
 function decimal(value: unknown): boolean {
   return value === null || (typeof value === "string" && /^\d+(\.\d+)?$/.test(value));
+}
+
+const INPUT_KEYS = ["id", "format", "project", "state", "last_attempt_at", "last_success_at",
+  "records_seen", "added", "replayed", "error"];
+const INPUT_ERRORS = ["Input unavailable.", "Input data was rejected.", "Input processing failed."];
+
+function alias(value: unknown): value is string {
+  return typeof value === "string" && /^[A-Za-z0-9_.:@-]{1,160}$/.test(value);
+}
+
+function nullableTimestamp(value: unknown): value is string | null {
+  return value === null || (typeof value === "string" &&
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value) &&
+    Number.isFinite(Date.parse(value)));
+}
+
+function nonnegativeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+function managedInputs(value: unknown): value is ManagedInputs {
+  if (!record(value) || Object.keys(value).sort().join(",") !==
+      ["schema", "configured", "inputs", "healthy_inputs", "unavailable_inputs", "unread_inputs"].sort().join(",") ||
+      value.schema !== "monitoring.inputs.v1" || value.configured !== true || !Array.isArray(value.inputs) ||
+      ![value.healthy_inputs, value.unavailable_inputs, value.unread_inputs].every(nonnegativeInteger)) return false;
+
+  const seen = new Set<string>();
+  let healthy = 0, unavailable = 0, unread = 0;
+  for (const row of value.inputs) {
+    if (!record(row) || Object.keys(row).sort().join(",") !== [...INPUT_KEYS].sort().join(",") ||
+        !alias(row.id) || seen.has(row.id) || !["normalized", "claude", "codex"].includes(String(row.format)) ||
+        !(row.project === null || alias(row.project)) ||
+        !["following", "unavailable", "unread"].includes(String(row.state)) ||
+        !nullableTimestamp(row.last_attempt_at) || !nullableTimestamp(row.last_success_at) ||
+        !(row.records_seen === null || nonnegativeInteger(row.records_seen)) ||
+        !nonnegativeInteger(row.added) || !nonnegativeInteger(row.replayed) ||
+        !(row.error === null || INPUT_ERRORS.includes(String(row.error)))) return false;
+    seen.add(row.id);
+    if (row.added + row.replayed > (row.records_seen ?? 0)) return false;
+    if (row.state === "following") {
+      if (row.last_attempt_at === null || row.last_success_at === null || row.records_seen === null ||
+          row.error !== null || row.added + row.replayed !== row.records_seen) return false;
+      healthy++;
+    } else if (row.state === "unavailable") {
+      if (row.last_attempt_at === null || row.error === null || row.added !== 0 || row.replayed !== 0) return false;
+      unavailable++;
+    } else {
+      if (row.last_success_at !== null || row.records_seen !== null || row.added !== 0 || row.replayed !== 0 || row.error !== null) return false;
+      unread++;
+    }
+  }
+  return value.healthy_inputs === healthy && value.unavailable_inputs === unavailable && value.unread_inputs === unread;
 }
 
 function insights(value: unknown): boolean {
@@ -116,10 +192,12 @@ export function decodeSnapshot(value: unknown): Snapshot {
       !Number.isSafeInteger(value.coverage.event_count) || !Number.isSafeInteger(value.coverage.matched_events) ||
       typeof value.coverage.scope !== "string" || typeof value.coverage.entities_truncated !== "boolean" ||
       !record(value.source_status) || !["static", "following", "unavailable"].includes(String(value.source_status.state)) ||
+      (value.source_status.degraded !== undefined && typeof value.source_status.degraded !== "boolean") ||
       !metrics(value.summary) || !record(value.summary) ||
       ![value.summary.sessions, value.summary.entities, value.summary.active, value.summary.attention]
         .every((n) => Number.isSafeInteger(n) && (n as number) >= 0) ||
       !Array.isArray(value.entities) || value.entities.length > 500 ||
+      (value.inputs !== undefined && !managedInputs(value.inputs)) ||
       (value.insights !== undefined && !insights(value.insights)) ||
       !value.entities.every((row) => record(row) && typeof row.source === "string" &&
         typeof row.session === "string" && typeof row.entity === "string" &&
@@ -135,6 +213,7 @@ export function decodeReport(value: unknown): Report {
       !Number.isSafeInteger(value.revision) || typeof value.observed_at !== "string" ||
       !Number.isFinite(Date.parse(value.observed_at)) || typeof value.currency !== "string" ||
       !record(value.range) || !metrics(value.summary) || !record(value.breakdowns) ||
+      (value.inputs !== undefined && !managedInputs(value.inputs)) ||
       !["projects", "models", "daily"].every((name) => {
         const group = (value.breakdowns as Record<string, unknown>)[name];
         return record(group) && typeof group.truncated === "boolean" && Array.isArray(group.rows) &&

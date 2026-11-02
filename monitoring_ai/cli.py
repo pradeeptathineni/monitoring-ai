@@ -42,6 +42,7 @@ def parser():
         if name == "serve":
             command.add_argument("--port", type=int, default=5274)
             command.add_argument("--demo", action="store_true", help="Seed an empty ledger with fictional data")
+            command.add_argument("--sources", type=Path, help="Explicit private source manifest, loaded once at startup")
         if name == "top":
             command.add_argument("--json", action="store_true")
             command.add_argument("--watch", action="store_true", help="Refresh every two seconds in this terminal")
@@ -148,14 +149,22 @@ def run(args):
     if args.command == "serve":
         if not 0 <= args.port <= 65535:
             raise ValueError("Invalid port")
+        if sum(bool(value) for value in (args.demo, args.file, args.sources)) > 1:
+            raise ValueError("Choose --demo, --file or --sources")
+        if args.sources and (args.format != "normalized" or args.source_id or args.project):
+            raise ValueError("Source aliases and formats belong in the manifest")
+        observer = None
+        if args.sources:
+            from .sources import load_sources
+            from .source_observer import SourceObserver
+            observer = SourceObserver(load_sources(args.sources))
         if args.demo:
-            if args.file:
-                raise ValueError("Choose --demo or --file")
             if store.read()[0]:
                 raise ValueError("Demo seeding requires an empty ledger")
             store.ingest(demo_events())
         loader = (lambda: load(args.file, args.format, args.source_id, args.project, live=True)) if args.file else None
         serve(Observatory(store, pricing, fx, loader, quota_loader=quota_loader(args),
+                          source_observer=observer,
                           quota_book=demo_quotas() if args.demo and not args.quota_file and not args.codex_quota else None), args.port)
     else:
         if args.watch and (args.json or not sys.stdout.isatty()):
