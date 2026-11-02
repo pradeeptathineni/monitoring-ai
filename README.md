@@ -133,6 +133,16 @@ python3 -m monitoring_ai report --db /tmp/my-observatory.sqlite --project my-app
 
 Known estimate per priced session is a covered subtotal divided by sessions with priced estimated records. Recorded cache-read share uses cached reads divided by all recorded input buckets. Reported output rate uses only records with positive explicit durations and is not model streaming speed. Context overhead, one-shot rate, corrections, time to first edit and rework are unavailable from this schema. No workflow-quality conclusion is inferred from tool errors or chronology. [The detailed report contract](docs/contract.md#detailed-report) defines those measures.
 
+## Appearance
+
+Open **Appearance** below the header. Follow the system scheme or choose Neon 1 Dark, Neon 1 Light, Slate Dark, Sand Light, Forest Light or Matrix Dark. Monitoring bundles the pinned shared `@deep/theme` candidate locally, with its MIT license. It needs no running Deep service, registry installation or network request.
+
+Color pickers, corner radius and density offer local overrides. **Apply overrides** validates them before changing the view. Unsafe contrast is refused and the current theme stays active. **Reset appearance** returns to system mode. Explicit choices survive reload and update other tabs on the same Monitoring origin. Storage failures leave the current page usable with a visible persistence message. Settings use a Monitoring-specific browser key, with no automatic cross-application synchronization.
+
+The shared palette changes appearance only. Estimated and billed costs, unknown values, source read health and lifecycle evidence retain their existing meanings. [Pinned package provenance](docs/theme-source.json) records the exact candidate and checksums. Monitoring owns its adapter and layouts.
+
+[Dark dashboard](docs/theme-dark.png) · [Light dashboard](docs/theme-light.png) · [Mobile appearance](docs/theme-mobile.png) · [Light input health](docs/theme-inputs-mobile.png). These captures contain fictional data.
+
 ## Limits
 
 Cloud producers can write normalized metadata through an authorized export or collector. Cloud account adapters, remote authentication, OpenTelemetry receivers, hardware/process sampling, budget alerts and execution controls remain planned. Quota collection currently supports the installed Codex account interface and explicit normalized files. Subscription quotas and API-equivalent costs are different measures. This alpha does not derive one from the other.

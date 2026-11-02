@@ -1,0 +1,12 @@
+{
+  "schema": "monitoring.theme-source.v1",
+  "package": "@deep/theme",
+  "version": "1.0.0",
+  "status": "unreleased-candidate",
+  "source_revision": "ce503f61a0d3b1a60ce11ac99e7d4e954d2280dd",
+  "archive_sha256": "f768faba9bca0c0ec6bfab672493118f7f6ae7dacdcee9539c793b7c0640d165",
+  "vendored_files": {
+    "monitoring_ai/web/theme/index.js": "ae259abb290ad8b5678b64e1d5e3726b16e24c592a3f94c3aaa53c05b285a1b4",
+    "monitoring_ai/web/theme/LICENSE": "69e8bc0e7e498d3dbc421855f3be2857130648cc0ef343e81d95afd2ad168296"
+  }
+}

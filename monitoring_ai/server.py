@@ -170,14 +170,17 @@ def handler(observatory):
                         value["inputs"] = inputs
                     self.send(200, value)
                 else:
-                    files = {"/": ("index.html", "text/html; charset=utf-8"),
-                             "/app.js": ("app.js", "text/javascript; charset=utf-8"),
-                             "/style.css": ("style.css", "text/css; charset=utf-8")}
+                    files = {"/": (WEB / "index.html", "text/html; charset=utf-8"),
+                             "/app.js": (WEB / "app.js", "text/javascript; charset=utf-8"),
+                             "/appearance.js": (WEB / "appearance.js", "text/javascript; charset=utf-8"),
+                             "/style.css": (WEB / "style.css", "text/css; charset=utf-8"),
+                             "/theme/index.js": (WEB / "theme" / "index.js", "text/javascript; charset=utf-8"),
+                             "/theme/LICENSE": (WEB / "theme" / "LICENSE", "text/plain; charset=utf-8")}
                     if parsed.path not in files:
                         self.send(404, {"error": "Not found"})
                         return
-                    name, mime = files[parsed.path]
-                    self.send(200, (WEB / name).read_bytes(), mime)
+                    path, mime = files[parsed.path]
+                    self.send(200, path.read_bytes(), mime)
             except (ValueError, TypeError):
                 self.send(400, {"error": "Invalid query or data exceeds documented limits"})
             except (OSError, sqlite3.Error):

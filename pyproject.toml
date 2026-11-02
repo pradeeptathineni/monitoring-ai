@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "monitoring-ai"
-version = "0.4.0a1"
+version = "0.5.0a1"
 description = "Local AI session and usage observatory with a reusable read contract"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -16,7 +16,7 @@ dependencies = []
 monitoring-ai = "monitoring_ai.cli:main"
 
 [tool.setuptools.package-data]
-monitoring_ai = ["web/*"]
+monitoring_ai = ["web/*", "web/theme/*"]
 
 [tool.setuptools.packages.find]
 include = ["monitoring_ai*"]

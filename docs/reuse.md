@@ -1,6 +1,6 @@
 # Upstream findings
 
-Inspected on 2026-11-02. Popularity helped discovery, not correctness or fit. The runtime is an original, small implementation using the Python standard library and SQLite. No upstream application code, icons, credentials, native agents or enterprise components are bundled. These source reviews informed behavior and the roadmap, not claims of equivalent feature coverage.
+Inspected on 2026-11-02. Popularity helped discovery, not correctness or fit. The runtime is an original, small implementation using the Python standard library and SQLite. No application code from the eight research projects, icons, credentials, native agents or enterprise components is bundled. The shared MIT theme package is the separately attributed bundled dependency below. These source reviews informed behavior and the roadmap, not claims of equivalent feature coverage.
 
 [The machine-readable catalog](featuresets.json) groups six cohesive feature sets, with dependent subfeatures nested inside each workflow. It records eight upstreams, exact revisions, observed star counts, maintenance, licenses, copying scope and implementation evidence. Use `python3 tools/compare.py --category analytics --min-stars 5000` from the repository root to compare candidates by popularity within a category. Other filters are `--feature-set`, `--tag` and `--json`. This is a bounded shortlist, not an exhaustive search or a count of shipped capabilities.
 
@@ -46,3 +46,9 @@ The native source uses the [Codex app-server protocol](https://developers.openai
 CodeBurn's cohesive reporting direction and Helicone/OpenLIT's structured session and request analysis informed period controls, qualified comparisons, project/model/day reports and tool categories. The original implementation reuses Monitoring's existing accounting functions. It does not copy their dashboard stacks or source assets. Private reference material is excluded from this repository.
 
 The report keeps named measures with their required source evidence. Cache token share and recorded timing have explicit denominators. Workflow quality and context overhead remain unsupported rather than imitated from visual labels. A bounded Claude subscription implementation supplied the metadata-only completed-tool parser and synthetic tests. The integrator reviewed it and checked the complete file-to-report path. No private sessions were provided to that implementation.
+
+## Shared appearance dependency
+
+Monitoring bundles the unchanged `index.js` and MIT license from `@deep/theme` candidate 1.0.0 at `ce503f61a0d3b1a60ce11ac99e7d4e954d2280dd`. The verified archive and exact file checksums are recorded in [theme-source.json](theme-source.json). The files matched the shared integrator package before adoption. No registry package is published by this repository.
+
+The package owns palettes, preference validation, contrast rules and semantic CSS tokens. Monitoring owns its browser storage key, controls, CSS mapping, layout and acceptance checks. The shared code has no React, Deep runtime or network dependency. Its included [MIT notice](../monitoring_ai/web/theme/LICENSE) is preserved. This is actual code reuse, separate from the eight external product reviews above.

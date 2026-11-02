@@ -3,10 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#0a1118">
   <title>Monitoring AI · Observatory</title>
   <link rel="stylesheet" href="/style.css">
   <script src="/app.js" defer></script>
+  <script src="/appearance.js" type="module"></script>
 </head>
 <body>
   <aside class="rail">
@@ -20,10 +22,11 @@
       <button class="nav" data-view="events"><span>≋</span> Event stream <kbd>4</kbd></button>
       <button class="nav" data-view="report"><span>▤</span> Report <kbd>5</kbd></button>
     </nav>
-    <div class="rail-bottom"><span class="small-dot"></span> Local by design<p>No account · No telemetry<br>No model calls</p><a href="https://github.com/pradeeptathineni/monitoring-ai" target="_blank" rel="noreferrer">Source & documentation ↗</a><small>EXPERIMENTAL · v0.4.0a1</small></div>
+    <div class="rail-bottom"><span class="small-dot"></span> Local by design<p>No account · No telemetry<br>No model calls</p><a href="https://github.com/pradeeptathineni/monitoring-ai" target="_blank" rel="noreferrer">Source & documentation ↗</a><small>EXPERIMENTAL · v0.5.0a1</small></div>
   </aside>
   <main>
     <header class="topbar"><div><span class="muted">Observatory</span><span class="slash">/</span><span id="breadcrumb">Overview</span></div><div class="top-actions"><span id="connection" class="connection">Connecting</span><button id="pause" class="quiet">Pause refresh</button><span class="avatar">M</span></div></header>
+    <details id="appearance-settings" class="appearance-settings"><summary>Appearance</summary><div id="appearance-controls"></div></details>
     <nav class="mobile-nav" aria-label="Compact views"><button data-view="overview">Overview</button><button data-view="sessions">Sessions</button><button data-view="usage">Usage</button><button data-view="events">Events</button><button data-view="report">Report</button></nav>
     <div class="content">
       <section class="title-row"><div><p class="eyebrow">A CLEARER VIEW OF YOUR AGENTS</p><h1 id="title">Every session. One place.</h1><p id="subtitle">Follow the work, understand the usage, keep the evidence.</p></div><div class="clock"><span id="updated">Waiting for data</span><small>All dates in UTC</small></div></section>
