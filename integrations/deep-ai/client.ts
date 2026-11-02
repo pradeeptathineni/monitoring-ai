@@ -28,6 +28,7 @@ export type Report = {
   previous_range: { from: string; until: string } | null;
   fx?: { base: string; as_of: string; provenance: string; rates: Record<string, string | number> } | null;
   inputs?: ManagedInputs;
+  source_coverage?: SourceCoverage;
   summary: Metrics & { observed_sessions: number; estimated_session_count: number;
     known_estimate_per_priced_session: string | null; cache_read_share_percent: string | null };
   breakdowns: Record<"projects" | "models" | "daily", { rows: Array<{
@@ -49,6 +50,7 @@ export type Snapshot = {
   coverage: { scope: string; event_count: number; matched_events: number; entities_truncated: boolean };
   source_status: { state: "static" | "following" | "unavailable"; last_success_at: string | null; error: string | null; degraded?: boolean };
   inputs?: ManagedInputs;
+  source_coverage?: SourceCoverage;
   summary: Metrics & { sessions: number; entities: number; active: number; attention: number };
   entities: Entity[];
   insights?: {
@@ -92,6 +94,31 @@ export type ManagedInputs = {
   unread_inputs: number;
 };
 
+export type SourceCoverage = {
+  schema: "monitoring.source-coverage.v1";
+  observed_at: string;
+  scope: "latest-accepted-input-reads";
+  complete_coverage: false;
+  inputs: SourceCoverageInput[];
+};
+
+export type SourceCoverageInput = {
+  id: string;
+  format: "normalized" | "claude" | "codex";
+  capabilities: { usage: string; lifecycle: string; tools: string };
+  sampled_at: string | null;
+  records: { total: number; usage: number; status: number; tool: number;
+    sessions: number; entities: number; event_sources: number } | null;
+  latest_event_at: string | null;
+  latest_usage_at: string | null;
+  latest_status_at: string | null;
+  latest_tool_at: string | null;
+  read_state: "unread" | "following" | "unavailable";
+  retained: boolean;
+  event_age_seconds: number | null;
+  event_freshness: "unread" | "empty" | "recent" | "stale" | "future";
+};
+
 function record(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
@@ -114,6 +141,10 @@ function decimal(value: unknown): boolean {
 const INPUT_KEYS = ["id", "format", "project", "state", "last_attempt_at", "last_success_at",
   "records_seen", "added", "replayed", "error"];
 const INPUT_ERRORS = ["Input unavailable.", "Input data was rejected.", "Input processing failed."];
+const SOURCE_COVERAGE_KEYS = ["schema", "observed_at", "scope", "complete_coverage", "inputs"];
+const SOURCE_COVERAGE_INPUT_KEYS = ["id", "format", "capabilities", "sampled_at", "records",
+  "latest_event_at", "latest_usage_at", "latest_status_at", "latest_tool_at", "read_state",
+  "retained", "event_age_seconds", "event_freshness"];
 
 function alias(value: unknown): value is string {
   return typeof value === "string" && /^[A-Za-z0-9_.:@-]{1,160}$/.test(value);
@@ -163,6 +194,65 @@ function managedInputs(value: unknown): value is ManagedInputs {
   return value.healthy_inputs === healthy && value.unavailable_inputs === unavailable && value.unread_inputs === unread;
 }
 
+function sourceCoverage(value: unknown): value is SourceCoverage {
+  if (!record(value) || Object.keys(value).sort().join(",") !== [...SOURCE_COVERAGE_KEYS].sort().join(",") ||
+      value.schema !== "monitoring.source-coverage.v1" || typeof value.observed_at !== "string" || !nullableTimestamp(value.observed_at) ||
+      value.scope !== "latest-accepted-input-reads" || value.complete_coverage !== false ||
+      !Array.isArray(value.inputs) || value.inputs.length > 32) return false;
+  const seen = new Set<string>();
+  return value.inputs.every((input) => sourceCoverageInput(input, seen));
+}
+
+function sourceCoverageInput(value: unknown, seen: Set<string>): value is SourceCoverageInput {
+  if (!record(value) || Object.keys(value).sort().join(",") !== [...SOURCE_COVERAGE_INPUT_KEYS].sort().join(",") ||
+      !alias(value.id) || seen.has(value.id) ||
+      !["normalized", "claude", "codex"].includes(String(value.format)) ||
+      !record(value.capabilities) || Object.keys(value.capabilities).sort().join(",") !== "lifecycle,tools,usage" ||
+      !nullableTimestamp(value.sampled_at) ||
+      ![value.latest_event_at, value.latest_usage_at, value.latest_status_at, value.latest_tool_at].every(nullableTimestamp) ||
+      !["unread", "following", "unavailable"].includes(String(value.read_state)) ||
+      typeof value.retained !== "boolean" ||
+      !(value.event_age_seconds === null || (typeof value.event_age_seconds === "number" && Number.isFinite(value.event_age_seconds))) ||
+      !["unread", "empty", "recent", "stale", "future"].includes(String(value.event_freshness))) return false;
+
+  const expectedCapabilities = {
+    normalized: { usage: "normalized-deltas", lifecycle: "producer-supplied", tools: "producer-supplied" },
+    claude: { usage: "native-reconstruction", lifecycle: "unsupported", tools: "completed-pairs" },
+    codex: { usage: "native-reconstruction", lifecycle: "unsupported", tools: "unsupported" },
+  }[value.format as "normalized" | "claude" | "codex"];
+  if (value.capabilities.usage !== expectedCapabilities.usage ||
+      value.capabilities.lifecycle !== expectedCapabilities.lifecycle ||
+      value.capabilities.tools !== expectedCapabilities.tools) return false;
+
+  seen.add(value.id);
+  const timestamps = [value.latest_event_at, value.latest_usage_at, value.latest_status_at, value.latest_tool_at];
+  if (value.records === null) {
+    return value.sampled_at === null && timestamps.every((date) => date === null) &&
+      value.read_state !== "following" && !value.retained && value.event_age_seconds === null &&
+      value.event_freshness === "unread";
+  }
+  const counts = value.records;
+  if (!record(counts) || Object.keys(counts).sort().join(",") !== "entities,event_sources,sessions,status,tool,total,usage" ||
+      ![counts.total, counts.usage, counts.status, counts.tool, counts.sessions, counts.entities, counts.event_sources]
+        .every(nonnegativeInteger) || counts.total !== counts.usage + counts.status + counts.tool ||
+      counts.sessions > counts.entities || counts.entities > counts.total || counts.event_sources > counts.sessions ||
+      value.sampled_at === null || value.read_state === "unread" ||
+      value.retained !== (value.read_state === "unavailable")) return false;
+
+  if (counts.total === 0) {
+    return counts.sessions === 0 && counts.entities === 0 && counts.event_sources === 0 &&
+      timestamps.every((date) => date === null) && value.event_age_seconds === null &&
+      value.event_freshness === "empty";
+  }
+  if (value.event_age_seconds === null || value.latest_event_at === null ||
+      (counts.usage === 0) !== (value.latest_usage_at === null) ||
+      (counts.status === 0) !== (value.latest_status_at === null) ||
+      (counts.tool === 0) !== (value.latest_tool_at === null)) return false;
+  const expectedFreshness = value.event_age_seconds < 0 ? "future" :
+    value.event_age_seconds <= 60 ? "recent" : "stale";
+  return value.event_freshness === expectedFreshness;
+}
+
 function insights(value: unknown): boolean {
   if (!record(value) || value.schema !== "monitoring.insights.v1" || !record(value.window) ||
       !record(value.pace) || !record(value.forecast) || !record(value.quotas) ||
@@ -198,6 +288,7 @@ export function decodeSnapshot(value: unknown): Snapshot {
         .every((n) => Number.isSafeInteger(n) && (n as number) >= 0) ||
       !Array.isArray(value.entities) || value.entities.length > 500 ||
       (value.inputs !== undefined && !managedInputs(value.inputs)) ||
+      (value.source_coverage !== undefined && !sourceCoverage(value.source_coverage)) ||
       (value.insights !== undefined && !insights(value.insights)) ||
       !value.entities.every((row) => record(row) && typeof row.source === "string" &&
         typeof row.session === "string" && typeof row.entity === "string" &&
@@ -214,6 +305,7 @@ export function decodeReport(value: unknown): Report {
       !Number.isFinite(Date.parse(value.observed_at)) || typeof value.currency !== "string" ||
       !record(value.range) || !metrics(value.summary) || !record(value.breakdowns) ||
       (value.inputs !== undefined && !managedInputs(value.inputs)) ||
+      (value.source_coverage !== undefined && !sourceCoverage(value.source_coverage)) ||
       !["projects", "models", "daily"].every((name) => {
         const group = (value.breakdowns as Record<string, unknown>)[name];
         return record(group) && typeof group.truncated === "boolean" && Array.isArray(group.rows) &&

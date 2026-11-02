@@ -26,6 +26,43 @@ function managedInputs() {
     ], healthy_inputs: 1, unavailable_inputs: 1, unread_inputs: 1 };
 }
 
+function sourceCoverage() {
+  return { schema: "monitoring.source-coverage.v1", observed_at: "2026-11-02T20:00:00Z",
+    scope: "latest-accepted-input-reads", complete_coverage: false,
+    inputs: [
+      { id: "normalized-a", format: "normalized",
+        capabilities: { usage: "normalized-deltas", lifecycle: "producer-supplied", tools: "producer-supplied" },
+        sampled_at: "2026-11-02T19:59:59Z",
+        records: { total: 3, usage: 1, status: 1, tool: 1, sessions: 2, entities: 2, event_sources: 2 },
+        latest_event_at: "2026-11-02T20:00:00Z", latest_usage_at: "2026-11-02T20:00:00Z",
+        latest_status_at: "2026-11-02T19:59:00Z", latest_tool_at: "2026-11-02T19:58:00Z",
+        read_state: "following", retained: false, event_age_seconds: 0, event_freshness: "recent" },
+      { id: "claude-usage", format: "claude",
+        capabilities: { usage: "native-reconstruction", lifecycle: "unsupported", tools: "completed-pairs" },
+        sampled_at: "2026-11-02T19:59:59Z",
+        records: { total: 1, usage: 1, status: 0, tool: 0, sessions: 1, entities: 1, event_sources: 1 },
+        latest_event_at: "2026-11-02T20:00:02Z", latest_usage_at: "2026-11-02T20:00:02Z",
+        latest_status_at: null, latest_tool_at: null,
+        read_state: "unavailable", retained: true, event_age_seconds: -2, event_freshness: "future" },
+      { id: "unread-codex", format: "codex",
+        capabilities: { usage: "native-reconstruction", lifecycle: "unsupported", tools: "unsupported" },
+        sampled_at: null, records: null, latest_event_at: null, latest_usage_at: null,
+        latest_status_at: null, latest_tool_at: null, read_state: "unread", retained: false,
+        event_age_seconds: null, event_freshness: "unread" },
+      { id: "empty-codex", format: "codex",
+        capabilities: { usage: "native-reconstruction", lifecycle: "unsupported", tools: "unsupported" },
+        sampled_at: "2026-11-02T19:59:59Z",
+        records: { total: 0, usage: 0, status: 0, tool: 0, sessions: 0, entities: 0, event_sources: 0 },
+        latest_event_at: null, latest_usage_at: null, latest_status_at: null, latest_tool_at: null,
+        read_state: "unavailable", retained: true, event_age_seconds: null, event_freshness: "empty" },
+      { id: "failed-first-read", format: "normalized",
+        capabilities: { usage: "normalized-deltas", lifecycle: "producer-supplied", tools: "producer-supplied" },
+        sampled_at: null, records: null, latest_event_at: null, latest_usage_at: null,
+        latest_status_at: null, latest_tool_at: null, read_state: "unavailable", retained: false,
+        event_age_seconds: null, event_freshness: "unread" },
+    ] };
+}
+
 test("unavailable amounts stay null and malformed costs refuse", () => {
   assert.equal(decodeSnapshot(snapshot).summary.costs.estimated.amount, null);
   const broken = structuredClone(snapshot);
@@ -68,6 +105,36 @@ test("optional managed-input health is strict and remains backward compatible", 
   assert.throws(() => decodeReport(malformedReport), /incompatible/);
 });
 
+test("optional source coverage validates capabilities, states, counts and unknowns", () => {
+  assert.equal(decodeSnapshot(snapshot).identity, "owner-one"); // Older owners omit source coverage.
+  const value = structuredClone(snapshot);
+  value.source_coverage = sourceCoverage();
+  const accepted = decodeSnapshot(value).source_coverage;
+  assert.equal(accepted.inputs[1].event_freshness, "future");
+  assert.equal(accepted.inputs[2].records, null);
+  assert.equal(accepted.inputs[3].event_freshness, "empty");
+  assert.equal(accepted.inputs[4].read_state, "unavailable");
+
+  for (const mutate of [
+    (coverage) => { coverage.inputs[0].path = "/private/source.jsonl"; },
+    (coverage) => { coverage.complete_coverage = true; },
+    (coverage) => { coverage.inputs[0].records.usage = 2; },
+    (coverage) => { coverage.inputs[0].capabilities.lifecycle = "all-workers"; },
+    (coverage) => { coverage.inputs[0].event_freshness = "unread"; },
+    (coverage) => { coverage.inputs[0].event_age_seconds = Infinity; },
+    (coverage) => { coverage.inputs[1].retained = false; },
+    (coverage) => { coverage.inputs[2].latest_event_at = "2026-11-02"; },
+    (coverage) => { coverage.inputs[3].records.total = 1; },
+  ]) {
+    const malformed = structuredClone(value);
+    mutate(malformed.source_coverage);
+    assert.throws(() => decodeSnapshot(malformed), /incompatible/);
+  }
+  const duplicate = structuredClone(value);
+  duplicate.source_coverage.inputs[1].id = duplicate.source_coverage.inputs[0].id;
+  assert.throws(() => decodeSnapshot(duplicate), /incompatible/);
+});
+
 test("only an operator-supplied plain loopback origin is accepted", () => {
   for (const url of ["https://example.com", "http://localhost:5274", "http://127.0.0.1:5274/private", "http://secret@127.0.0.1:5274"]) {
     assert.throws(() => monitoringOwner(url), /loopback/);
@@ -108,14 +175,16 @@ test("report reads preserve unknown amounts and share the pinned owner identity"
   let report = { schema: "monitoring.report.v1", identity: "owner-one", revision: 1,
     observed_at: snapshot.observed_at, currency: "USD", range: { from: null, until: snapshot.observed_at },
     previous_range: null, summary: metrics, breakdowns: { projects: group, models: group, daily: group },
-    tools: {}, comparisons: {}, coverage: {}, inputs: managedInputs() };
-  const snapshotWithInputs = { ...snapshot, inputs: managedInputs() };
+    tools: {}, comparisons: {}, coverage: {}, inputs: managedInputs(), source_coverage: sourceCoverage() };
+  const snapshotWithInputs = { ...snapshot, inputs: managedInputs(), source_coverage: sourceCoverage() };
   context.mock.method(globalThis, "fetch", async (url) => ({ ok: true,
     json: async () => new URL(url).pathname.endsWith("report") ? report : snapshotWithInputs }));
   const owner = monitoringOwner("http://127.0.0.1:5274");
   assert.equal((await owner.snapshot()).inputs.healthy_inputs, 1);
+  assert.equal((await owner.snapshot()).source_coverage.inputs[1].format, "claude");
   assert.equal((await owner.report()).summary.costs.estimated.amount, null);
   assert.equal((await owner.report()).inputs.unread_inputs, 1);
+  assert.equal((await owner.report()).source_coverage.inputs[2].records, null);
   report = { ...report, identity: "owner-two" };
   await assert.rejects(owner.report(), /restarted/);
   assert.throws(() => decodeReport({ ...report, summary: { ...metrics, total_tokens: -1 } }), /incompatible/);

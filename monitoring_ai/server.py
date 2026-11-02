@@ -82,6 +82,7 @@ class Observatory:
             value.update(identity=self.identity, source_status=dict(self.source_status))
             if self.source_observer is not None:
                 value["inputs"] = self.input_status()
+                value["source_coverage"] = self.source_observer.coverage(now=value["observed_at"])
             return value
 
     def report(self, query):
@@ -91,6 +92,7 @@ class Observatory:
             value.update(identity=self.identity, source_status=dict(self.source_status))
             if self.source_observer is not None:
                 value["inputs"] = self.input_status()
+                value["source_coverage"] = self.source_observer.coverage(now=value["observed_at"])
             return value
 
 
@@ -136,6 +138,7 @@ def handler(observatory):
                         snapshot="/api/v1/snapshot", events="/api/v1/events",
                         report="/api/v1/report", event_features=["tool-categories.v1"],
                         input_observations="monitoring.inputs.v1",
+                        source_coverage="monitoring.source-coverage.v1",
                         insights="monitoring.insights.v1", quota_observations="monitoring.quotas.v1",
                         filters=["provider", "model", "surface", "project", "source", "session", "since", "until", "state"],
                         limits={"read_events": 100000, "snapshot_entities": 500, "event_page": 500},

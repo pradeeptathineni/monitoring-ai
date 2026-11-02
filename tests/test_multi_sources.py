@@ -62,6 +62,13 @@ class MultiSourceJourney(unittest.TestCase):
                 self.assertEqual(initial["source_status"]["state"], "unavailable")
                 self.assertTrue(initial["source_status"]["degraded"])
                 self.assertEqual(read("capabilities")["input_observations"], "monitoring.inputs.v1")
+                self.assertEqual(read("capabilities")["source_coverage"], "monitoring.source-coverage.v1")
+                coverage = initial["source_coverage"]
+                self.assertFalse(coverage["complete_coverage"])
+                self.assertEqual(coverage["inputs"][0]["records"]["usage"], 1)
+                self.assertEqual(coverage["inputs"][1]["capabilities"]["lifecycle"], "unsupported")
+                self.assertEqual(coverage["inputs"][1]["records"]["status"], 0)
+                self.assertIsNone(coverage["inputs"][2]["records"])
                 self.assertEqual(read("report")["inputs"]["inputs"][0]["id"], "export-input")
                 self.assertNotIn(directory, json.dumps(initial))
 
@@ -84,6 +91,11 @@ class MultiSourceJourney(unittest.TestCase):
                 self.assertNotIn("would-add", [row["id"] for row in page["events"]])
                 self.assertNotIn(directory, json.dumps(partial))
                 self.assertEqual(partial["revision"], 4)
+                retained = partial["source_coverage"]["inputs"][0]
+                self.assertTrue(retained["retained"])
+                self.assertEqual(retained["read_state"], "unavailable")
+                self.assertEqual(retained["records"]["total"], 1)
+                self.assertEqual(retained["latest_event_at"], "2026-11-02T20:00:00.000Z")
             finally:
                 process.terminate()
                 process.communicate(timeout=5)

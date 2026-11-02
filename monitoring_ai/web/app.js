@@ -10,9 +10,11 @@ const titles = { overview: ["Every session. One place.", "Follow the work, under
   sessions: ["See the whole working tree.", "Sessions, agents and workers, with evidence behind every state."],
   usage: ["Understand every token.", "Compare models and surfaces without losing cost qualifications."],
   events: ["The story behind the numbers.", "A chronological ledger of explicitly supplied activity."],
-  report: ["Usage with context.", "A detailed, qualified report for the selected UTC period and filters."] };
+  report: ["Usage with context.", "A detailed, qualified report for the selected UTC period and filters."],
+  settings: ["Settings", "Appearance preferences and setup guidance for explicitly selected sources."] };
 let data, paused = false, busy = false, view = "overview", entity = null;
 let lastSuccess = 0;
+let snapshotReadUnavailable = false;
 let reportController = null, reportRequestId = 0, reportData = null;
 
 function node(tag, text, className) {
@@ -33,10 +35,12 @@ function showView(next) {
   if (view === next && location.hash.slice(1) === next) return;
   if (view === "report" && next !== "report") cancelReport();
   view = next;
-  $("#metrics").hidden = next === "report";
+  $("#metrics").hidden = next === "report" || next === "settings";
+  $("#filters").hidden = next === "settings";
+  $("#scope").hidden = next === "settings";
   $$(".view").forEach((section) => { section.hidden = section.id !== next; });
   $$(".nav, .mobile-nav button").forEach((button) => button.classList.toggle("active", button.dataset.view === next));
-  $("#breadcrumb").textContent = { overview: "Overview", sessions: "Sessions & workers", usage: "Usage & costs", events: "Event stream", report: "Report" }[next];
+  $("#breadcrumb").textContent = { overview: "Overview", sessions: "Sessions & workers", usage: "Usage & costs", events: "Event stream", report: "Report", settings: "Settings" }[next];
   $("#title").textContent = titles[next][0];
   $("#subtitle").textContent = titles[next][1];
   location.hash = next;
@@ -370,9 +374,99 @@ function inputCount(value) {
   return Number.isFinite(value) ? number.format(value) : "Unknown";
 }
 
+function capabilityText(kind, value) {
+  const labels = {
+    usage: { "normalized-deltas": "Normalized usage deltas", "native-reconstruction": "Native usage reconstruction" },
+    lifecycle: { "producer-supplied": "Producer-supplied lifecycle", unsupported: "Lifecycle unsupported" },
+    tools: { "producer-supplied": "Producer-supplied tool events", "completed-pairs": "Completed tool pairs", unsupported: "Tool events unsupported" },
+  };
+  return labels[kind]?.[value] || `${kind}: ${value || "Unknown"}`;
+}
+
+function eventAgeText(item) {
+  const freshness = item.event_freshness || "unknown";
+  if (freshness === "unread") return "Unread · no accepted sample yet";
+  if (freshness === "empty") return "Empty · no event timestamp in the accepted sample";
+  const serverAge = item.event_age_seconds;
+  if (typeof serverAge !== "number" || !Number.isFinite(serverAge) || !lastSuccess) return "Event freshness unknown";
+  // The event age is measured by the owner at snapshot time. Advance it from
+  // the browser's successful receipt time so pause/disconnect cannot freeze it.
+  const age = serverAge + Math.max(0, (Date.now() - lastSuccess) / 1000);
+  if (age < 0) return `Future event timestamp · ${number.format(Math.round(Math.abs(age)))} seconds ahead`;
+  return `${age <= 60 ? "Recent" : "Stale"} · latest event ${number.format(Math.max(0, Math.round(age)))} seconds ago`;
+}
+
+function renderSourceCoverage() {
+  const root = $("#source-coverage"), status = $("#source-coverage-status"), setup = $("#coverage-setup"), fallback = $("#input-inventory-fallback");
+  const coverage = data?.source_coverage;
+  const valid = coverage?.schema === "monitoring.source-coverage.v1";
+  root.replaceChildren(); status.classList.remove("partial");
+  fallback.hidden = valid;
+  if (setup.dataset.hasCoverage !== String(valid)) {
+    setup.dataset.hasCoverage = String(valid);
+    setup.open = !valid;
+  }
+  if (!valid) {
+    status.textContent = "Coverage inventory is unavailable in this snapshot. Existing analytics remain available; source coverage is not known.";
+    root.append(node("p", "This inventory requires the newer source-coverage contract. Setup guidance is available in Settings.", "empty"));
+    return;
+  }
+  const inputs = Array.isArray(coverage.inputs) ? coverage.inputs : [];
+  const unavailable = inputs.filter((item) => item.read_state === "unavailable").length;
+  const unread = inputs.filter((item) => item.read_state === "unread").length;
+  const partial = unavailable > 0 || unread > 0;
+  const retained = paused || snapshotReadUnavailable;
+  const ownerQualification = paused
+    ? ` Browser refresh is paused; this inventory is retained from the last successful browser snapshot received ${inputTimestamp(lastSuccess ? new Date(lastSuccess).toISOString() : null)}.`
+    : snapshotReadUnavailable
+      ? ` Monitoring owner is unavailable to this browser; this inventory is retained from the last successful browser snapshot received ${inputTimestamp(lastSuccess ? new Date(lastSuccess).toISOString() : null)}.`
+      : " This describes the latest owner snapshot, not live worker liveness.";
+  status.textContent = `Global inventory · latest accepted input reads · ${inputCount(inputs.length)} inputs · ${unavailable} unavailable · ${unread} unread · owner snapshot observed ${inputTimestamp(coverage.observed_at)}.${ownerQualification} Coverage is incomplete across unconnected sources. Counts below may overlap and are not summed as total activity.`;
+  status.classList.toggle("partial", partial);
+  if (!inputs.length) { root.append(node("p", "No accepted input reads are listed in this coverage snapshot.", "empty")); return; }
+  const recordFields = [["total", "Event records"], ["usage", "Usage records"], ["status", "Status records"], ["tool", "Tool records"], ["sessions", "Session identities"], ["entities", "Entity identities"], ["event_sources", "Event sources"]];
+  const healthById = new Map((data.inputs?.inputs || []).map((item) => [item.id, item]));
+  const timingFields = [["latest_event_at", "Latest event"], ["latest_usage_at", "Latest usage"], ["latest_status_at", "Latest status"], ["latest_tool_at", "Latest tool event"]];
+  for (const item of inputs) {
+    const row = node("article", null, `source-coverage-row coverage-${item.event_freshness || "unknown"}`);
+    const head = node("div", null, "source-coverage-head"), info = node("div", null, "source-coverage-label");
+    info.append(node("strong", typeof item.id === "string" && item.id ? item.id : "Managed input"));
+    info.append(node("small", `${item.format || "Format unknown"}${healthById.get(item.id)?.project ? ` · project ${healthById.get(item.id).project}` : ""}`));
+    const readState = item.read_state === "following" ? "Following at last owner read" : item.read_state === "unavailable" ? "Unavailable at last owner read" : item.read_state === "unread" ? "Unread at last owner read" : "Unknown at last owner read";
+    head.append(info, node("span", `${readState}${retained ? " · retained browser read" : ""}`, `source-coverage-state coverage-read-${item.read_state || "unknown"}`)); row.append(head);
+    const health = healthById.get(item.id);
+    if (health) {
+      row.append(node("p", `Last read attempt: ${inputTimestamp(health.last_attempt_at)} · last successful read: ${inputTimestamp(health.last_success_at)}`, "source-coverage-sample"));
+      row.append(node("p", `Latest attempt: ${inputCount(health.records_seen)} normalized rows seen · ${inputCount(health.added)} added · ${inputCount(health.replayed)} replayed. These are read-attempt counts, not lifetime totals.`, "source-coverage-sample"));
+    }
+
+    const capability = node("p", null, "source-coverage-capability");
+    capability.append(node("span", "Capabilities"), node("span", ["usage", "lifecycle", "tools"].map((key) => capabilityText(key, item.capabilities?.[key])).join(" · ")));
+    row.append(capability);
+    const records = item.records;
+    const kinds = node("div", null, "source-coverage-records");
+    kinds.append(node("p", "Unique observations in this input's latest accepted read. Different inputs may overlap.", "source-coverage-subhead"));
+    const counts = node("div", null, "source-coverage-count-grid");
+    for (const [key, label] of recordFields) counts.append(confidenceRow(label, records == null ? "Unknown" : inputCount(records[key])));
+    kinds.append(counts); row.append(kinds);
+
+    const statusRecords = records?.status, toolRecords = records?.tool, capabilities = item.capabilities || {};
+    const observed = node("p", null, "source-coverage-observed");
+    const lifecycleObserved = capabilities.lifecycle === "unsupported" ? "No lifecycle support in this format" : Number.isFinite(statusRecords) && statusRecords > 0 ? `${inputCount(statusRecords)} producer status records observed` : statusRecords === 0 ? "No producer status records observed" : "Lifecycle records unknown";
+    const toolsObserved = capabilities.tools === "unsupported" ? "No tool event support in this format" : Number.isFinite(toolRecords) && toolRecords > 0 ? `${inputCount(toolRecords)} tool records observed` : toolRecords === 0 ? "No tool records observed" : "Tool record count unknown";
+    observed.append(node("span", `Lifecycle evidence: ${lifecycleObserved}`), node("span", `Tool evidence: ${toolsObserved}`)); row.append(observed);
+    row.append(node("p", `Last accepted input sample: ${inputTimestamp(item.sampled_at)} · ${item.retained ? "previously accepted records retained" : "no retained prior read reported"}`, "source-coverage-sample"));
+    row.append(node("p", `Event timestamp age: ${eventAgeText(item)}${item.latest_event_at ? ` · ${inputTimestamp(item.latest_event_at)}` : ""}`, "source-coverage-age"));
+    const eventTimes = node("div", null, "source-coverage-times");
+    for (const [key, label] of timingFields.slice(1)) eventTimes.append(confidenceRow(label, inputTimestamp(item[key])));
+    row.append(eventTimes); root.append(row);
+  }
+}
+
 function renderInputHealth() {
   const root = $("#input-health"), status = $("#input-health-status"), inventory = data?.inputs;
   root.replaceChildren(); status.classList.remove("partial");
+  if (data?.source_coverage?.schema === "monitoring.source-coverage.v1") return;
   if (inventory?.schema !== "monitoring.inputs.v1") {
     status.textContent = "Input inventory is unavailable in this snapshot. Explicit event history remains available.";
     root.append(node("p", "Connect an explicitly selected input to see read health here.", "empty"));
@@ -388,9 +482,15 @@ function renderInputHealth() {
   const unavailable = count(inventory.unavailable_inputs, (item) => item.state === "unavailable");
   const unread = count(inventory.unread_inputs, (item) => item.state === "unread");
   const partial = Boolean(inventory.degraded) || unavailable > 0 || unread > 0;
+  const retained = paused || snapshotReadUnavailable;
+  const ownerQualification = paused
+    ? ` Browser refresh is paused; this is retained from the last successful browser snapshot received ${inputTimestamp(lastSuccess ? new Date(lastSuccess).toISOString() : null)}.`
+    : snapshotReadUnavailable
+      ? ` Monitoring owner is unavailable to this browser; this inventory is retained from the last successful browser snapshot received ${inputTimestamp(lastSuccess ? new Date(lastSuccess).toISOString() : null)}.`
+      : " This describes the latest owner snapshot, not live worker liveness.";
   status.textContent = partial
-    ? `Partial input availability · ${inputCount(healthy)} following · ${inputCount(unavailable)} unavailable · ${inputCount(unread)} unread. Failed reads retain previously accepted event history. Snapshot observed ${inputTimestamp(data.observed_at)}.`
-    : `${inputCount(healthy)} configured inputs following. Snapshot observed ${inputTimestamp(data.observed_at)}.`;
+    ? `Partial input availability · ${inputCount(healthy)} following · ${inputCount(unavailable)} unavailable · ${inputCount(unread)} unread. Following means at last owner read. Failed reads retain previously accepted event history. Owner snapshot observed ${inputTimestamp(data.observed_at)}.${ownerQualification}`
+    : `${inputCount(healthy)} configured inputs following at last owner read. Owner snapshot observed ${inputTimestamp(data.observed_at)}.${ownerQualification}`;
   status.classList.toggle("partial", partial);
   if (!inputs.length) { root.append(node("p", "No managed inputs are listed in the configured manifest.", "empty")); return; }
   for (const input of inputs) {
@@ -544,6 +644,7 @@ function render() {
   }
   confidence.append(node("p", "Known amounts cover only their labeled records. Estimates and billed amounts are never added for the same event. Lifecycle evidence expires after 60 seconds.", "confidence-note"));
   renderInsights();
+  renderSourceCoverage();
   renderInputHealth();
   table("#entity-table", ["Entity / hierarchy", "State", "Model / surface", "Tokens", "Estimated", "Billed", "Last evidence · UTC"], data.entities.map((row) => {
     const name = node("button", (row.parent ? "↳ " : "") + row.entity, "entity-button");
@@ -569,7 +670,7 @@ async function refresh() {
     if (!response.ok) throw new Error(`Read failed (${response.status}). Check the filters and ledger limits.`);
     const value = await response.json();
     if (value.schema !== "monitoring.snapshot.v1") throw new Error("The monitoring owner returned an incompatible schema.");
-    data = value; lastSuccess = Date.now();
+    data = value; lastSuccess = Date.now(); snapshotReadUnavailable = false;
     $("#notice").hidden = data.source_status.state !== "unavailable";
     $("#notice").textContent = data.source_status.error || "";
     $("#connection").textContent = data.source_status.state === "following" ? "Following source" : data.source_status.state === "unavailable" ? "Source unavailable" : "History connected";
@@ -577,6 +678,7 @@ async function refresh() {
     $("#updated").textContent = `Updated ${data.observed_at.slice(11, 19)} UTC`;
     render();
   } catch (error) {
+    snapshotReadUnavailable = true;
     $("#notice").hidden = false;
     $("#notice").textContent = `${error.message} ${data ? "Last observations remain visible and may be stale." : "No data loaded."}`;
     $("#connection").textContent = "Disconnected"; $("#connection").classList.add("offline");
@@ -619,7 +721,7 @@ $("#pause").addEventListener("click", () => {
 });
 $("#clear-entity").addEventListener("click", () => { entity = null; $("#event-selection").textContent = ""; $("#clear-entity").hidden = true; renderEvents(); });
 document.addEventListener("keydown", (event) => {
-  if (!event.ctrlKey && !event.metaKey && !event.altKey && !["INPUT", "SELECT", "TEXTAREA"].includes(event.target.tagName) && ["1", "2", "3", "4", "5"].includes(event.key)) showView(Object.keys(titles)[Number(event.key) - 1]);
+  if (!event.ctrlKey && !event.metaKey && !event.altKey && !["INPUT", "SELECT", "TEXTAREA"].includes(event.target.tagName) && ["1", "2", "3", "4", "5", "6"].includes(event.key)) showView(Object.keys(titles)[Number(event.key) - 1]);
 });
 window.addEventListener("hashchange", () => showView(location.hash.slice(1) || "overview"));
 showView(location.hash.slice(1) || "overview");
@@ -628,5 +730,7 @@ setInterval(() => {
   if (paused && data) {
     retainInsights("Dashboard refresh paused; showing retained dated quota observations.");
     renderInsights();
+    renderSourceCoverage();
+    renderInputHealth();
   } else { refresh(); if (view === "report") loadReport(false); }
 }, 2000);

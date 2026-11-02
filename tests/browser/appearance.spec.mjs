@@ -3,6 +3,11 @@ import { test, expect } from "@playwright/test";
 const KEY = "monitoring-ai.appearance.v1";
 
 async function openAppearance(page) {
+  if (!(await page.locator("#settings").isVisible())) {
+    const mobileNav = page.locator('.mobile-nav button[data-view="settings"]');
+    if (await mobileNav.isVisible()) await mobileNav.click();
+    else await page.locator('.rail .nav[data-view="settings"]').click();
+  }
   const details = page.locator("#appearance-settings");
   if (!(await details.evaluate((element) => element.open))) await page.locator("#appearance-settings summary").click();
 }
@@ -101,10 +106,10 @@ test("appearance syncs across tabs, reset restores system mode, and mobile conte
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ colorScheme: "light" });
   await page.goto("/");
-  await openAppearance(page);
   await expect(page.locator("#confidence")).toBeVisible();
-  const confidenceBefore = await page.locator("#confidence").innerText();
-  const healthBefore = await page.locator("#input-health-status").innerText();
+  const confidenceBefore = await page.locator("#confidence").evaluate((element) => element.textContent);
+  const healthBefore = await page.locator("#input-health-status").evaluate((element) => element.textContent);
+  await openAppearance(page);
   await expect(page.locator("#appearance-preset")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
 
@@ -118,7 +123,7 @@ test("appearance syncs across tabs, reset restores system mode, and mobile conte
   await second.click("#appearance-reset");
   await expect.poll(() => page.locator("html").getAttribute("data-theme")).toBe("neon1-light");
   await expect(page.locator("#appearance-status")).toContainText("Another tab reset the appearance");
-  expect(await page.locator("#confidence").innerText()).toBe(confidenceBefore);
-  expect(await page.locator("#input-health-status").innerText()).toBe(healthBefore);
+  expect(await page.locator("#confidence").evaluate((element) => element.textContent)).toBe(confidenceBefore);
+  expect(await page.locator("#input-health-status").evaluate((element) => element.textContent)).toBe(healthBefore);
   await second.close();
 });

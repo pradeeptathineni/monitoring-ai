@@ -56,6 +56,24 @@ Each source batch commits atomically and independently. Replay remains idempoten
 
 Legacy `source_status.state` retains its `static`/`following`/`unavailable` vocabulary. A completed multi-input refresh is `following` only if all inputs succeeded. Otherwise it is `unavailable`, with additive `degraded: true` when some inputs succeeded. Per-input outcomes provide the more specific explanation. Polling success and instance identity never establish worker liveness. Event evidence age remains independent. Slow input reads do not hold the API's observation lock.
 
+## Source coverage
+
+Configured snapshot and report responses add optional `source_coverage` with schema `monitoring.source-coverage.v1`. Capabilities advertises that schema. Owners without this addition remain compatible. The top-level object contains `observed_at`, `scope: latest-accepted-input-reads`, `complete_coverage: false` and ordered `inputs`. Usage filters do not filter this source inventory.
+
+Each row contains `id`, `format`, `capabilities`, `sampled_at`, `records`, `latest_event_at`, `latest_usage_at`, `latest_status_at`, `latest_tool_at`, `read_state`, `retained`, `event_age_seconds` and `event_freshness`. Paths, row bodies and costs are excluded. Supported capabilities are:
+
+| Format | Usage | Lifecycle | Tools |
+| --- | --- | --- | --- |
+| normalized | normalized-deltas | producer-supplied | producer-supplied |
+| claude | native-reconstruction | unsupported | completed-pairs |
+| codex | native-reconstruction | unsupported | unsupported |
+
+Capabilities describe the adapter, not evidence that a producer supplied all those observations. Native usage timestamps never become lifecycle evidence. `records` is null before a successful accepted read, or counts unique `(source,id)` observations as `total`, `usage`, `status`, `tool`, plus distinct `sessions`, `entities`, `event_sources`. Identical copies count once. Conflicting copies refuse. Session identity includes event source, and entity identity also includes session. Counts can overlap across inputs and are not global ledger totals. The existing input-health `records_seen` still counts original read rows.
+
+`sampled_at` and latest-kind timestamps are nullable UTC strings. Sample time never replaces event evidence time. Event age is signed seconds from `observed_at` to `latest_event_at`. Freshness is `future` for a later event, `recent` through 60 seconds, `stale` afterward, `empty` for a successful empty read and `unread` without an accepted sample. Failure retains the prior accepted summary with `retained: true` while `read_state` becomes unavailable. Coverage is cached only after atomic ledger acceptance. Polling and metadata reads do not refresh events. This inventory neither proves complete machine coverage nor makes a worker active.
+
+The CLI `sources create` writes one validated private selection without overwriting an existing path. `sources check` emits `monitoring.source-check.v1` with per-input parsing and summary results, without creating or changing a ledger. It reports readability and supplied evidence rather than ingestion acceptance against prior history. Setup never discovers paths, installs hooks or creates credentials.
+
 ## Interpretation
 
 `reported_state` retains the latest producer status. Nonterminal evidence older than 60 seconds, more than five seconds in the future, or absent becomes `state: unknown` with `stale: true`. Terminal states remain recorded outcomes, even when historical. A reported completed session does not establish task acceptance or correctness. Recent tokens do not make a session running. Source-file following status is independent from entity status. An unavailable source retains accepted history.

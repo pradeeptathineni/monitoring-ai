@@ -3,6 +3,7 @@
 import threading
 
 from .metrics import now_iso
+from .source_coverage import source_coverage, source_summary
 
 
 class SourceObserver:
@@ -30,6 +31,7 @@ class SourceObserver:
             }
             for _, source_id, format_name, project in configured
         }
+        self._coverage_summaries = {source_id: None for _, source_id, _, _ in configured}
 
     @staticmethod
     def _error_message(error):
@@ -52,6 +54,7 @@ class SourceObserver:
             try:
                 rows = list(source.load(live=True))
                 records_seen = len(rows)
+                summary = source_summary(source, rows, sampled_at=now_iso())
                 result = store.ingest(rows)
                 added, replayed = result["added"], result["replayed"]
             except Exception as exc:
@@ -67,6 +70,7 @@ class SourceObserver:
                 status.update(state="following", last_success_at=completed,
                               records_seen=records_seen, added=added, replayed=replayed,
                               error=None)
+                self._coverage_summaries[source_id] = summary
         return self.snapshot()
 
     def snapshot(self):
@@ -81,3 +85,11 @@ class SourceObserver:
             "unavailable_inputs": sum(row["state"] == "unavailable" for row in inputs),
             "unread_inputs": sum(row["state"] == "unread" for row in inputs),
         }
+
+    def coverage(self, now=None):
+        """Return source-read coverage without reading sources or the event ledger."""
+        with self._lock:
+            statuses = [dict(self._status[source_id]) for _, source_id, _, _ in self._sources]
+            summaries = [self._coverage_summaries[source_id] for _, source_id, _, _ in self._sources]
+        sources = [source for source, _, _, _ in self._sources]
+        return source_coverage(sources, statuses, summaries, now=now)

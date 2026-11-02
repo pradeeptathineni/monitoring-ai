@@ -1,0 +1,69 @@
+{
+  "schema": "monitoring.demo-gallery.v1",
+  "synthetic": true,
+  "view": "overview",
+  "viewport": {
+    "width": 1440,
+    "height": 1000
+  },
+  "settings_separate": true,
+  "presets": [
+    {
+      "preset": "neon1-dark",
+      "label": "Neon 1 Dark",
+      "file": "neon1-dark.png",
+      "scheme": "dark",
+      "canvas": "#070a08",
+      "text": "#e8efea",
+      "body_contrast": 17.01
+    },
+    {
+      "preset": "neon1-light",
+      "label": "Neon 1 Light",
+      "file": "neon1-light.png",
+      "scheme": "light",
+      "canvas": "#f4f7f4",
+      "text": "#17211a",
+      "body_contrast": 15.33
+    },
+    {
+      "preset": "slate-dark",
+      "label": "Slate Dark",
+      "file": "slate-dark.png",
+      "scheme": "dark",
+      "canvas": "#0b1018",
+      "text": "#e9eff7",
+      "body_contrast": 16.48
+    },
+    {
+      "preset": "sand-light",
+      "label": "Sand Light",
+      "file": "sand-light.png",
+      "scheme": "light",
+      "canvas": "#f7f3eb",
+      "text": "#27251f",
+      "body_contrast": 13.84
+    },
+    {
+      "preset": "forest-light",
+      "label": "Forest Light",
+      "file": "forest-light.png",
+      "scheme": "light",
+      "canvas": "#f4f7f4",
+      "text": "#101010",
+      "body_contrast": 17.63
+    },
+    {
+      "preset": "matrix-dark",
+      "label": "Matrix Dark",
+      "file": "matrix-dark.png",
+      "scheme": "dark",
+      "canvas": "#0d0208",
+      "text": "#e8efea",
+      "body_contrast": 17.45
+    }
+  ],
+  "mobile_overflow": false,
+  "page_errors": 0,
+  "version": "0.6.0a1"
+}

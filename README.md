@@ -68,6 +68,19 @@ Claude imports also retain metadata from complete structured tool-use/result pai
 
 ### Follow several selected files
 
+Create a first selection without hand-writing JSON. Use a new output path in an existing private directory:
+
+```sh
+python3 -m monitoring_ai sources create --output /path/to/private-sources.json \
+  --file /absolute/path/to/authorized-events.jsonl --id my-export --format normalized
+python3 -m monitoring_ai sources check --sources /path/to/private-sources.json
+python3 -m monitoring_ai serve --sources /path/to/private-sources.json --db /tmp/my-observatory.sqlite
+```
+
+For a native export, select `--format claude` or `--format codex` and add `--project my-app`. Creation validates the selection without reading source content, writes the manifest with private file permissions and refuses existing outputs, including symlinks. It never scans for files. A missing selected file can be configured, then becomes readable when that exact path exists.
+
+`sources check` reads only those selected inputs and reports parsing, observed record kinds and adapter limitations. Use `sources check --sources /path/to/private-sources.json --json` for path-free machine output. A failed input returns exit code 1 after reporting the other inputs. Invalid selection or creation returns 2. The check creates no ledger, imports no history and makes no provider request. It does not prove that a later import will reconcile existing event conflicts or overlapping collectors.
+
 Keep a private JSON manifest outside the repository. Each entry names one authorized absolute file path. For example:
 
 ```json
@@ -93,6 +106,14 @@ Duplicate selected paths and IDs refuse at startup. Copies of the same native se
 For pricing, adapt [the fictional price book](examples/pricing.json) to your verified rates and validity dates. All four rates are amounts per million tokens. Add `--pricing /path/to/pricing.json` to `serve` or `top`. Reported event costs take precedence. To convert, supply `--currency EUR --fx /path/to/fx.json` with a dated [FX book](examples/fx.json). Example prices and exchange rates are deliberately fictional.
 
 [Desktop input-health example](docs/inputs.png) · [Mobile panel](docs/inputs-mobile.png). Both show fictional sources, including an intentionally missing demo input.
+
+### Understand connected coverage
+
+The dashboard separates **what an adapter can supply** from **what its latest accepted read actually contains**. Claude and Codex files reconstruct usage, with completed tool-pair metadata supported for Claude. Neither adapter supplies worker lifecycle. Normalized producers can supply explicit usage, status and tool observations, but a file with no status records does not provide lifecycle evidence merely because that format permits it.
+
+Coverage counts unique `(source, id)` observations within each input's latest accepted read. Raw read-attempt counts, replay counts and all-time ledger totals are different measures. Separate inputs can overlap, so their coverage counts are never summed into a claim of complete activity. Entity and session identities are observed metadata, not an operating-system process roster.
+
+Input sample time records when data was read. Event age records its supplied evidence time and continues aging between reads. A successfully polled old file stays stale. Empty, unread, future-dated and retained-after-failure samples remain distinct. Current session states continue to use the ledger's independent lifecycle rules. Source inventory is global and does not change with usage filters.
 
 ## Usage pace and quotas
 
@@ -133,11 +154,15 @@ python3 -m monitoring_ai report --db /tmp/my-observatory.sqlite --project my-app
 
 Known estimate per priced session is a covered subtotal divided by sessions with priced estimated records. Recorded cache-read share uses cached reads divided by all recorded input buckets. Reported output rate uses only records with positive explicit durations and is not model streaming speed. Context overhead, one-shot rate, corrections, time to first edit and rework are unavailable from this schema. No workflow-quality conclusion is inferred from tool errors or chronology. [The detailed report contract](docs/contract.md#detailed-report) defines those measures.
 
+[Explore all six dashboard themes](docs/gallery/README.md) with the same fictional data and layout. Settings screenshots show the separate configuration destination.
+
 ## Appearance
 
-Open **Appearance** below the header. Follow the system scheme or choose Neon 1 Dark, Neon 1 Light, Slate Dark, Sand Light, Forest Light or Matrix Dark. Monitoring bundles the pinned shared `@deep/theme` candidate locally, with its MIT license. It needs no running Deep service, registry installation or network request.
+Open **Settings → Appearance**. Follow the system scheme or choose Neon 1 Dark, Neon 1 Light, Slate Dark, Sand Light, Forest Light or Matrix Dark. Monitoring bundles the pinned shared `@deep/theme` candidate locally, with its MIT license. It needs no running Deep service, registry installation or network request.
 
 Color pickers, corner radius and density offer local overrides. **Apply overrides** validates them before changing the view. Unsafe contrast is refused and the current theme stays active. **Reset appearance** returns to system mode. Explicit choices survive reload and update other tabs on the same Monitoring origin. Storage failures leave the current page usable with a visible persistence message. Settings use a Monitoring-specific browser key, with no automatic cross-application synchronization.
+
+Settings also holds source-setup guidance. Overview keeps monitoring evidence and contextual filters. [Settings ownership and timing](docs/settings-contract.md) describes sources, defaults, persistence and effect.
 
 The shared palette changes appearance only. Estimated and billed costs, unknown values, source read health and lifecycle evidence retain their existing meanings. [Pinned package provenance](docs/theme-source.json) records the exact candidate and checksums. Monitoring owns its adapter and layouts.
 

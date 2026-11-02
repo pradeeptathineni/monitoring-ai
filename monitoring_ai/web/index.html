@@ -21,13 +21,13 @@
       <button class="nav" data-view="usage"><span>▥</span> Usage & costs <kbd>3</kbd></button>
       <button class="nav" data-view="events"><span>≋</span> Event stream <kbd>4</kbd></button>
       <button class="nav" data-view="report"><span>▤</span> Report <kbd>5</kbd></button>
+      <button class="nav" data-view="settings"><span>⚙</span> Settings <kbd>6</kbd></button>
     </nav>
-    <div class="rail-bottom"><span class="small-dot"></span> Local by design<p>No account · No telemetry<br>No model calls</p><a href="https://github.com/pradeeptathineni/monitoring-ai" target="_blank" rel="noreferrer">Source & documentation ↗</a><small>EXPERIMENTAL · v0.5.0a1</small></div>
+    <div class="rail-bottom"><span class="small-dot"></span> Local by design<p>No account · No telemetry<br>No model calls</p><a href="https://github.com/pradeeptathineni/monitoring-ai" target="_blank" rel="noreferrer">Source & documentation ↗</a><small>EXPERIMENTAL · v0.6.0a1</small></div>
   </aside>
   <main>
     <header class="topbar"><div><span class="muted">Observatory</span><span class="slash">/</span><span id="breadcrumb">Overview</span></div><div class="top-actions"><span id="connection" class="connection">Connecting</span><button id="pause" class="quiet">Pause refresh</button><span class="avatar">M</span></div></header>
-    <details id="appearance-settings" class="appearance-settings"><summary>Appearance</summary><div id="appearance-controls"></div></details>
-    <nav class="mobile-nav" aria-label="Compact views"><button data-view="overview">Overview</button><button data-view="sessions">Sessions</button><button data-view="usage">Usage</button><button data-view="events">Events</button><button data-view="report">Report</button></nav>
+    <nav class="mobile-nav" aria-label="Compact views"><button data-view="overview">Overview</button><button data-view="sessions">Sessions</button><button data-view="usage">Usage</button><button data-view="events">Events</button><button data-view="report">Report</button><button data-view="settings">Settings</button></nav>
     <div class="content">
       <section class="title-row"><div><p class="eyebrow">A CLEARER VIEW OF YOUR AGENTS</p><h1 id="title">Every session. One place.</h1><p id="subtitle">Follow the work, understand the usage, keep the evidence.</p></div><div class="clock"><span id="updated">Waiting for data</span><small>All dates in UTC</small></div></section>
       <div id="notice" class="notice" role="status" hidden></div>
@@ -49,7 +49,14 @@
         <article class="panel"><div class="panel-head"><div><h2>Where the work happens</h2><p>Usage across configured projects</p></div><span class="tag">PROJECTS</span></div><div id="project-bars" class="bars"></div></article></div>
         <article class="panel timeline-panel"><div class="panel-head"><div><h2>Session chronology</h2><p>Recorded event span · a long span does not establish continuous work</p></div><button class="text-button" data-view="sessions">Inspect all sessions ↗</button></div><div id="timeline"></div></article>
         <div class="two-column"><article class="panel"><div class="panel-head"><div><h2>Source freshness</h2><p>Observed event age by explicitly supplied source</p></div><span class="tag">EVIDENCE</span></div><div id="freshness"></div></article><article class="panel"><div class="panel-head"><div><h2>Usage pace</h2><p>Selected-window rate and a linear projection</p></div><span class="tag">PACE</span></div><div id="pace"></div></article></div>
-        <article class="panel"><div class="panel-head"><div><h2>Configured input health</h2><p>Explicitly selected sources and their last read outcomes</p></div><span class="tag">INPUTS</span></div><div id="input-health-status" class="input-health-status" role="status"></div><div id="input-health" class="input-health-list"></div><p class="confidence-note">Last successful read describes source polling freshness. It is not evidence that a session or worker is live. Failed reads retain previously accepted event history.</p></article>
+        <article class="panel"><div class="panel-head"><div><h2>Connected data coverage</h2><p>Capabilities and event kinds from explicitly selected inputs</p></div><span class="tag">SOURCES</span></div>
+          <div id="source-coverage-status" class="source-coverage-status" role="status"></div>
+          <div id="source-coverage" class="source-coverage-list"></div>
+          <div id="input-inventory-fallback" hidden><div id="input-health-status" class="input-health-status" role="status"></div><div id="input-health" class="input-health-list"></div></div>
+          <p class="confidence-note">Last successful read describes source polling freshness, not worker liveness. Event age comes from event timestamps. Recent tokens do not prove a live worker. Failed reads retain accepted history.</p>
+          <p class="confidence-note">Setup guidance lives in Settings, alongside appearance preferences.</p>
+          <button class="text-button" data-view="settings">Configure explicitly selected sources ↗</button>
+        </article>
         <div class="two-column"><article class="panel"><div class="panel-head"><div><h2>Daily usage</h2><p>UTC calendar days in this filter</p></div><span class="tag">HISTORY</span></div><div id="daily" class="bars"></div></article><article class="panel"><div class="panel-head"><div><h2>Cost confidence</h2><p>Coverage and calculation provenance</p></div><span class="tag">AUDIT</span></div><div id="confidence"></div></article></div>
       </section>
       <section id="sessions" class="view" hidden><article class="panel"><div class="panel-head"><div><h2>Sessions, agents & workers</h2><p>Choose an entity to inspect its recorded activity. Missing parents stay explicit.</p></div><label class="inline-filter">State<select id="state-filter"><option value="">All states</option><option>running</option><option>waiting</option><option>blocked</option><option>completed</option><option>failed</option><option>cancelled</option><option>unknown</option></select></label></div><div id="entity-table" class="table-wrap"></div></article></section>
@@ -67,6 +74,23 @@
           <article class="panel"><div class="panel-head"><div><h2>Daily usage</h2><p>UTC calendar days in the selected range.</p></div></div><div id="report-daily" class="table-wrap"></div><p id="report-daily-note" class="report-breakdown-note"></p></article>
           <div class="report-panels"><article class="panel"><div class="panel-head"><div><h2>Tool activity</h2><p>Recorded tool outcomes and categorized metadata.</p></div></div><div id="report-tools-summary"></div><div id="report-tool-groups"></div></article><article class="panel"><div class="panel-head"><div><h2>Coverage & unavailable measures</h2><p>Observations describe only connected, explicitly supplied sources.</p></div></div><div id="report-coverage"></div><div class="prose"><p>Context overhead, one-shot rate, corrections, rework, and time to first edit are unavailable from these records. Costs, usage records, and sessions may be incomplete across unconnected sources.</p><p>Timing values are reported duration and output-token rate. They do not infer streaming speed, time to first token, or continuous agent work.</p></div></article></div>
         </div>
+      </section>
+      <section id="settings" class="view" hidden>
+        <article class="panel">
+          <div class="panel-head"><div><h2>Appearance</h2><p>Choose a preset or adjust the display theme for this browser.</p></div><span class="tag">LOCAL PREFERENCE</span></div>
+          <details id="appearance-settings" class="appearance-settings"><summary>Appearance preferences</summary><div id="appearance-controls"></div></details>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><div><h2>Sources and connections</h2><p>Explicitly select authorized inputs through the local CLI.</p></div><span class="tag">LOCAL CONFIGURATION</span></div>
+          <p class="prose">Monitoring does not discover files or create a manifest in the browser. Use the CLI to choose authorized inputs and keep the manifest private.</p>
+          <details id="coverage-setup" class="coverage-setup"><summary>Set up an explicitly selected source</summary>
+            <ol><li>Choose a normalized JSONL stream, or a complete Claude Code or Codex session file that you own or are authorized to read. The dashboard never scans for files.</li>
+              <li>Create a private manifest with the CLI. For normalized input:<pre><code>python3 -m monitoring_ai sources create --output /path/to/private-sources.json --file /absolute/path/to/authorized.jsonl --id my-input --format normalized</code></pre><span>For Claude or Codex, choose <code>--format claude</code> or <code>--format codex</code> and add a project alias such as <code>--project my-app</code>.</span></li>
+              <li>Check the manifest, then start the server with it:<pre><code>python3 -m monitoring_ai sources check --sources /path/to/private-sources.json
+python3 -m monitoring_ai serve --sources /path/to/private-sources.json --db /path/to/private-ledger.sqlite</code></pre></li></ol>
+            <p>See README.md sections “Connect your data” and “Detailed reports” for command details. Manifests and input files stay on your machine.</p>
+          </details>
+        </article>
       </section>
       <footer><span id="footnote">Only explicitly supplied sources are observed.</span><span>OBSERVE WITH CONTEXT. ACT WITH INTENT.</span></footer>
     </div>

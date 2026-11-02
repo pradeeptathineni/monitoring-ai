@@ -68,6 +68,17 @@ def parser():
     report.add_argument("--json", action="store_true")
     for key in (*DIMENSIONS, "since", "until", "state"):
         report.add_argument("--" + key)
+    sources = sub.add_parser("sources", help="Select explicit inputs and check their supplied evidence")
+    actions = sources.add_subparsers(dest="source_action", required=True)
+    create = actions.add_parser("create", help="Create one private selection without overwriting a file")
+    create.add_argument("--output", type=Path, required=True)
+    create.add_argument("--file", type=Path, required=True)
+    create.add_argument("--id", required=True, help="Safe alias, independent of a normalized event's source")
+    create.add_argument("--format", choices=["normalized", "claude", "codex"], default="normalized")
+    create.add_argument("--project", help="Required project alias for native inputs")
+    check = actions.add_parser("check", help="Check selected file parsing and coverage without changing a ledger")
+    check.add_argument("--sources", type=Path, required=True)
+    check.add_argument("--json", action="store_true")
     return cli
 
 
@@ -105,6 +116,46 @@ def quota_loader(args):
 
 
 def run(args):
+    if args.command == "sources":
+        from .source_setup import create_selection, check_selection
+        from .sources import SourceManifestError
+        try:
+            if args.source_action == "create":
+                create_selection(args.output, file=args.file, id=args.id, format=args.format, project=args.project)
+                print("Created a private source selection. Run sources check, then serve --sources with the selected manifest.")
+                return
+            value = check_selection(args.sources)
+        except FileExistsError:
+            print("monitoring-ai: output already exists. Choose a new --output. No file was overwritten.", file=sys.stderr)
+            raise SystemExit(2) from None
+        except SourceManifestError as error:
+            # Manifest parser diagnostics are fixed text, without private input values.
+            print(f"monitoring-ai: source selection rejected. {error}", file=sys.stderr)
+            raise SystemExit(2) from None
+        if args.json:
+            print(json.dumps(value, indent=2))
+        else:
+            print("MONITORING AI INPUT CHECK · explicit selected files only")
+            for row in value["checks"]:
+                print(f"\n{row['id']} · {row['format']} · {row['state']}")
+                if row["error"]:
+                    print(row["error"])
+                    continue
+                summary = row["summary"]
+                counts = summary["records"]
+                print(f"{counts['usage']} usage · {counts['status']} lifecycle · {counts['tool']} tool records · {counts['sessions']} observed sessions")
+                if summary["capabilities"]["lifecycle"] == "unsupported":
+                    print("Usage reconstruction only. This adapter supplies no live worker lifecycle.")
+                elif not counts["status"]:
+                    print("No lifecycle events supplied. A producer must explicitly export status evidence.")
+                else:
+                    print("Producer-supplied lifecycle observations. Evidence ages independently of file reads.")
+                if not counts["total"]:
+                    print("No complete supported records yet. Check the selected format and producer output.")
+            print("\n" + value["note"])
+        if not value["all_readable"]:
+            raise SystemExit(1)
+        return
     if args.command == "quota":
         if args.codex:
             value = read_codex_quota(executable=args.executable, source=args.source_id, account=args.account)
