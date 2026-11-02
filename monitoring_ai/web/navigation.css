@@ -1,0 +1,138 @@
+/* Monitoring adapter for the shared workspace navigation geometry. */
+#monitoring-workspace {
+  display: grid;
+  min-height: 100vh;
+  align-items: start;
+}
+
+#monitoring-workspace > .main-shell {
+  min-width: 0;
+  min-height: 100vh;
+  margin-left: 0;
+}
+
+#monitoring-workspace .skip-link {
+  position: fixed;
+  z-index: 20;
+  top: 8px;
+  left: 8px;
+  padding: 10px 14px;
+  border-radius: var(--radius-control);
+  color: var(--text);
+  background: var(--panel);
+  transform: translateY(-160%);
+}
+
+#monitoring-workspace .skip-link:focus {
+  transform: translateY(0);
+}
+
+#monitoring-workspace .brand-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border: 1px solid color-mix(in srgb, var(--brand) 38%, var(--line));
+  border-radius: var(--radius-control);
+  color: var(--accent-text);
+  background: color-mix(in srgb, var(--brand) 14%, var(--panel));
+  font: 700 18px var(--font-mono);
+  letter-spacing: -2px;
+}
+
+#monitoring-workspace .navigation-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#monitoring-workspace .primary-nav .nav-item {
+  margin: 0;
+  overflow: hidden;
+}
+
+#monitoring-workspace .primary-nav.mobile-nav {
+  display: flex;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+}
+
+#monitoring-workspace .primary-nav .nav-item.active {
+  color: var(--theme-accent, var(--text));
+  background: color-mix(in srgb, var(--brand) 16%, var(--panel));
+  border-color: color-mix(in srgb, var(--brand) 40%, var(--line));
+}
+
+#monitoring-workspace .primary-nav .nav-icon {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  flex: none;
+  font-size: 19px;
+}
+
+#monitoring-workspace .primary-nav .navigation-label {
+  font-size: inherit;
+  width: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+#monitoring-workspace .primary-nav kbd {
+  margin-left: auto;
+  font: inherit;
+  font-size: 10px;
+  opacity: 0.55;
+}
+
+#monitoring-workspace .navigation-status {
+  margin: 8px 14px;
+  padding: 9px 12px;
+  border: 1px solid var(--warn);
+  border-radius: var(--radius-control);
+  color: var(--text);
+  background: color-mix(in srgb, var(--warn) 12%, var(--panel));
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+#monitoring-workspace .section-navigation a {
+  font-size: 12px;
+}
+
+#settings[data-category="appearance"] > [data-settings-category="sources"],
+#settings[data-category="sources"] > [data-settings-category="appearance"] {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  #monitoring-workspace .primary-nav.mobile-nav {
+    padding-block: 3px;
+    border: 0;
+  }
+
+  #monitoring-workspace .primary-nav .nav-item {
+    flex: none;
+    width: auto;
+    min-width: 44px;
+    white-space: nowrap;
+  }
+
+  #monitoring-workspace .primary-nav .navigation-label {
+  font-size: inherit;
+  width: auto;
+    flex: none;
+  }
+
+  #monitoring-workspace .primary-nav kbd {
+    display: none;
+  }
+
+  #monitoring-workspace .navigation-status {
+    margin: 8px 14px;
+  }
+}

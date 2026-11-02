@@ -87,24 +87,24 @@ try {
     const contrast = contrastRatio(rgbHex(rendered.text), rgbHex(rendered.background));
     if (contrast < 4.5) fail("Insufficient rendered body contrast");
     const filename = `${preset.id}.png`;
-    await page.screenshot({ path: path.join(output, filename) });
+    await page.screenshot({ animations: "disabled", path: path.join(output, filename) });
     captures.push({ preset: preset.id, label: preset.label, file: filename, scheme: rendered.scheme,
       canvas: rgbHex(rendered.background), text: rgbHex(rendered.text), body_contrast: Number(contrast.toFixed(2)) });
   }
 
   await choose("neon1-light");
   await page.evaluate(() => window.scrollTo(0, 0));
-  await page.screenshot({ path: path.join(output, "settings.png") });
+  await page.screenshot({ animations: "disabled", path: path.join(output, "settings.png") });
   await page.setViewportSize({ width: 390, height: 844 });
   await choose("forest-light");
   await page.evaluate(() => window.scrollTo(0, 0));
-  await page.screenshot({ path: path.join(output, "settings-mobile.png") });
+  await page.screenshot({ animations: "disabled", path: path.join(output, "settings-mobile.png") });
   if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) fail("Settings mobile overflow");
   await page.locator('[data-view="overview"]:visible').first().click();
   await page.evaluate(() => window.scrollTo(0, 0));
-  await page.screenshot({ path: path.join(output, "overview-mobile.png") });
+  await page.screenshot({ animations: "disabled", path: path.join(output, "overview-mobile.png") });
   const panel = page.locator("article").filter({ has: page.locator("#source-coverage") });
-  await panel.screenshot({ path: path.join(output, "coverage-mobile.png") });
+  await panel.screenshot({ animations: "disabled", path: path.join(output, "coverage-mobile.png") });
   if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) fail("Overview mobile overflow");
   if (errors.length) fail(errors.join("; "));
 

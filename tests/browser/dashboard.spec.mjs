@@ -56,5 +56,5 @@ test("narrow view remains usable and keyboard navigation works", async ({ page }
   await page.locator("#pause").click();
   await expect(page.locator("#connection")).toHaveText("Refresh paused");
   await page.locator("#pause").click();
-  await expect(page.locator("#connection")).toHaveText("History connected");
+  await expect(page.locator("#connection")).toHaveText("Ledger available");
 });

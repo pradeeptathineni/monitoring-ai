@@ -1,4 +1,4 @@
-"""Run the local observatory, import an explicit source or inspect usage in a terminal."""
+"""Run the local monitoring server, import an explicit source or inspect usage in a terminal."""
 
 import argparse
 import json
@@ -79,6 +79,10 @@ def parser():
     check = actions.add_parser("check", help="Check selected file parsing and coverage without changing a ledger")
     check.add_argument("--sources", type=Path, required=True)
     check.add_argument("--json", action="store_true")
+    preview = actions.add_parser("preview", help="Preview ingestion in a disposable ledger without changing history")
+    preview.add_argument("--sources", type=Path, required=True)
+    preview.add_argument("--db", type=Path, help="Explicit existing ledger to copy read-only. Omit for an empty base")
+    preview.add_argument("--json", action="store_true")
     return cli
 
 
@@ -123,6 +127,32 @@ def run(args):
             if args.source_action == "create":
                 create_selection(args.output, file=args.file, id=args.id, format=args.format, project=args.project)
                 print("Created a private source selection. Run sources check, then serve --sources with the selected manifest.")
+                return
+            if args.source_action == "preview":
+                from .source_readiness import preview_selection
+                value = preview_selection(args.sources, args.db)
+                if args.json:
+                    print(json.dumps(value, indent=2))
+                else:
+                    base = value["base"]
+                    print(f"MONITORING AI INGESTION PREVIEW · {base['kind']} · revision {base['revision']} · {base['events']} accepted observations in base")
+                    for row in value["inputs"]:
+                        print(f"\n{row['id']} · {row['format']} · {row['state']}")
+                        if row["proposed"] is not None:
+                            print(f"Proposed additions {row['proposed']['added']} · replays {row['proposed']['replayed']}")
+                        if row["error"]:
+                            print(row["error"])
+                        if row["summary"]:
+                            counts = row["summary"]["records"]
+                            print(f"Unique sample: {counts['usage']} usage · {counts['status']} lifecycle · {counts['tool']} tool observations")
+                            if not counts["total"]:
+                                print("The selected file supplies no complete supported observations yet.")
+                        if row["summary"] and row["summary"]["capabilities"]["lifecycle"] == "unsupported":
+                            print("This usage adapter supplies no live worker lifecycle.")
+                    print("\nPrivate temporary preview completed. Accepted ledger history is unchanged.")
+                    print(value["note"])
+                if not value["ready"]:
+                    raise SystemExit(1)
                 return
             value = check_selection(args.sources)
         except FileExistsError:

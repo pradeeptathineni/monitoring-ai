@@ -1,0 +1,26 @@
+{
+  "schema": "monitoring.navigation-source.v1",
+  "license": "MIT",
+  "license_notice": "monitoring_ai/web/theme/LICENSE",
+  "source": {
+    "path": "src/components/workspace-navigation.css",
+    "commit": "93f5754fb4c92775381c103c5ef212de3cf5ed96",
+    "parent_commit": "6004af35bfa1c0c400d3ed2d82698232e06380dc",
+    "review_baseline_commit": "9377c06e3685f2caea6aa3e17c2a5323f55c146e",
+    "sha256": "42527aeebc8f86761c86bf555897ca4b70edfcb7a3dff98387daab5b998f459d"
+  },
+  "adapted": {
+    "path": "monitoring_ai/web/theme/workspace-navigation.css",
+    "sha256": "179b19e60c6d3478b98a98a6120326320eed10fa3f7348ba07a762c90373ac39",
+    "changes": "Renamed only the #deep-workspace selector prefix to #monitoring-workspace and added this MIT attribution notice; CSS declarations and behavior are unchanged."
+  },
+  "navigation_geometry": {
+    "primary_width_expanded_px": 236,
+    "primary_width_collapsed_px": 68,
+    "context_width_desktop_px": 208,
+    "context_width_intermediate_px": 184,
+    "intermediate_width_range_px": [861, 1100],
+    "mobile_breakpoint_max_px": 860,
+    "reduced_motion": "Disables navigation and descendant animation, transition and smooth scrolling."
+  }
+}

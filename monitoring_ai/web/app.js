@@ -6,13 +6,14 @@ const number = new Intl.NumberFormat("en-US");
 const compact = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
 const bucketNames = { input: "Input", cache_read: "Cache read", cache_write: "Cache write", output: "Output" };
 const insightUnavailable = "Insights are unavailable in this snapshot.";
-const titles = { overview: ["Every session. One place.", "Follow the work, understand the usage, keep the evidence."],
-  sessions: ["See the whole working tree.", "Sessions, agents and workers, with evidence behind every state."],
-  usage: ["Understand every token.", "Compare models and surfaces without losing cost qualifications."],
-  events: ["The story behind the numbers.", "A chronological ledger of explicitly supplied activity."],
-  report: ["Usage with context.", "A detailed, qualified report for the selected UTC period and filters."],
+const titles = { overview: ["Overview", "Status evidence and usage from the sources selected for this ledger."],
+  sessions: ["Sessions, agents and workers", "Recorded entities and parent relationships. Status uses the latest supplied lifecycle event."],
+  usage: ["Usage and costs", "Group token usage and costs by model, provider, surface, project or date."],
+  events: ["Events", "Latest 100 matching usage, status and tool records."],
+  report: ["Usage report", "Usage and cost coverage for the selected UTC dates and filters."],
   settings: ["Settings", "Appearance preferences and setup guidance for explicitly selected sources."] };
 let data, paused = false, busy = false, view = "overview", entity = null;
+let settingsCategory = "all";
 let lastSuccess = 0;
 let snapshotReadUnavailable = false;
 let reportController = null, reportRequestId = 0, reportData = null;
@@ -30,20 +31,47 @@ function cash(value) {
   catch { return `${value} ${data.currency}`; }
 }
 
-function showView(next) {
-  if (!titles[next]) return;
-  if (view === next && location.hash.slice(1) === next) return;
+function parseRoute(route) {
+  const [requested, category] = String(route || "overview").replace(/^#/, "").split("/");
+  const next = titles[requested] ? requested : "overview";
+  const selectedCategory = next === "settings" && ["appearance", "sources"].includes(category) ? category : "all";
+  return { next, category: selectedCategory, hash: next === "settings" && selectedCategory !== "all" ? `settings/${selectedCategory}` : next };
+}
+
+function showView(route) {
+  const target = parseRoute(route), next = target.next;
+  if (view === next && settingsCategory === target.category && location.hash.slice(1) === target.hash) return;
   if (view === "report" && next !== "report") cancelReport();
   view = next;
+  settingsCategory = target.category;
   $("#metrics").hidden = next === "report" || next === "settings";
   $("#filters").hidden = next === "settings";
   $("#scope").hidden = next === "settings";
   $$(".view").forEach((section) => { section.hidden = section.id !== next; });
-  $$(".nav, .mobile-nav button").forEach((button) => button.classList.toggle("active", button.dataset.view === next));
-  $("#breadcrumb").textContent = { overview: "Overview", sessions: "Sessions & workers", usage: "Usage & costs", events: "Event stream", report: "Report", settings: "Settings" }[next];
-  $("#title").textContent = titles[next][0];
-  $("#subtitle").textContent = titles[next][1];
-  location.hash = next;
+  const settings = $("#settings");
+  settings.dataset.category = target.category;
+  $$("#settings [data-settings-category]").forEach((card) => { card.hidden = target.category !== "all" && card.dataset.settingsCategory !== target.category; });
+  document.body.classList.toggle("has-section-navigation", next === "settings");
+  $("#section-navigation").hidden = next !== "settings";
+  $$("#primary-navigation [data-view]").forEach((button) => {
+    const active = button.dataset.view === next;
+    button.classList.toggle("active", active);
+    if (active) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
+  });
+  $$("#section-navigation [data-settings-route]").forEach((link) => {
+    const active = link.dataset.settingsRoute === target.category;
+    if (active) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
+  });
+  const baseBreadcrumb = { overview: "Overview", sessions: "Sessions & workers", usage: "Usage & costs", events: "Event stream", report: "Report", settings: "Settings" }[next];
+  const categoryLabel = { appearance: "Appearance", sources: "Sources and connections" }[target.category];
+  $("#breadcrumb").textContent = categoryLabel ? `${baseBreadcrumb} / ${categoryLabel}` : baseBreadcrumb;
+  $("#title").textContent = target.category === "appearance" ? "Appearance" : target.category === "sources" ? "Sources and connections" : titles[next][0];
+  $("#subtitle").textContent = target.category === "appearance" ? "Choose a preset or adjust the display theme for this browser." : target.category === "sources" ? "Setup guidance for explicitly selected, authorized inputs." : titles[next][1];
+  if (location.hash.slice(1) !== target.hash) location.hash = target.hash;
+  window.dispatchEvent(new CustomEvent("monitoring:navigate", { detail: { view: next } }));
+  window.monitoringNavigation?.reveal(next);
   if (next === "report") loadReport();
 }
 
@@ -673,7 +701,7 @@ async function refresh() {
     data = value; lastSuccess = Date.now(); snapshotReadUnavailable = false;
     $("#notice").hidden = data.source_status.state !== "unavailable";
     $("#notice").textContent = data.source_status.error || "";
-    $("#connection").textContent = data.source_status.state === "following" ? "Following source" : data.source_status.state === "unavailable" ? "Source unavailable" : "History connected";
+    $("#connection").textContent = data.source_status.state === "following" ? "Following source" : data.source_status.state === "unavailable" ? "Source unavailable" : "Ledger available";
     $("#connection").classList.toggle("offline", data.source_status.state === "unavailable");
     $("#updated").textContent = `Updated ${data.observed_at.slice(11, 19)} UTC`;
     render();

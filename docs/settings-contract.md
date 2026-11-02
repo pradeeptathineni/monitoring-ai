@@ -1,6 +1,6 @@
 # Settings ownership and timing
 
-The standalone **Settings** destination is `/#settings`. Overview contains monitoring evidence and contextual filters. Persistent appearance choices and source-setup guidance live in Settings. Existing view hashes and theme preferences remain compatible.
+The standalone **Settings** destination is `/#settings`, with contextual Appearance and Sources categories. Overview contains monitoring evidence and contextual filters. Persistent appearance choices and source-setup guidance live in Settings. Existing view hashes and theme preferences remain compatible.
 
 | Item | Owner and source | Default and effect | Persistence |
 | --- | --- | --- | --- |
@@ -12,6 +12,6 @@ The standalone **Settings** destination is `/#settings`. Overview contains monit
 
 Settings groups existing owner controls. It does not add a cross-system configuration registry, a browser source-write endpoint or new inheritance rules. Deep should retain its existing capability discovery and owner projections. Shared appearance uses the existing theme package. A future editable Monitoring projection must expose actual scope, defaults, validation, source and timing before mounting it elsewhere.
 
-Ordinary appearance choices are separate from credentials, filesystem access, executable trust, consent, execution and spending. Saving a theme does not connect a source. Creating a source manifest selects explicit paths but starts no collector until the operator launches the server. A read-only setup check creates no ledger and does not accept events into history.
+Ordinary appearance choices are separate from credentials, filesystem access, executable trust, consent, execution and spending. Saving a theme does not connect a source. Creating a source manifest selects explicit paths but starts no collector until the operator launches the server. A read-only setup check creates no ledger and does not accept events into history. An ingestion preview uses a private disposable ledger copy, preserving accepted history.
 
 Invalid appearance input preserves the active valid choice. Storage failure preserves a usable page with a visible persistence limit. Source configuration refuses unknown fields and overwrites, and failures retain already accepted ledger history. Existing qualified costs and lifecycle meanings do not change with settings.

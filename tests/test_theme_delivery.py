@@ -45,7 +45,10 @@ class ThemeDeliveryTests(unittest.TestCase):
     def test_whitelisted_theme_assets_are_delivered_exactly(self):
         for route, asset, mime in (
             ("/appearance.js", "appearance.js", "text/javascript; charset=utf-8"),
+            ("/navigation.js", "navigation.js", "text/javascript; charset=utf-8"),
+            ("/navigation.css", "navigation.css", "text/css; charset=utf-8"),
             ("/theme/index.js", "theme/index.js", "text/javascript; charset=utf-8"),
+            ("/theme/workspace-navigation.css", "theme/workspace-navigation.css", "text/css; charset=utf-8"),
             ("/theme/LICENSE", "theme/LICENSE", "text/plain; charset=utf-8"),
         ):
             with self.subTest(route=route):
@@ -60,7 +63,8 @@ class ThemeDeliveryTests(unittest.TestCase):
     def test_arbitrary_and_traversal_paths_are_not_served(self):
         for route in ("/theme/../server.py", "/theme/%2e%2e/server.py",
                       "/%2e%2e/monitoring_ai/server.py", "/theme/other.js",
-                      "/theme/index.js/extra"):
+                      "/theme/index.js/extra", "/theme/workspace-navigation.css/extra",
+                      "/navigation.css.bak"):
             with self.subTest(route=route):
                 status, _, _, _ = self.get(route)
                 self.assertEqual(status, 404)

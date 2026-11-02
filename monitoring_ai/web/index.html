@@ -5,31 +5,46 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#0a1118">
-  <title>Monitoring AI · Observatory</title>
+  <title>Monitoring AI</title>
   <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/theme/workspace-navigation.css">
+  <link rel="stylesheet" href="/navigation.css">
   <script src="/app.js" defer></script>
   <script src="/appearance.js" type="module"></script>
+  <script src="/navigation.js" type="module"></script>
 </head>
-<body>
-  <aside class="rail">
-    <a class="brand" href="/" aria-label="Monitoring AI home"><span class="brand-icon">m<span>·</span></span><span>monitoring<span class="muted">/ ai</span></span></a>
-    <div class="workspace"><span class="workspace-icon">◈</span><div>Local observatory<small>YOUR MACHINE · READ ONLY</small></div></div>
-    <p class="rail-label">OBSERVE</p>
-    <nav aria-label="Views">
-      <button class="nav active" data-view="overview"><span>◫</span> Overview <kbd>1</kbd></button>
-      <button class="nav" data-view="sessions"><span>⌘</span> Sessions & workers <kbd>2</kbd></button>
-      <button class="nav" data-view="usage"><span>▥</span> Usage & costs <kbd>3</kbd></button>
-      <button class="nav" data-view="events"><span>≋</span> Event stream <kbd>4</kbd></button>
-      <button class="nav" data-view="report"><span>▤</span> Report <kbd>5</kbd></button>
-      <button class="nav" data-view="settings"><span>⚙</span> Settings <kbd>6</kbd></button>
+<body id="monitoring-workspace" class="app-shell" data-navigation="expanded">
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <aside class="rail sidebar" aria-label="Workspace navigation">
+    <div class="navigation-heading">
+      <a class="brand" href="#overview" aria-label="Monitoring AI home"><span class="brand-mark" aria-hidden="true">m·</span><span class="navigation-label">monitoring<span class="muted">/ ai</span></span></a>
+      <button id="navigation-toggle" class="navigation-toggle" type="button" aria-controls="primary-navigation" aria-expanded="true" aria-label="Collapse navigation" title="Collapse navigation"><span aria-hidden="true">‹</span></button>
+    </div>
+    <div class="workspace rail-slot"><span class="workspace-icon" aria-hidden="true">◈</span><div>Local monitoring<small>SELECTED SOURCES · READ ONLY</small></div></div>
+    <p class="rail-label rail-slot">VIEWS</p>
+    <nav id="primary-navigation" class="primary-nav mobile-nav" aria-label="Views">
+      <button class="nav nav-item" data-view="overview" title="Overview" aria-label="Overview"><span class="nav-icon" aria-hidden="true">◫</span><span class="navigation-label">Overview <kbd>1</kbd></span></button>
+      <button class="nav nav-item" data-view="sessions" title="Sessions & workers" aria-label="Sessions and workers"><span class="nav-icon" aria-hidden="true">⌘</span><span class="navigation-label">Sessions & workers <kbd>2</kbd></span></button>
+      <button class="nav nav-item" data-view="usage" title="Usage & costs" aria-label="Usage and costs"><span class="nav-icon" aria-hidden="true">▥</span><span class="navigation-label">Usage & costs <kbd>3</kbd></span></button>
+      <button class="nav nav-item" data-view="events" title="Event stream" aria-label="Event stream"><span class="nav-icon" aria-hidden="true">≋</span><span class="navigation-label">Event stream <kbd>4</kbd></span></button>
+      <button class="nav nav-item" data-view="report" title="Report" aria-label="Report"><span class="nav-icon" aria-hidden="true">▤</span><span class="navigation-label">Report <kbd>5</kbd></span></button>
+      <button class="nav nav-item" data-view="settings" title="Settings" aria-label="Settings"><span class="nav-icon" aria-hidden="true">⚙</span><span class="navigation-label">Settings <kbd>6</kbd></span></button>
     </nav>
-    <div class="rail-bottom"><span class="small-dot"></span> Local by design<p>No account · No telemetry<br>No model calls</p><a href="https://github.com/pradeeptathineni/monitoring-ai" target="_blank" rel="noreferrer">Source & documentation ↗</a><small>EXPERIMENTAL · v0.6.0a1</small></div>
+    <div class="rail-bottom sidebar-foot"><span class="small-dot" aria-hidden="true"></span><div class="navigation-label">Read-only dashboard<a href="https://github.com/pradeeptathineni/monitoring-ai" target="_blank" rel="noreferrer">Source & documentation ↗</a><small>EXPERIMENTAL · v0.7.0a1</small></div></div>
   </aside>
-  <main>
-    <header class="topbar"><div><span class="muted">Observatory</span><span class="slash">/</span><span id="breadcrumb">Overview</span></div><div class="top-actions"><span id="connection" class="connection">Connecting</span><button id="pause" class="quiet">Pause refresh</button><span class="avatar">M</span></div></header>
-    <nav class="mobile-nav" aria-label="Compact views"><button data-view="overview">Overview</button><button data-view="sessions">Sessions</button><button data-view="usage">Usage</button><button data-view="events">Events</button><button data-view="report">Report</button><button data-view="settings">Settings</button></nav>
+  <aside id="section-navigation" class="section-navigation" aria-label="Settings sections" hidden>
+    <h2>Settings</h2>
+    <nav>
+      <a href="#settings" data-settings-route="all">All settings</a>
+      <a href="#settings/appearance" data-settings-route="appearance">Appearance</a>
+      <a href="#settings/sources" data-settings-route="sources">Sources and connections</a>
+    </nav>
+  </aside>
+  <main id="main-content" class="main-shell" tabindex="-1">
+    <div id="navigation-status" class="navigation-status" role="status" aria-live="polite" hidden></div>
+    <header class="topbar"><div><span class="muted">Monitoring AI</span><span class="slash">/</span><span id="breadcrumb">Overview</span></div><div class="top-actions"><span id="connection" class="connection">Connecting</span><button id="pause" class="quiet">Pause refresh</button><span class="avatar">M</span></div></header>
     <div class="content">
-      <section class="title-row"><div><p class="eyebrow">A CLEARER VIEW OF YOUR AGENTS</p><h1 id="title">Every session. One place.</h1><p id="subtitle">Follow the work, understand the usage, keep the evidence.</p></div><div class="clock"><span id="updated">Waiting for data</span><small>All dates in UTC</small></div></section>
+      <section class="title-row"><div><h1 id="title">Overview</h1><p id="subtitle">Status evidence and usage from the sources selected for this ledger.</p></div><div class="clock"><span id="updated">Waiting for data</span><small>All dates in UTC</small></div></section>
       <div id="notice" class="notice" role="status" hidden></div>
       <form id="filters" class="filters" aria-label="Filter monitoring data">
         <label>Provider<select name="provider"><option value="">All providers</option></select></label>
@@ -46,9 +61,9 @@
       <section id="metrics" class="metrics" aria-label="Summary metrics"></section>
       <section id="overview" class="view">
         <div class="two-column"><article class="panel"><div class="panel-head"><div><h2>Usage by model</h2><p>Disjoint token buckets, counted once</p></div><span class="tag">TOKENS</span></div><div id="model-bars" class="bars"></div><div id="token-legend" class="legend"></div></article>
-        <article class="panel"><div class="panel-head"><div><h2>Where the work happens</h2><p>Usage across configured projects</p></div><span class="tag">PROJECTS</span></div><div id="project-bars" class="bars"></div></article></div>
+        <article class="panel"><div class="panel-head"><div><h2>Usage by project</h2><p>Usage across configured projects</p></div><span class="tag">PROJECTS</span></div><div id="project-bars" class="bars"></div></article></div>
         <article class="panel timeline-panel"><div class="panel-head"><div><h2>Session chronology</h2><p>Recorded event span · a long span does not establish continuous work</p></div><button class="text-button" data-view="sessions">Inspect all sessions ↗</button></div><div id="timeline"></div></article>
-        <div class="two-column"><article class="panel"><div class="panel-head"><div><h2>Source freshness</h2><p>Observed event age by explicitly supplied source</p></div><span class="tag">EVIDENCE</span></div><div id="freshness"></div></article><article class="panel"><div class="panel-head"><div><h2>Usage pace</h2><p>Selected-window rate and a linear projection</p></div><span class="tag">PACE</span></div><div id="pace"></div></article></div>
+        <div class="two-column"><article class="panel"><div class="panel-head"><div><h2>Source freshness</h2><p>Observed event age by explicitly supplied source</p></div><span class="tag">EVIDENCE</span></div><div id="freshness"></div></article><article class="panel"><div class="panel-head"><div><h2>Usage rate</h2><p>Selected-window rate and a linear projection</p></div><span class="tag">PACE</span></div><div id="pace"></div></article></div>
         <article class="panel"><div class="panel-head"><div><h2>Connected data coverage</h2><p>Capabilities and event kinds from explicitly selected inputs</p></div><span class="tag">SOURCES</span></div>
           <div id="source-coverage-status" class="source-coverage-status" role="status"></div>
           <div id="source-coverage" class="source-coverage-list"></div>
@@ -57,13 +72,13 @@
           <p class="confidence-note">Setup guidance lives in Settings, alongside appearance preferences.</p>
           <button class="text-button" data-view="settings">Configure explicitly selected sources ↗</button>
         </article>
-        <div class="two-column"><article class="panel"><div class="panel-head"><div><h2>Daily usage</h2><p>UTC calendar days in this filter</p></div><span class="tag">HISTORY</span></div><div id="daily" class="bars"></div></article><article class="panel"><div class="panel-head"><div><h2>Cost confidence</h2><p>Coverage and calculation provenance</p></div><span class="tag">AUDIT</span></div><div id="confidence"></div></article></div>
+        <div class="two-column"><article class="panel"><div class="panel-head"><div><h2>Daily usage</h2><p>UTC calendar days in this filter</p></div><span class="tag">HISTORY</span></div><div id="daily" class="bars"></div></article><article class="panel"><div class="panel-head"><div><h2>Cost coverage</h2><p>Coverage and calculation provenance</p></div><span class="tag">AUDIT</span></div><div id="confidence"></div></article></div>
       </section>
       <section id="sessions" class="view" hidden><article class="panel"><div class="panel-head"><div><h2>Sessions, agents & workers</h2><p>Choose an entity to inspect its recorded activity. Missing parents stay explicit.</p></div><label class="inline-filter">State<select id="state-filter"><option value="">All states</option><option>running</option><option>waiting</option><option>blocked</option><option>completed</option><option>failed</option><option>cancelled</option><option>unknown</option></select></label></div><div id="entity-table" class="table-wrap"></div></article></section>
       <section id="usage" class="view" hidden><article class="panel"><div class="panel-head"><div><h2>Usage breakdown</h2><p>Estimated and billed amounts are separate subsets. Missing amounts are never zero.</p></div><label class="inline-filter">Group by<select id="group"><option value="model">Model</option><option value="provider">Provider</option><option value="surface">Surface</option><option value="project">Project</option><option value="date">UTC date</option></select></label></div><div id="usage-table" class="table-wrap"></div></article><article class="panel"><div class="panel-head"><div><h2>Provider quota observations</h2><p>Supplied snapshots, when configured. Token use does not establish quota.</p></div><span class="tag">QUOTA</span></div><div id="quotas"></div></article><article class="panel"><div class="panel-head"><div><h2>Currency & pricing</h2><p>Default USD. Conversions use an explicitly supplied dated rate book.</p></div></div><div id="currency-info" class="prose"></div></article></section>
       <section id="events" class="view" hidden><article class="panel"><div class="panel-head"><div><h2>Event stream</h2><p>Latest 100 matching records · usage deltas, status evidence and tool outcomes</p></div><button id="clear-entity" class="quiet" hidden>Clear entity selection</button></div><div id="event-selection" class="selection"></div><div id="event-table" class="table-wrap"></div></article></section>
       <section id="report" class="view" hidden>
-        <article class="panel"><div class="panel-head"><div><h2>Detailed usage report</h2><p>Usage records, observed sessions and qualified cost evidence across the selected period.</p></div><label class="inline-filter">Period<select id="report-period"><option value="custom">Custom dates</option><option value="today">Today · UTC</option><option value="7days">Last 7 days · UTC</option><option value="30days">Last 30 days · UTC</option><option value="thismonth">This month · UTC</option><option value="6months">Last 6 months · UTC</option><option value="all">All recorded</option></select></label></div><div class="prose">Choose a preset to set the shared UTC From and Through filters above, or edit those dates directly. All recorded has no invented prior period.</div></article>
+        <article class="panel"><div class="panel-head"><div><h2>Usage report</h2><p>Usage records, observed sessions and qualified cost evidence across the selected period.</p></div><label class="inline-filter">Period<select id="report-period"><option value="custom">Custom dates</option><option value="today">Today · UTC</option><option value="7days">Last 7 days · UTC</option><option value="30days">Last 30 days · UTC</option><option value="thismonth">This month · UTC</option><option value="6months">Last 6 months · UTC</option><option value="all">All recorded</option></select></label></div><div class="prose">Choose a preset to set the shared UTC From and Through filters above, or edit those dates directly. All recorded has no invented prior period.</div></article>
         <div id="report-status" class="report-status" role="status" aria-live="polite">Report has not been loaded.</div>
         <div id="report-content" hidden>
           <div id="report-range" class="report-range"></div>
@@ -75,24 +90,25 @@
           <div class="report-panels"><article class="panel"><div class="panel-head"><div><h2>Tool activity</h2><p>Recorded tool outcomes and categorized metadata.</p></div></div><div id="report-tools-summary"></div><div id="report-tool-groups"></div></article><article class="panel"><div class="panel-head"><div><h2>Coverage & unavailable measures</h2><p>Observations describe only connected, explicitly supplied sources.</p></div></div><div id="report-coverage"></div><div class="prose"><p>Context overhead, one-shot rate, corrections, rework, and time to first edit are unavailable from these records. Costs, usage records, and sessions may be incomplete across unconnected sources.</p><p>Timing values are reported duration and output-token rate. They do not infer streaming speed, time to first token, or continuous agent work.</p></div></article></div>
         </div>
       </section>
-      <section id="settings" class="view" hidden>
-        <article class="panel">
+      <section id="settings" class="view" data-category="all" hidden>
+        <article class="panel" data-settings-category="appearance">
           <div class="panel-head"><div><h2>Appearance</h2><p>Choose a preset or adjust the display theme for this browser.</p></div><span class="tag">LOCAL PREFERENCE</span></div>
           <details id="appearance-settings" class="appearance-settings"><summary>Appearance preferences</summary><div id="appearance-controls"></div></details>
         </article>
-        <article class="panel">
+        <article class="panel" data-settings-category="sources">
           <div class="panel-head"><div><h2>Sources and connections</h2><p>Explicitly select authorized inputs through the local CLI.</p></div><span class="tag">LOCAL CONFIGURATION</span></div>
           <p class="prose">Monitoring does not discover files or create a manifest in the browser. Use the CLI to choose authorized inputs and keep the manifest private.</p>
-          <details id="coverage-setup" class="coverage-setup"><summary>Set up an explicitly selected source</summary>
+          <details id="coverage-setup" class="coverage-setup navigation-disclosure"><summary>Set up an explicitly selected source</summary>
             <ol><li>Choose a normalized JSONL stream, or a complete Claude Code or Codex session file that you own or are authorized to read. The dashboard never scans for files.</li>
               <li>Create a private manifest with the CLI. For normalized input:<pre><code>python3 -m monitoring_ai sources create --output /path/to/private-sources.json --file /absolute/path/to/authorized.jsonl --id my-input --format normalized</code></pre><span>For Claude or Codex, choose <code>--format claude</code> or <code>--format codex</code> and add a project alias such as <code>--project my-app</code>.</span></li>
-              <li>Check the manifest, then start the server with it:<pre><code>python3 -m monitoring_ai sources check --sources /path/to/private-sources.json
+              <li>Check the manifest and optionally preview against an existing ledger before starting:<pre><code>python3 -m monitoring_ai sources check --sources /path/to/private-sources.json
+python3 -m monitoring_ai sources preview --sources /path/to/private-sources.json
 python3 -m monitoring_ai serve --sources /path/to/private-sources.json --db /path/to/private-ledger.sqlite</code></pre></li></ol>
-            <p>See README.md sections “Connect your data” and “Detailed reports” for command details. Manifests and input files stay on your machine.</p>
+            <p>Preview uses a disposable ledger copy. Add <code>--db</code> only to inspect an existing ledger. The default is an empty base. Files can change afterward. See README.md sections “Connect your data” and “Detailed reports” for command details. Manifests and input files stay on your machine.</p>
           </details>
         </article>
       </section>
-      <footer><span id="footnote">Only explicitly supplied sources are observed.</span><span>OBSERVE WITH CONTEXT. ACT WITH INTENT.</span></footer>
+      <footer><span id="footnote">Only explicitly supplied sources are observed.</span></footer>
     </div>
   </main>
 </body>

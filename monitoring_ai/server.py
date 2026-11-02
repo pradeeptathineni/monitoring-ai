@@ -176,8 +176,11 @@ def handler(observatory):
                     files = {"/": (WEB / "index.html", "text/html; charset=utf-8"),
                              "/app.js": (WEB / "app.js", "text/javascript; charset=utf-8"),
                              "/appearance.js": (WEB / "appearance.js", "text/javascript; charset=utf-8"),
+                             "/navigation.js": (WEB / "navigation.js", "text/javascript; charset=utf-8"),
+                             "/navigation.css": (WEB / "navigation.css", "text/css; charset=utf-8"),
                              "/style.css": (WEB / "style.css", "text/css; charset=utf-8"),
                              "/theme/index.js": (WEB / "theme" / "index.js", "text/javascript; charset=utf-8"),
+                             "/theme/workspace-navigation.css": (WEB / "theme" / "workspace-navigation.css", "text/css; charset=utf-8"),
                              "/theme/LICENSE": (WEB / "theme" / "LICENSE", "text/plain; charset=utf-8")}
                     if parsed.path not in files:
                         self.send(404, {"error": "Not found"})

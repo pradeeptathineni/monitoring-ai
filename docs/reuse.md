@@ -52,3 +52,9 @@ The report keeps named measures with their required source evidence. Cache token
 Monitoring bundles the unchanged `index.js` and MIT license from `@deep/theme` candidate 1.0.0 at `ce503f61a0d3b1a60ce11ac99e7d4e954d2280dd`. The verified archive and exact file checksums are recorded in [theme-source.json](theme-source.json). The files matched the shared integrator package before adoption. No registry package is published by this repository.
 
 The package owns palettes, preference validation, contrast rules and semantic CSS tokens. Monitoring owns its browser storage key, controls, CSS mapping, layout and acceptance checks. The shared code has no React, Deep runtime or network dependency. Its included [MIT notice](../monitoring_ai/web/theme/LICENSE) is preserved. This is actual code reuse, separate from the eight external product reviews above.
+
+## Shared navigation dependency
+
+The stylesheet at `src/components/workspace-navigation.css` from shared UI candidate `93f5754fb4c92775381c103c5ef212de3cf5ed96` is reused under its MIT license. Monitoring changes only its workspace selector prefix and adds attribution. [Exact source and adapted checksums](navigation-source.json) preserve that provenance. The local DOM/controller adapter supplies Monitoring routes, existing Settings categories and local preference storage. No React shell, private view, review screenshot or unrelated owner tool is copied.
+
+The shared owner supplies geometry, accessible rail behavior, contextual slots and reduced-motion treatment. Monitoring owns its actual category links and standalone acceptance. Deep integration of the shared candidate remains with its integrator. This is scoped reuse of the handed-off pattern rather than a replacement settings registry or an independent palette/navigation system.

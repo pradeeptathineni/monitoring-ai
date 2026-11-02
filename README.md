@@ -1,6 +1,6 @@
 # Monitoring AI
 
-A local observatory for AI sessions, agents, workers, tokens and costs. Use it in your terminal, open its web dashboard, or consume its read-only API from another workspace.
+Local monitoring for AI sessions, agents, workers, tokens and costs. Use it in your terminal, open its web dashboard, or consume its read-only API from another workspace.
 
 **Experimental alpha.** This is a working first slice, not a complete replacement for CodeBurn, ccusage, abtop or an enterprise tracing platform. It observes explicitly supplied sources. It does not discover every agent on your machine.
 
@@ -97,6 +97,18 @@ Keep a private JSON manifest outside the repository. Each entry names one author
 python3 -m monitoring_ai serve --sources /path/to/private-sources.json --db /tmp/my-observatory.sqlite
 ```
 
+Before following, preview ingestion against a disposable ledger:
+
+```sh
+python3 -m monitoring_ai sources preview --sources /path/to/private-sources.json --json
+python3 -m monitoring_ai sources preview --sources /path/to/private-sources.json \
+  --db /path/to/existing-ledger.sqlite
+```
+
+Omit `--db` to preview an empty base. With `--db`, the ledger must already exist: the command reads a consistent SQLite copy, including committed WAL records, and changes only a private temporary database. It uses the same immutable identity and hierarchy rules as ingestion, reports proposed additions/replays per input and continues after an input fails. Failed batches leave the preview unchanged. The original accepted history is preserved. Missing or malformed bases refuse rather than creating a ledger.
+
+Readiness includes the current 100,000-event view limit. A ready result describes the copied base and the explicitly selected files read during that preview. Files can change before following begins. It does not establish worker liveness, prevent future conflicts or reconcile activity recorded under different aliases. Preview returns 0 when all inputs fit, 1 for unavailable/rejected inputs and 2 when configuration or the base cannot be inspected. The temporary copy is removed after success or failure. Base copying is bounded to 512 MiB and a five-second backup deadline.
+
 The manifest is loaded once at startup and admits at most 32 files. Restart deliberately to change that selection. File paths stay in the private configuration; the read API and dashboard show only aliases, format, project and read outcomes. Native inputs require a project alias. Normalized inputs retain their supplied source and project dimensions, so a managed input alias is not necessarily an event-source filter.
 
 Each input is read and imported independently. Missing files, malformed data or changed event identities mark that input unavailable; other inputs continue and accepted history stays in the ledger. Recovery replays safely. A changed identity rejects the whole attempted batch for that input. Replacing or truncating a file never deletes earlier observations. The panel shows counts for the latest read attempt, not lifetime ingestion totals. Last successful read describes polling freshness, not worker liveness or completeness of session coverage.
@@ -167,6 +179,10 @@ Settings also holds source-setup guidance. Overview keeps monitoring evidence an
 The shared palette changes appearance only. Estimated and billed costs, unknown values, source read health and lifecycle evidence retain their existing meanings. [Pinned package provenance](docs/theme-source.json) records the exact candidate and checksums. Monitoring owns its adapter and layouts.
 
 [Dark dashboard](docs/theme-dark.png) · [Light dashboard](docs/theme-light.png) · [Mobile appearance](docs/theme-mobile.png) · [Light input health](docs/theme-inputs-mobile.png). These captures contain fictional data.
+
+The main navigation can collapse to an icon rail while keeping named destinations and tooltips. Settings has contextual categories for All settings, Appearance and Sources. Small screens use local horizontal navigation strips, and reduced-motion preferences disable transitions. The layout choice is browser-local and separate from appearance preferences. [Shared navigation ownership](docs/navigation-contract.md) records the source pattern and compatibility boundaries.
+
+[Collapsed desktop Settings](docs/navigation-desktop.png) · [Mobile contextual navigation](docs/navigation-mobile.png). Both use fictional observations.
 
 ## Limits
 

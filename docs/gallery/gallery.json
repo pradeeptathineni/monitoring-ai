@@ -1,5 +1,6 @@
 {
   "schema": "monitoring.demo-gallery.v1",
+  "version": "0.7.0a1",
   "synthetic": true,
   "view": "overview",
   "viewport": {
@@ -64,6 +65,5 @@
     }
   ],
   "mobile_overflow": false,
-  "page_errors": 0,
-  "version": "0.6.0a1"
+  "page_errors": 0
 }

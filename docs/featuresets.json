@@ -200,7 +200,7 @@
         "openlit/openlit",
         "langfuse/langfuse"
       ],
-      "decision": "Implemented metadata hierarchy, evidence aging, explicit multi-file configuration, read-only setup checks and independent per-input capability/observed-coverage reports. Source reading does not prove live workers. OS process ownership, discovery and full native lifecycle adapters remain deferred.",
+      "decision": "Implemented metadata hierarchy, evidence aging, explicit multi-file health/coverage, private setup checks and read-only ingestion readiness against a disposable ledger copy. Shared contextual navigation is adopted without runtime authority. Native usage still supplies no live worker lifecycle; process discovery and full native lifecycle adapters remain deferred.",
       "evidence": [
         "tests/browser/dashboard.spec.mjs",
         "tests/test_monitoring.py",
@@ -211,7 +211,10 @@
         "tests/test_multi_sources.py",
         "monitoring_ai/source_coverage.py",
         "monitoring_ai/source_setup.py",
-        "tests/test_source_setup.py"
+        "tests/test_source_setup.py",
+        "monitoring_ai/source_readiness.py",
+        "monitoring_ai/ledger_preview.py",
+        "tests/test_readiness_journey.py"
       ]
     },
     {
