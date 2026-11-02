@@ -19,6 +19,7 @@ A UTF-8 JSONL stream carries `monitoring.event.v1` objects. [The example](../exa
 | `cost` | Optional usage evidence with decimal `amount`, ISO-style three-letter `currency`, `basis` of `estimated` or `billed`, and identifier `provenance`. |
 | `state` | Status only. `running`, `waiting`, `blocked`, `completed`, `failed`, `cancelled`, `unknown`. |
 | `tool`, `outcome` | Tool records only. Tool name and `ok`, `error` or `unknown`. No arguments or file paths. |
+| `tool_category`, `tool_server` | Optional tool-only category `core`, `mcp`, `shell`, `skill`, `agent` or `other`. MCP may include a server alias. Untagged tools remain unclassified. |
 | `duration_ms` | Optional nonnegative duration in milliseconds. It is not inferred from chronology. |
 
 Usage records are deltas, never cumulative snapshots. Producers must identify a call once, including streamed copies and subagent routing. A parent must not include its children's usage and also report those child deltas separately. The native Codex adapter computes deltas from complete cumulative counters, subtracts cached input from total input, and leaves reasoning inside output. Claude input excludes its separate cache buckets. These formats are not interchangeable.
@@ -35,6 +36,7 @@ The standalone server listens only on `127.0.0.1`, default port 5274. Host check
 | `GET /api/v1/capabilities` | `monitoring.capabilities.v1`, owner version, instance identity, read routes, filters and bounds |
 | `GET /api/v1/snapshot` | `monitoring.snapshot.v1`, revision, observation time, cost coverage, grouped totals, up to 500 entities and latest 100 matching events |
 | `GET /api/v1/events` | `monitoring.events.v1`, chronological records and a bounded next offset |
+| `GET /api/v1/report` | `monitoring.report.v1`, qualified period comparisons, project/model/day and tool breakdowns |
 
 Snapshot filters are exact `provider`, `model`, `surface`, `project`, `source`, `session`, `state`, `since` and `until`. Date-only bounds include the whole UTC day. Timestamp bounds are inclusive. Repeated or unknown parameters refuse. State filters use current evidence across the entire ledger. Usage/date filters select event accounting, while entity lifecycle still uses that entity's latest ledger status. This distinction prevents an old running event from becoming current merely because the completed event lies outside a usage filter.
 
@@ -91,3 +93,23 @@ Snapshot/window fields are closed. Dimension values are identifier aliases. Used
 The opt-in installed Codex collector launches its own stdio app-server process, performs `initialize`, `initialized` and `account/rateLimits/read`, then cleans only that owned process group. The protocol exchange has a deadline and a 1 MiB output bound. It never sends thread, turn, login or mutation methods, reads credentials itself, or copies account IDs. Native `captured_at` records local receipt time because the response has no qualified upstream sample timestamp. A present rate-limit map takes precedence over the legacy view, including an empty map. Unknown fields such as paid credits are discarded rather than reinterpreted as subscription allowance. Server shutdown waits for the bounded quota worker to clean up.
 
 A raw Codex account response can also be normalized with `quota --file response.json --format codex --captured-at ORIGINAL_RESPONSE_TIME`. The original time is required. This conversion does not establish a live connection. Claude quota data can be imported through the same normalized contract, but no Claude account collector or hook ships here.
+
+## Detailed report
+
+`GET /api/v1/report` accepts the same dimension, date and current-state filters as snapshots. State selection shares the snapshot evidence logic across the full ledger, even if the latest status lies outside the chosen usage period. It never revives old running evidence as current. Future records remain in the ledger but are excluded from reports, with an explicit count. Requested end times after the read time are clamped to observation time.
+
+Response fields include `identity`, `revision`, `observed_at`, `filters`, current `range`, `previous_range`, `summary`, `breakdowns`, `tools`, `comparisons` and `coverage`. Project/model/day groups live under `breakdowns.<name>.rows`, with truncation flags. Project and model groups rank by recorded tokens, tool groups by record count, and dates chronologically. Each group is limited to 100 displayed rows while totals retain the entire selected data. Coverage records selection and truncation explicitly.
+
+`currency` identifies displayed cost units. `fx` returns the supplied dated conversion book or null, preserving its rate date and provenance. A converted report never claims that those are current market or invoice rates. The CLI's JSON export includes the same qualifications.
+
+An explicit `since` anchors a comparison. The previous inclusive millisecond interval ends immediately before the current interval and has the same elapsed length. Its exact bounds are returned. This is not an implicit day-over-day or month-over-month claim. All recorded history has no fabricated earlier observation period. Source coverage can differ between intervals. Zero prior baselines produce no infinite percentage.
+
+The legacy `calls` field counts normalized usage records. It does not establish all provider requests or calls across unconnected tools. Observed sessions are distinct source/session pairs among matching events, including tool/status-only sessions. They are not a live worker count or proof of complete coverage.
+
+`known_estimate_per_priced_session` divides the converted estimated subtotal by distinct sessions with at least one converted estimated record. It remains a qualified subtotal if those sessions also contain unpriced or billed records. Estimated and billed changes are calculated only when both periods have complete converted coverage for the chosen basis. Otherwise current/previous known amounts remain visible while change and percentage are null with a coverage reason.
+
+Recorded cache-read share is `cache_read / (input + cache_read + cache_write)` over normalized buckets. A zero denominator is unknown. This is a recorded token share, not a universal provider cache-hit metric. Reported duration percentiles use nearest-rank observed values. Output rate sums output tokens and positive explicit durations over the timed subset only. Missing durations stay missing, and no duration is inferred from timestamp gaps. This is end-to-end recorded rate, not model streaming speed.
+
+Tool groups use explicit normalized categories. MCP groups require an explicit server alias. Shell, skill and agent groups describe invocation aliases, never raw arguments or live worker identities. Claude's explicit-file adapter can classify recognized native tool names and exact MCP namespaces, pair completed tool-use/results out of order, and reject conflicting replay metadata. Incomplete pairs are uncounted. It never retains result text or reads tool arguments for command or skill names.
+
+Context overhead, one-shot rate, corrections, time to first edit and rework lack supported evidence in v1 and are explicitly unavailable. Importing a screenshot or seeing a long timeline does not establish those measures. Account quota remains outside report period comparisons and does not authorize work or spending.

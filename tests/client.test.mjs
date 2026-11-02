@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { decodeSnapshot, monitoringOwner } from "../integrations/deep-ai/client.ts";
+import { decodeReport, decodeSnapshot, monitoringOwner } from "../integrations/deep-ai/client.ts";
 
 const metrics = { calls: 1, tokens: { input: 10, cache_read: 0, cache_write: 0, output: 2 },
   total_tokens: 12, costs: { estimated: { amount: null, events: 0 }, billed: { amount: "0", events: 1 } },
@@ -51,4 +51,20 @@ test("optional insight data rejects impossible quota percentages and preserves u
   assert.equal(decodeSnapshot(value).insights.quotas.windows[0].remaining_percent, null);
   value.insights.quotas.windows[0].used_percent = 101;
   assert.throws(() => decodeSnapshot(value), /incompatible/);
+});
+
+test("report reads preserve unknown amounts and share the pinned owner identity", async (context) => {
+  const group = { rows: [], truncated: false };
+  let report = { schema: "monitoring.report.v1", identity: "owner-one", revision: 1,
+    observed_at: snapshot.observed_at, currency: "USD", range: { from: null, until: snapshot.observed_at },
+    previous_range: null, summary: metrics, breakdowns: { projects: group, models: group, daily: group },
+    tools: {}, comparisons: {}, coverage: {} };
+  context.mock.method(globalThis, "fetch", async (url) => ({ ok: true,
+    json: async () => new URL(url).pathname.endsWith("report") ? report : snapshot }));
+  const owner = monitoringOwner("http://127.0.0.1:5274");
+  await owner.snapshot();
+  assert.equal((await owner.report()).summary.costs.estimated.amount, null);
+  report = { ...report, identity: "owner-two" };
+  await assert.rejects(owner.report(), /restarted/);
+  assert.throws(() => decodeReport({ ...report, summary: { ...metrics, total_tokens: -1 } }), /incompatible/);
 });

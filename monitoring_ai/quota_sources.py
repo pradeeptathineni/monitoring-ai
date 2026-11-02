@@ -19,9 +19,10 @@ MAX_BYTES = 1024 * 1024
 
 
 def quota_export(path):
-    path = Path(path).absolute()
-    if path.resolve() != path:
-        raise ValueError("Select an exact quota file without symlinks")
+    selected = Path(path).absolute()
+    if selected.is_symlink():
+        raise ValueError("Select a regular quota file, not a symlink")
+    path = selected.parent.resolve() / selected.name
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     with os.fdopen(fd, "rb") as stream:
         info = os.fstat(stream.fileno())

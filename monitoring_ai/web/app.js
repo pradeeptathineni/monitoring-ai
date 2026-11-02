@@ -9,9 +9,11 @@ const insightUnavailable = "Insights are unavailable in this snapshot.";
 const titles = { overview: ["Every session. One place.", "Follow the work, understand the usage, keep the evidence."],
   sessions: ["See the whole working tree.", "Sessions, agents and workers, with evidence behind every state."],
   usage: ["Understand every token.", "Compare models and surfaces without losing cost qualifications."],
-  events: ["The story behind the numbers.", "A chronological ledger of explicitly supplied activity."] };
+  events: ["The story behind the numbers.", "A chronological ledger of explicitly supplied activity."],
+  report: ["Usage with context.", "A detailed, qualified report for the selected UTC period and filters."] };
 let data, paused = false, busy = false, view = "overview", entity = null;
 let lastSuccess = 0;
+let reportController = null, reportRequestId = 0, reportData = null;
 
 function node(tag, text, className) {
   const result = document.createElement(tag);
@@ -28,13 +30,17 @@ function cash(value) {
 
 function showView(next) {
   if (!titles[next]) return;
+  if (view === next && location.hash.slice(1) === next) return;
+  if (view === "report" && next !== "report") cancelReport();
   view = next;
+  $("#metrics").hidden = next === "report";
   $$(".view").forEach((section) => { section.hidden = section.id !== next; });
   $$(".nav, .mobile-nav button").forEach((button) => button.classList.toggle("active", button.dataset.view === next));
-  $("#breadcrumb").textContent = { overview: "Overview", sessions: "Sessions & workers", usage: "Usage & costs", events: "Event stream" }[next];
+  $("#breadcrumb").textContent = { overview: "Overview", sessions: "Sessions & workers", usage: "Usage & costs", events: "Event stream", report: "Report" }[next];
   $("#title").textContent = titles[next][0];
   $("#subtitle").textContent = titles[next][1];
   location.hash = next;
+  if (next === "report") loadReport();
 }
 
 function query() {
@@ -42,6 +48,229 @@ function query() {
   new FormData($("#filters")).forEach((value, key) => { if (value) values.set(key, value); });
   if ($("#state-filter").value) values.set("state", $("#state-filter").value);
   return values;
+}
+
+function utcDate(date = new Date()) {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+}
+
+function applyReportPeriod(period) {
+  const now = new Date(), until = utcDate(now), start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  let since = "";
+  if (period === "today") since = until;
+  else if (period === "7days") { start.setUTCDate(start.getUTCDate() - 6); since = utcDate(start); }
+  else if (period === "30days") { start.setUTCDate(start.getUTCDate() - 29); since = utcDate(start); }
+  else if (period === "thismonth") since = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-01`;
+  else if (period === "6months") {
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 6, 1));
+    const monthEndDay = new Date(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, 0)).getUTCDate();
+    monthStart.setUTCDate(Math.min(now.getUTCDate(), monthEndDay)); since = utcDate(monthStart);
+  }
+  else if (period === "all") { since = ""; }
+  else return;
+  $("#filters [name=since]").value = since;
+  $("#filters [name=until]").value = period === "all" ? "" : until;
+  $("#filters").dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function cancelReport() {
+  reportRequestId += 1;
+  if (reportController) reportController.abort();
+  reportController = null;
+}
+
+function reportCurrency(value, currency = reportData?.currency || data?.currency || "USD") {
+  if (value === null || value === undefined || value === "") return "Unknown";
+  if (typeof value === "object" && value.amount !== undefined) value = value.amount;
+  try { return new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(Number(value)); }
+  catch { return `${value} ${currency}`; }
+}
+
+function reportNumber(value) {
+  if (value === null || value === undefined || value === "") return "Unknown";
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? number.format(parsed) : String(value);
+}
+
+function reportTokens(metrics) {
+  const total = metrics?.total_tokens ?? metrics?.tokens_total;
+  if (total !== undefined && total !== null) return reportNumber(total);
+  if (metrics?.tokens && typeof metrics.tokens === "object") return reportNumber(Object.values(metrics.tokens).reduce((sum, item) => sum + (Number(item) || 0), 0));
+  return "Unknown";
+}
+
+function reportCalls(metrics) {
+  return reportNumber(metrics?.calls ?? metrics?.records ?? metrics?.usage_records);
+}
+
+function reportRows(target, headers, rows, emptyMessage = "No matching records in this period.") {
+  const root = $(target); root.replaceChildren();
+  if (!Array.isArray(rows) || !rows.length) { root.append(node("p", emptyMessage, "empty")); return; }
+  const grid = node("table"), head = node("thead"), heading = node("tr");
+  for (const text of headers) heading.append(node("th", text));
+  head.append(heading); grid.append(head);
+  const body = node("tbody");
+  for (const values of rows) {
+    const tr = node("tr");
+    for (const value of values) { const td = node("td", value); tr.append(td); }
+    body.append(tr);
+  }
+  grid.append(body); root.append(grid);
+}
+
+function reportCost(metrics, basis, currency) {
+  return reportCurrency(metrics?.costs?.[basis]?.amount ?? null, currency);
+}
+
+function renderProjectRows(rows, currency) {
+  return (Array.isArray(rows) ? rows : []).map((row) => {
+    const metrics = row.metrics || {};
+    return [row.key ?? "Unknown", reportCalls(metrics), row.observed_sessions == null ? "Unknown" : reportNumber(row.observed_sessions), reportTokens(metrics), reportCost(metrics, "estimated", currency), reportCost(metrics, "billed", currency), row.known_estimate_per_priced_session == null ? "Unknown" : `${reportCurrency(row.known_estimate_per_priced_session, currency)} / priced session`];
+  });
+}
+
+function renderModelRows(rows, currency) {
+  return (Array.isArray(rows) ? rows : []).map((row) => {
+    const metrics = row.metrics || {}, timing = row.timing || {};
+    const rate = timing.output_tokens_per_second == null ? "Unknown" : `${reportNumber(timing.output_tokens_per_second)} tokens/s · ${reportNumber(timing.output_rate_records)} rate records`;
+    return [row.key ?? "Unknown", reportCalls(metrics), reportTokens(metrics), row.cache_read_share_percent == null ? "Unknown" : `${reportNumber(row.cache_read_share_percent)}%`, reportCost(metrics, "estimated", currency), reportCost(metrics, "billed", currency), Number.isFinite(timing.p50_ms) ? `${number.format(timing.p50_ms)} ms` : "Unknown", Number.isFinite(timing.p95_ms) ? `${number.format(timing.p95_ms)} ms` : "Unknown", rate];
+  });
+}
+
+function renderDailyRows(rows, currency) {
+  return (Array.isArray(rows) ? rows : []).map((row) => {
+    const metrics = row.metrics || {};
+    return [row.key ?? "Unknown date", reportCalls(metrics), reportTokens(metrics), reportCost(metrics, "estimated", currency), reportCost(metrics, "billed", currency)];
+  });
+}
+
+function setBreakdownNote(target, label, section) {
+  const rows = Array.isArray(section?.rows) ? section.rows : [];
+  const note = $(target);
+  const singular = label === "Days" ? "day" : label.slice(0, -1).toLowerCase();
+  note.textContent = section?.truncated
+    ? `${number.format(rows.length)} rows displayed; this ${label.toLowerCase()} section is truncated at the configured bound. Aggregate report totals above include the selected range.`
+    : `${number.format(rows.length)} ${rows.length === 1 ? singular : label.toLowerCase()} ${rows.length === 1 ? "row" : "rows"} shown for the selected range.`;
+}
+
+function renderReport() {
+  const report = reportData, currency = report.currency || "USD", summary = report.summary || {}, metrics = summary.metrics || summary;
+  const range = report.range || {};
+  $("#report-range").textContent = `Current range: ${range.from || "start unknown"} through ${range.until || "end unknown"} UTC · target currency ${currency} · observed ${report.observed_at || "time unknown"}. ${report.previous_range ? `Prior range: ${report.previous_range.from} through ${report.previous_range.until} UTC.` : "No prior range is defined."}`;
+  const estimated = metrics.costs?.estimated?.amount ?? metrics.estimated_cost ?? null;
+  const estimatedRecords = metrics.costs?.estimated?.events ?? summary.estimated_records;
+  $("#report-metrics").replaceChildren(
+    metric("Usage records", reportCalls(metrics), "Recorded usage events; not calls across unconnected sources", "≋"),
+    metric("Observed tokens", metrics.total_tokens == null ? reportTokens(metrics) : compact.format(metrics.total_tokens), "Disjoint token buckets counted once", "◷"),
+    metric("Observed sessions", reportNumber(summary.observed_sessions ?? metrics.observed_sessions ?? summary.sessions), "Observed session identities; source coverage may be limited", "⌘"),
+    metric("Known estimated cost", reportCurrency(estimated, currency), `${estimatedRecords == null ? "Coverage unknown" : `${reportNumber(estimatedRecords)} priced records`} · not a complete bill`, "≈"),
+  );
+  const measures = $("#report-session-measures"); measures.replaceChildren();
+  measures.append(confidenceRow("Recorded cache-read share", summary.cache_read_share_percent == null ? "Unknown" : `${reportNumber(summary.cache_read_share_percent)}%`));
+  measures.append(confidenceRow("Estimated session count", reportNumber(summary.estimated_session_count)));
+  measures.append(confidenceRow("Known estimate per priced session", summary.known_estimate_per_priced_session == null ? "Unknown" : `${reportCurrency(summary.known_estimate_per_priced_session, currency)} / priced session`));
+  measures.append(node("p", "Estimated session counts and per-priced-session amounts describe covered records only.", "confidence-note"));
+
+  const comparisons = report.comparisons || {}, comparisonKeys = ["records", "tokens", "sessions", "estimated_cost", "billed_cost"];
+  const compareFmt = (key, value) => value == null ? "Unknown" : key.includes("cost") ? reportCurrency(value, currency) : reportNumber(value);
+  if (!report.previous_range) $("#report-comparisons").replaceChildren(node("p", "Prior-period comparisons are unavailable because no equal preceding range is defined for this selection.", "empty"));
+  else {
+    const values = comparisonKeys.map((key) => {
+      const entry = comparisons[key];
+      if (!entry || typeof entry !== "object") return [key.replaceAll("_", " "), "Unavailable", "Unavailable", "Unavailable", "Unavailable"];
+      const reason = entry.coverage_reason === "incomplete-cost-coverage" ? " · incomplete cost coverage" : entry.coverage_reason ? ` · ${entry.coverage_reason.replaceAll("-", " ")}` : "";
+      return [key.replaceAll("_", " "), compareFmt(key, entry.current), compareFmt(key, entry.previous), entry.change == null ? `Unavailable${reason}` : compareFmt(key, entry.change), entry.percent_change == null ? `Unavailable${reason}` : `${reportNumber(entry.percent_change)}%`];
+    });
+    reportRows("#report-comparisons", ["Measure", "Current", "Previous", "Change", "Change %"], values, "Prior-period comparison unavailable.");
+  }
+  const projects = report.breakdowns?.projects, models = report.breakdowns?.models, daily = report.breakdowns?.daily;
+  reportRows("#report-projects", ["Project alias", "Usage records", "Observed sessions", "Tokens", `Known estimate · ${currency}`, `Reported billed · ${currency}`, "Known estimate / priced session"], renderProjectRows(projects?.rows, currency), "No project rows match this period and filter.");
+  setBreakdownNote("#report-projects-note", "Projects", projects);
+  reportRows("#report-models", ["Model", "Usage records", "Tokens", "Recorded cache-read share", `Known estimate · ${currency}`, `Reported billed · ${currency}`, "P50 reported duration", "P95 reported duration", "Reported output rate · sample count"], renderModelRows(models?.rows, currency), "No model rows match this period and filter.");
+  setBreakdownNote("#report-models-note", "Models", models);
+  reportRows("#report-daily", ["UTC date", "Usage records", "Tokens", `Known estimate · ${currency}`, `Reported billed · ${currency}`], renderDailyRows(daily?.rows, currency), "No daily rows match this period and filter.");
+  setBreakdownNote("#report-daily-note", "Days", daily);
+
+  const tools = report.tools || {}, toolSummary = $("#report-tools-summary"); toolSummary.replaceChildren();
+  for (const [label, key] of [["Tool records", "records"], ["Errors", "errors"], ["Unclassified", "unclassified_records"]]) toolSummary.append(confidenceRow(label, reportNumber(tools[key])));
+  const groups = $("#report-tool-groups"); groups.replaceChildren();
+  const toolLabels = { categories: "Categories", names: "Tool names", mcp_servers: "MCP server aliases", shell_commands: "Shell tool / command aliases", skills: "Skill invocation aliases", agents: "Agent invocation aliases" };
+  let foundGroup = false;
+  for (const [key, label] of Object.entries(toolLabels)) {
+    const values = tools[key]; if (!Array.isArray(values) || !values.length) continue;
+    foundGroup = true; groups.append(node("h3", label));
+    const wrap = node("div", null, "table-wrap"); groups.append(wrap);
+    const headers = ["Name", "Category", "Records", "Errors", "Duration records", "Total duration", "P50", "P95"];
+    const rows = values.map((row) => [row.key ?? "Unknown", row.category ?? "Unknown", reportNumber(row.records), reportNumber(row.errors), reportNumber(row.duration_records), row.total_duration_ms == null ? "Unknown" : `${reportNumber(row.total_duration_ms)} ms`, row.p50_ms == null ? "Unknown" : `${reportNumber(row.p50_ms)} ms`, row.p95_ms == null ? "Unknown" : `${reportNumber(row.p95_ms)} ms`]);
+    const grid = node("table"), head = node("thead"), heading = node("tr"); headers.forEach((text) => heading.append(node("th", text))); head.append(heading); grid.append(head);
+    const body = node("tbody"); rows.forEach((values) => { const tr = node("tr"); values.forEach((value) => tr.append(node("td", value))); body.append(tr); }); grid.append(body); wrap.append(grid);
+  }
+  if (!foundGroup) groups.append(node("p", "No categorized tool activity was reported for this period.", "empty"));
+  if (Object.values(tools.truncated || {}).some(Boolean)) groups.append(node("p", "One or more tool breakdowns are truncated by the report bound.", "confidence-note"));
+
+  const coverage = report.coverage || {}, coverageRoot = $("#report-coverage"); coverageRoot.replaceChildren();
+  const fx = report.fx;
+  const fxSummary = fx
+    ? `Target currency ${currency}; supplied ${fx.base || "USD"}-base conversion book dated ${fx.as_of || "date unknown"}, provenance ${fx.provenance || "unknown"}. This dated display conversion makes no current-rate claim.`
+    : `Target currency ${currency}; no conversion book supplied. Amounts requiring conversion remain excluded from converted totals or unknown. No current-rate claim is made.`;
+  coverageRoot.append(confidenceRow("Currency and FX provenance", fxSummary));
+  const entries = Object.entries(coverage);
+  if (!entries.length) coverageRoot.append(node("p", "Coverage details are unavailable in this report.", "empty"));
+  const unsupportedLabels = { "context-overhead": "Context overhead", "one-shot-rate": "One-shot rate", corrections: "Corrections", rework: "Rework", "time-to-first-edit": "Time to first edit" };
+  for (const [key, value] of entries) {
+    if (key === "unsupported" && Array.isArray(value)) {
+      const labels = value.map((item) => unsupportedLabels[item] || item.replaceAll("-", " "));
+      coverageRoot.append(confidenceRow("Unavailable measures", labels.length ? labels.join(" · ") : "None listed"));
+    } else if (key === "truncated" && value && typeof value === "object") {
+      const sections = Object.entries(value).filter(([, truncated]) => truncated).map(([name]) => name.replaceAll("_", " "));
+      coverageRoot.append(confidenceRow("Truncated sections", sections.length ? sections.join(" · ") : "None"));
+    } else if (key === "selection_basis") {
+      coverageRoot.append(confidenceRow("Row ordering", "Projects/models: most recorded tokens first. Tools: most records first. Days: chronological."));
+    } else if (typeof value === "boolean") coverageRoot.append(confidenceRow(key.replaceAll("_", " "), value ? "Yes" : "No"));
+    else if (Array.isArray(value)) coverageRoot.append(confidenceRow(key.replaceAll("_", " "), value.map((item) => String(item).replaceAll("-", " ")).join(" · ") || "None"));
+    else if (value && typeof value === "object") {
+      const readable = Object.entries(value).map(([name, item]) => `${name.replaceAll("_", " ")}: ${typeof item === "boolean" ? (item ? "yes" : "no") : String(item)}`).join(" · ");
+      coverageRoot.append(confidenceRow(key.replaceAll("_", " "), readable || "Unknown"));
+    } else coverageRoot.append(confidenceRow(key.replaceAll("_", " "), reportNumber(value)));
+  }
+}
+
+async function loadReport(force = true) {
+  if (view !== "report") return;
+  if (paused) {
+    const last = reportData ? ` Last successful report observed at ${reportData.observed_at || "unknown time"} remains visible and may not match current filters.` : " No report observations have loaded yet.";
+    $("#report-status").textContent = `Report refresh is paused.${last}`;
+    $("#report-status").classList.remove("error");
+    $("#report-content").hidden = !reportData;
+    return;
+  }
+  if (!force && reportController) return;
+  cancelReport();
+  const requestId = reportRequestId, controller = new AbortController();
+  reportController = controller;
+  const retained = reportData ? ` Last successful report from ${reportData.observed_at || "an unknown time"} remains visible and may not match the current filters.` : " No report observations have loaded yet.";
+  $("#report-status").textContent = `Loading report for the selected UTC range and filters.${retained}`;
+  $("#report-status").classList.remove("error");
+  try {
+    const response = await fetch(`/api/v1/report?${query()}`, { signal: controller.signal, cache: "no-store" });
+    if (!response.ok) throw new Error(`Report read failed (${response.status}).`);
+    const value = await response.json();
+    if (requestId !== reportRequestId || view !== "report") return;
+    if (value.schema !== "monitoring.report.v1") throw new Error("The report endpoint returned an incompatible schema.");
+    reportData = value;
+    $("#report-content").hidden = false;
+    const hasTruncation = Object.values(value.coverage?.truncated || {}).some(Boolean) || Object.values(value.tools?.truncated || {}).some(Boolean) || Object.values(value.breakdowns || {}).some((group) => Boolean(group?.truncated));
+    $("#report-status").textContent = `Report observed at ${value.observed_at || "unknown time"} UTC.${hasTruncation ? " One or more report sections are truncated by configured bounds." : ""}`;
+    renderReport();
+  } catch (error) {
+    if (error.name === "AbortError" || requestId !== reportRequestId || view !== "report") return;
+    $("#report-status").classList.add("error");
+    const last = reportData ? ` The last successful report observed at ${reportData.observed_at || "unknown time"} remains visible and may not match current filters.` : " No report observations have loaded yet.";
+    $("#report-status").textContent = `${error.message}${last}`;
+    $("#report-content").hidden = !reportData;
+  } finally {
+    if (requestId === reportRequestId) reportController = null;
+  }
 }
 
 function metric(label, value, note, symbol) {
@@ -313,27 +542,36 @@ async function refresh() {
 }
 
 $$("[data-view]").forEach((button) => button.addEventListener("click", () => showView(button.dataset.view)));
-$("#filters").addEventListener("change", refresh);
+$("#filters").addEventListener("change", (event) => {
+  if (event.target?.name === "since" || event.target?.name === "until") $("#report-period").value = "custom";
+  refresh(); if (view === "report") loadReport();
+});
 $("#filters").addEventListener("submit", (event) => event.preventDefault());
-$("#filters").addEventListener("reset", () => { $("#state-filter").value = ""; setTimeout(refresh, 0); });
-$("#state-filter").addEventListener("change", refresh);
+$("#filters").addEventListener("reset", () => { $("#state-filter").value = ""; setTimeout(() => { $("#report-period").value = "custom"; refresh(); if (view === "report") loadReport(); }, 0); });
+$("#report-period").addEventListener("change", () => applyReportPeriod($("#report-period").value));
+$("#state-filter").addEventListener("change", () => { refresh(); if (view === "report") loadReport(); });
 $("#group").addEventListener("change", () => { if (data) renderUsage(); });
 $("#pause").addEventListener("click", () => {
   paused = !paused; $("#pause").textContent = paused ? "Resume refresh" : "Pause refresh";
   if (paused) {
     $("#connection").textContent = "Refresh paused"; $("#connection").classList.add("offline");
+    if (view === "report") cancelReport();
     if (data) {
       for (const row of data.entities) if (!["completed", "failed", "cancelled"].includes(row.state)) { row.state = "unknown"; row.stale = true; }
       data.summary.active = 0; data.summary.attention = 0;
     }
     retainInsights("Dashboard refresh paused; showing retained dated quota observations.");
+    if (view === "report") {
+      const last = reportData ? ` Last successful report observed at ${reportData.observed_at || "unknown time"} remains visible and may not match current filters.` : " No report observations have loaded yet.";
+      $("#report-status").textContent = `Report refresh is paused.${last}`;
+    }
     if (data) render();
   }
-  else refresh();
+  else { refresh(); if (view === "report") loadReport(); }
 });
 $("#clear-entity").addEventListener("click", () => { entity = null; $("#event-selection").textContent = ""; $("#clear-entity").hidden = true; renderEvents(); });
 document.addEventListener("keydown", (event) => {
-  if (!event.ctrlKey && !event.metaKey && !event.altKey && !["INPUT", "SELECT", "TEXTAREA"].includes(event.target.tagName) && ["1", "2", "3", "4"].includes(event.key)) showView(Object.keys(titles)[Number(event.key) - 1]);
+  if (!event.ctrlKey && !event.metaKey && !event.altKey && !["INPUT", "SELECT", "TEXTAREA"].includes(event.target.tagName) && ["1", "2", "3", "4", "5"].includes(event.key)) showView(Object.keys(titles)[Number(event.key) - 1]);
 });
 window.addEventListener("hashchange", () => showView(location.hash.slice(1) || "overview"));
 showView(location.hash.slice(1) || "overview");
@@ -342,5 +580,5 @@ setInterval(() => {
   if (paused && data) {
     retainInsights("Dashboard refresh paused; showing retained dated quota observations.");
     renderInsights();
-  } else refresh();
+  } else { refresh(); if (view === "report") loadReport(false); }
 }, 2000);

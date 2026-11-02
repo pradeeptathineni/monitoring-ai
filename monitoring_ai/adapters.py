@@ -13,10 +13,11 @@ MAX_BYTES = 32 * 1024 * 1024
 
 
 def read_jsonl(path, *, live=False):
-    # O_NOFOLLOW protects the final file. Parent symlinks are refused separately
-    path = Path(path).absolute()
-    if path.resolve() != path:
-        raise ValueError("Select a regular file without symlinks")
+    # Canonicalize directory aliases such as macOS /tmp; refuse symlink files
+    selected = Path(path).absolute()
+    if selected.is_symlink():
+        raise ValueError("Select a regular source file, not a symlink")
+    path = selected.parent.resolve() / selected.name
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     with os.fdopen(fd, "rb") as stream:
         info = os.fstat(stream.fileno())
@@ -45,7 +46,8 @@ def read_jsonl(path, *, live=False):
 
 
 def safe_label(value, fallback="unknown"):
-    value = re.sub(r"[^A-Za-z0-9_.:@-]", "-", str(value or fallback))[:120]
+    value = value if isinstance(value, str) else fallback
+    value = re.sub(r"[^A-Za-z0-9_.:@-]", "-", value or fallback)[:120]
     return value or fallback
 
 
@@ -94,7 +96,9 @@ def claude(rows, source, project):
         if previous and previous != event:
             raise ValueError("Claude message usage changed. Export final messages before importing")
         events[event["id"]] = event
-    return list(events.values())
+    from .claude_tools import claude_tool_events
+
+    return list(events.values()) + claude_tool_events(rows, source, project)
 
 
 def codex(rows, source, project):

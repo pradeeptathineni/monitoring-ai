@@ -39,6 +39,7 @@ The producer appends usage and lifecycle evidence. The server imports complete l
 - A versioned read contract and a [server-side Deep AI consumer](integrations/deep-ai). Deep integration is supplied for review, not deployed by this repository.
 - Source-age views, trailing-window token pace and cautious linear forecasts with observed span, sample count and explicit cost coverage.
 - Independent quota observations from an explicit file or an opt-in installed Codex allowance read. Stale values and passed reset times retain their last supplied values.
+- A detailed Report view with UTC period presets, adjacent equal-length comparisons, project/model/day breakdowns and categorized tool activity. Unknown timing and unsupported workflow measures stay explicit.
 
 ## Connect your data
 
@@ -61,6 +62,8 @@ python3 -m monitoring_ai import --file /path/to/authorized-session.jsonl \
 ```
 
 Use the same source ID and project alias when replaying or following a file. Different aliases create different observations and can double-count the same activity. One source must not be imported through two formats. The native adapters discard conversation content, tool arguments and filesystem paths, and hash session IDs. They reconstruct usage, **not live process state**. Missing model names stay `unknown`. A changing streamed Claude message or decreasing Codex counter refuses rather than guessing a correction. Native format coverage is fixture-tested, not verified against your personal sessions.
+
+Claude imports also retain metadata from complete structured tool-use/result pairs: tool aliases, error outcomes and recognized native categories. Incomplete pairs are uncounted. Inputs, result text and shell arguments are discarded. A `Bash` or `Skill` record identifies that invocation, not its private command or skill arguments. The adapter never infers duration from gaps between messages.
 
 For pricing, adapt [the fictional price book](examples/pricing.json) to your verified rates and validity dates. All four rates are amounts per million tokens. Add `--pricing /path/to/pricing.json` to `serve` or `top`. Reported event costs take precedence. To convert, supply `--currency EUR --fx /path/to/fx.json` with a dated [FX book](examples/fx.json). Example prices and exchange rates are deliberately fictional.
 
@@ -87,6 +90,21 @@ python3 -m monitoring_ai serve --db /tmp/my-observatory.sqlite --codex-quota --q
 The first command reads once and prints quota-only JSON. The server reads at most once a minute in a separate worker, so a slow quota read does not block usage views. It sends only initialization and `account/rateLimits/read` to its own finite app-server process. It does not inspect conversations, change login, start inference, reset allowance or enable overage. `captured_at` is local response-receipt time, not a provider sample timestamp. Unsupported or unavailable sources retain prior observations with a visible failure state. Use `--codex-executable /absolute/path/to/codex` if the installed executable is not on PATH.
 
 Quota evidence becomes stale after five minutes. Future timestamps and passed reset times are explicit. A passed reset never implies replenishment. The collector was qualified against an existing authorized Codex login, while public examples and tests remain synthetic. [The quota and insight contract](docs/contract.md#usage-insights-and-quota-observations) documents the format and limits.
+
+## Detailed reports
+
+Open **Report** or press **5**. Choose Today, 7 days, 30 days, This month, 6 months or All recorded, then filter by provider, model, surface, project, source or session. Date controls use UTC. Six months rolls back six calendar months to the same day, clamping month ends. Custom date bounds remain available.
+
+Projects show usage, observed sessions and qualified costs. Models add recorded cache-read share and timing from explicitly timed records. Daily rows retain chronology. Tool panels group supplied core/MCP/shell/skill/agent aliases, errors and reported durations. These are invocation observations, not a worker roster. Untagged tools stay unclassified.
+
+The comparison uses the immediately preceding interval of equal elapsed length. Today's end is clamped to the read time, so its prior interval is an adjacent equal-length window rather than an asserted calendar-day comparison. Exact bounds are displayed. All recorded has no invented preceding period. Cost changes remain unavailable unless each period has complete coverage for that same cost basis.
+
+```sh
+python3 -m monitoring_ai report --db /tmp/my-observatory.sqlite --since 2026-11-01 --until 2026-11-02
+python3 -m monitoring_ai report --db /tmp/my-observatory.sqlite --project my-app --json
+```
+
+Known estimate per priced session is a covered subtotal divided by sessions with priced estimated records. Recorded cache-read share uses cached reads divided by all recorded input buckets. Reported output rate uses only records with positive explicit durations and is not model streaming speed. Context overhead, one-shot rate, corrections, time to first edit and rework are unavailable from this schema. No workflow-quality conclusion is inferred from tool errors or chronology. [The detailed report contract](docs/contract.md#detailed-report) defines those measures.
 
 ## Limits
 

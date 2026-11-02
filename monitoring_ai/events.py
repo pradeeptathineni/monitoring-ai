@@ -11,7 +11,7 @@ IDENTIFIER = re.compile(r"[A-Za-z0-9_.:@-]{1,160}\Z")
 FIELDS = {
     "schema", "id", "source", "session", "entity", "parent", "entity_type",
     "timestamp", "kind", "provider", "model", "surface", "project", "state",
-    "tokens", "cost", "duration_ms", "tool", "outcome",
+    "tokens", "cost", "duration_ms", "tool", "outcome", "tool_category", "tool_server",
 }
 
 
@@ -97,10 +97,19 @@ def validate(raw):
         if raw.get("outcome") not in {"ok", "error", "unknown"}:
             raise ValueError("Invalid tool outcome")
         event["outcome"] = raw["outcome"]
+        category = raw.get("tool_category")
+        if category is not None:
+            if category not in {"core", "mcp", "shell", "skill", "agent", "other"}:
+                raise ValueError("Invalid tool category")
+            event["tool_category"] = category
+        if "tool_server" in raw:
+            if category != "mcp":
+                raise ValueError("A tool server requires the MCP category")
+            event["tool_server"] = label(raw["tool_server"], "tool_server")
     if "duration_ms" in raw:
         if type(raw["duration_ms"]) is not int or not 0 <= raw["duration_ms"] <= 10**12:
             raise ValueError("Invalid duration_ms")
         event["duration_ms"] = raw["duration_ms"]
-    if kind != "tool" and ("tool" in raw or "outcome" in raw):
+    if kind != "tool" and ({"tool", "outcome", "tool_category", "tool_server"} & set(raw)):
         raise ValueError("Tool fields require a tool event")
     return event

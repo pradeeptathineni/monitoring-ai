@@ -33,12 +33,23 @@ def demo_events(now=None):
                 event["cost"] = dict(amount=str(round(.015 + (index + turn) * .0062, 6)), currency="USD",
                                      basis="billed" if entity == "lumen" else "estimated",
                                      provenance="fictional-invoice" if entity == "lumen" else "fictional-price")
+            if turn % 3 == 0:
+                event["duration_ms"] = 800 + turn * 70 + index * 100
             events.append(event)
+        previous = dict(events[-1], id=f"{entity}-prior-usage", timestamp=(started - timedelta(days=1)).isoformat())
+        events.append(previous)
         for turn in range(3):
-            events.append(dict(base, id=f"{entity}-tool-{turn}", kind="tool",
+            tool = dict(base, id=f"{entity}-tool-{turn}", kind="tool",
                 timestamp=(started + timedelta(minutes=turn * 12 + 1)).isoformat(),
                 tool=["search", "read", "test"][turn], outcome="error" if entity == "index" and turn == 2 else "ok",
-                duration_ms=400 + turn * 670))
+                duration_ms=400 + turn * 670)
+            category = ["core", "mcp", "shell", "skill", "agent", None][(index + turn) % 6]
+            if category:
+                tool["tool_category"] = category
+            if category == "mcp":
+                tool["tool_server"] = "example-docs"
+            tool["tool"] = {"shell": "pytest", "skill": "review", "agent": "worker-handoff"}.get(category, tool["tool"])
+            events.append(tool)
         status_at = now - timedelta(seconds=12 + index) if state != "completed" else started + timedelta(minutes=43)
         events.append(dict(base, id=f"{entity}-status", kind="status", timestamp=status_at.isoformat(), state=state))
     return sorted(events, key=lambda e: (e["timestamp"], e["id"]))

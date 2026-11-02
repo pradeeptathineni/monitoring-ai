@@ -144,11 +144,7 @@ def entity_key(event):
     return (event["source"], event["session"], event["entity"])
 
 
-def snapshot(revision, events, query=None, pricing=None, fx=None, now=None, quota_book=None):
-    from .insights import build_insights
-
-    query = filters(query or {})
-    pricing, fx, now = pricing or Pricing(), fx or Exchange(), now or now_iso()
+def entity_observations(events, now):
     by_entity = defaultdict(list)
     for event in events:
         by_entity[entity_key(event)].append(event)
@@ -172,9 +168,25 @@ def snapshot(revision, events, query=None, pricing=None, fx=None, now=None, quot
             stale=stale,
             parent_observed=first["parent"] is None or (key[0], key[1], first["parent"]) in by_entity,
         )
-    matched = [e for e in events if selected(e, query) and (
+    return entities
+
+
+def select_events(events, query=None, now=None, entities=None):
+    query = filters(query or {})
+    if entities is None and "state" in query:
+        entities = entity_observations(events, now or now_iso())
+    return [e for e in events if selected(e, query) and (
         "state" not in query or entities[entity_key(e)]["state"] == query["state"]
     )]
+
+
+def snapshot(revision, events, query=None, pricing=None, fx=None, now=None, quota_book=None):
+    from .insights import build_insights
+
+    query = filters(query or {})
+    pricing, fx, now = pricing or Pricing(), fx or Exchange(), now or now_iso()
+    entities = entity_observations(events, now)
+    matched = select_events(events, query, now, entities)
     matched_by_entity = defaultdict(list)
     for event in matched:
         matched_by_entity[entity_key(event)].append(event)

@@ -159,11 +159,13 @@
         "ccusage/ccusage",
         "Helicone/helicone"
       ],
-      "decision": "Implemented original normalized and Claude/Codex file pipeline. Additional native tools and correction protocol deferred.",
+      "decision": "Implemented normalized and Claude/Codex usage imports plus metadata-only completed Claude tool pairs. Replay identities remain stable. More native tools, multi-source configuration and correction protocol remain planned.",
       "evidence": [
         "tests/test_monitoring.py",
         "monitoring_ai/adapters.py",
-        "docs/contract.md"
+        "docs/contract.md",
+        "monitoring_ai/claude_tools.py",
+        "tests/test_claude_tools.py"
       ]
     },
     {
@@ -226,7 +228,12 @@
         "dated price matching",
         "estimated versus billed",
         "unknown coverage",
-        "dated FX"
+        "dated FX",
+        "adjacent period comparison",
+        "qualified per-priced-session estimates",
+        "recorded cache-read share",
+        "reported-duration statistics",
+        "explicit tool categories"
       ],
       "dependencies": [
         "local-usage-ledger",
@@ -240,11 +247,15 @@
         "langfuse/langfuse",
         "Helicone/helicone"
       ],
-      "decision": "Implemented grouped tables, token charts, source/session filters and source age. Hourly heatmaps, latency percentiles and richer comparisons remain planned.",
+      "decision": "Implemented detailed UTC period reports and qualified comparisons, project/model/day breakdowns, timed-record statistics and categorized tool activity. Unsupported workflow quality remains unavailable. Richer charts and configurable views remain planned.",
       "evidence": [
         "monitoring_ai/metrics.py",
         "tests/test_monitoring.py",
-        "tests/browser/dashboard.spec.mjs"
+        "tests/browser/dashboard.spec.mjs",
+        "monitoring_ai/reports.py",
+        "monitoring_ai/reporting.py",
+        "tests/test_reports.py",
+        "tests/browser/reports.spec.mjs"
       ]
     },
     {

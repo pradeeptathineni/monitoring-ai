@@ -21,6 +21,24 @@ export type Entity = {
   state: string; reported_state: string; stale: boolean;
   status_at: string | null; last_event_at: string; metrics: Metrics;
 };
+export type Report = {
+  schema: "monitoring.report.v1"; identity: string; revision: number;
+  observed_at: string; currency: string;
+  range: { from: string | null; until: string };
+  previous_range: { from: string; until: string } | null;
+  fx?: { base: string; as_of: string; provenance: string; rates: Record<string, string | number> } | null;
+  summary: Metrics & { observed_sessions: number; estimated_session_count: number;
+    known_estimate_per_priced_session: string | null; cache_read_share_percent: string | null };
+  breakdowns: Record<"projects" | "models" | "daily", { rows: Array<{
+    key: string; metrics: Metrics; observed_sessions: number; estimated_session_count: number;
+    known_estimate_per_priced_session: string | null; cache_read_share_percent: string | null;
+    timing: { records: number; p50_ms: number | null; p95_ms: number | null;
+      output_tokens_per_second: string | null; output_rate_records: number };
+  }>; truncated: boolean }>;
+  tools: Record<string, unknown>;
+  comparisons: Record<string, unknown>;
+  coverage: Record<string, unknown>;
+};
 export type Snapshot = {
   schema: "monitoring.snapshot.v1";
   identity: string;
@@ -112,6 +130,21 @@ export function decodeSnapshot(value: unknown): Snapshot {
   return value as unknown as Snapshot;
 }
 
+export function decodeReport(value: unknown): Report {
+  if (!record(value) || value.schema !== "monitoring.report.v1" || typeof value.identity !== "string" ||
+      !Number.isSafeInteger(value.revision) || typeof value.observed_at !== "string" ||
+      !Number.isFinite(Date.parse(value.observed_at)) || typeof value.currency !== "string" ||
+      !record(value.range) || !metrics(value.summary) || !record(value.breakdowns) ||
+      !["projects", "models", "daily"].every((name) => {
+        const group = (value.breakdowns as Record<string, unknown>)[name];
+        return record(group) && typeof group.truncated === "boolean" && Array.isArray(group.rows) &&
+          group.rows.length <= 100 && group.rows.every((row) => record(row) && typeof row.key === "string" && metrics(row.metrics));
+      }) || !record(value.tools) || !record(value.coverage) || !record(value.comparisons)) {
+    throw new Error("Monitoring AI returned an incompatible report");
+  }
+  return value as unknown as Report;
+}
+
 export function monitoringOwner(endpoint: string) {
   const base = new URL(endpoint);
   if (base.protocol !== "http:" || base.hostname !== "127.0.0.1" ||
@@ -119,19 +152,21 @@ export function monitoringOwner(endpoint: string) {
     throw new Error("Configure a plain loopback Monitoring AI origin on the Deep host");
   }
   let identity: string | undefined;
-  return {
-    async snapshot(filters: Filters = {}): Promise<Snapshot> {
-      const url = new URL("/api/v1/snapshot", base);
+  async function read<T extends { identity: string }>(route: string, decode: (value: unknown) => T, filters: Filters): Promise<T> {
+      const url = new URL(route, base);
       for (const [key, value] of Object.entries(filters)) if (value) url.searchParams.set(key, value);
       const response = await fetch(url, { signal: AbortSignal.timeout(8000), redirect: "error" });
       if (!response.ok) throw new Error(`Monitoring AI unavailable (${response.status})`);
-      const snapshot = decodeSnapshot(await response.json());
-      if (identity && snapshot.identity !== identity) {
+      const value = decode(await response.json());
+      if (identity && value.identity !== identity) {
         throw new Error("Monitoring AI restarted. Reconnect deliberately before adopting its observations");
       }
-      identity = snapshot.identity;
-      return snapshot;
-    },
+      identity = value.identity;
+      return value;
+  }
+  return {
+    snapshot(filters: Filters = {}): Promise<Snapshot> { return read("/api/v1/snapshot", decodeSnapshot, filters); },
+    report(filters: Filters = {}): Promise<Report> { return read("/api/v1/report", decodeReport, filters); },
     reconnect() { identity = undefined; },
   };
 }

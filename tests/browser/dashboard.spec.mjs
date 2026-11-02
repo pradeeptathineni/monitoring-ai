@@ -5,9 +5,9 @@ test("filtering, grouping, entity drill-down and reset use the real ledger", asy
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
   await expect(page.locator(".metric")).toHaveCount(4);
-  await expect(page.locator("#scope")).toContainText("108 of 108");
+  await expect(page.locator("#scope")).toContainText("114 of 114");
   await page.selectOption('[name="provider"]', "anthropic");
-  await expect(page.locator("#scope")).toContainText("36 of 108");
+  await expect(page.locator("#scope")).toContainText("38 of 114");
   await page.locator('.nav[data-view="usage"]').click();
   await page.selectOption("#group", "surface");
   await expect(page.locator("#usage-table tbody tr")).toHaveCount(1);
@@ -16,11 +16,11 @@ test("filtering, grouping, entity drill-down and reset use the real ledger", asy
   await expect(page.locator("#entity-table tbody tr")).toHaveCount(2);
   await page.getByRole("button", { name: "↳ scout", exact: true }).click();
   await expect(page.locator("#event-selection")).toContainText("scout");
-  await expect(page.locator("#event-table tbody tr")).toHaveCount(18);
+  await expect(page.locator("#event-table tbody tr")).toHaveCount(19);
   await page.locator("#clear-entity").click();
-  await expect(page.locator("#event-table tbody tr")).toHaveCount(36);
+  await expect(page.locator("#event-table tbody tr")).toHaveCount(38);
   await page.locator("#reset").click();
-  await expect(page.locator("#scope")).toContainText("108 of 108");
+  await expect(page.locator("#scope")).toContainText("114 of 114");
   await page.selectOption('[name="model"]', "demo-local");
   await expect(page.locator(".metric").nth(2)).toContainText("Unknown");
   await expect(page.locator(".metric").nth(3)).toContainText("Unknown");

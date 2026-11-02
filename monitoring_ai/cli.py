@@ -14,6 +14,7 @@ from .metrics import DIMENSIONS, Exchange, Pricing, snapshot
 from .server import Observatory, serve
 from .store import Store
 from .quota_sources import codex_book, quota_export, quota_file, read_codex_quota
+from .reporting import detailed_report
 
 
 def parser():
@@ -58,6 +59,14 @@ def parser():
     quota.add_argument("--source-id", default="codex-quota")
     quota.add_argument("--account", default="default")
     quota.add_argument("--executable", type=Path)
+    report = sub.add_parser("report", help="Inspect qualified period and tool reports without contacting a provider")
+    report.add_argument("--db", type=Path, default=Path(".monitoring-ai/events.sqlite"))
+    report.add_argument("--pricing", type=Path)
+    report.add_argument("--fx", type=Path)
+    report.add_argument("--currency", default="USD")
+    report.add_argument("--json", action="store_true")
+    for key in (*DIMENSIONS, "since", "until", "state"):
+        report.add_argument("--" + key)
     return cli
 
 
@@ -118,6 +127,24 @@ def run(args):
     if len(args.currency) != 3 or not args.currency.isupper():
         raise ValueError("Use an uppercase three-letter currency code")
     pricing, fx = Pricing(args.pricing), Exchange(args.currency, args.fx)
+    if args.command == "report":
+        query = {key: getattr(args, key) for key in (*DIMENSIONS, "since", "until", "state") if getattr(args, key)}
+        value = detailed_report(*store.read(), query, pricing, fx)
+        if args.json:
+            print(json.dumps(value, indent=2))
+        else:
+            summary = value["summary"]
+            print(f"MONITORING AI REPORT  {value['observed_at']}  •  {value['currency']}")
+            print(f"{summary['calls']} usage records · {summary['observed_sessions']} observed sessions · {summary['total_tokens']:,} tokens")
+            print(f"Known estimate {money(summary['costs']['estimated']['amount'])} · reported billed {money(summary['costs']['billed']['amount'])}")
+            print(f"Unknown cost {summary['unknown_cost_events']} · missing FX {summary['unconverted_cost_events']} · estimates and bills stay separate")
+            print("\nPROJECT                  TOKENS       KNOWN ESTIMATE      OBSERVED SESSIONS")
+            for row in value["breakdowns"]["projects"]["rows"]:
+                print(f"{row['key'][:24]:24} {row['metrics']['total_tokens']:>12,} {money(row['metrics']['costs']['estimated']['amount']):>18} {row['observed_sessions']:>22}")
+            print(f"\nTool records {value['tools']['records']} · errors {value['tools']['errors']} · unclassified {value['tools']['unclassified_records']}")
+            print("Comparison: " + value["coverage"]["comparison_basis"])
+            print("Unavailable from these records: " + ", ".join(value["coverage"]["unsupported"]))
+        return
     if args.command == "serve":
         if not 0 <= args.port <= 65535:
             raise ValueError("Invalid port")

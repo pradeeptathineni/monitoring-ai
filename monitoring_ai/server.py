@@ -12,6 +12,7 @@ import uuid
 from . import __version__
 from .metrics import filters, now_iso, selected, snapshot
 from .insights import validate_quota_book
+from .reporting import detailed_report
 
 WEB = Path(__file__).with_name("web")
 
@@ -63,6 +64,13 @@ class Observatory:
             value.update(identity=self.identity, source_status=dict(self.source_status))
             return value
 
+    def report(self, query):
+        with self.lock:
+            revision, events = self.store.read()
+            value = detailed_report(revision, events, query, self.pricing, self.fx)
+            value.update(identity=self.identity, source_status=dict(self.source_status))
+            return value
+
 
 def handler(observatory):
     class Handler(BaseHTTPRequestHandler):
@@ -104,12 +112,15 @@ def handler(observatory):
                         schema="monitoring.capabilities.v1", version=__version__,
                         identity=observatory.identity, read_only=True,
                         snapshot="/api/v1/snapshot", events="/api/v1/events",
+                        report="/api/v1/report", event_features=["tool-categories.v1"],
                         insights="monitoring.insights.v1", quota_observations="monitoring.quotas.v1",
                         filters=["provider", "model", "surface", "project", "source", "session", "since", "until", "state"],
                         limits={"read_events": 100000, "snapshot_entities": 500, "event_page": 500},
                     ))
                 elif parsed.path == "/api/v1/snapshot":
                     self.send(200, observatory.read(query))
+                elif parsed.path == "/api/v1/report":
+                    self.send(200, observatory.report(query))
                 elif parsed.path == "/api/v1/events":
                     limit = int(query.pop("limit", "100"))
                     after = int(query.pop("after", "0"))
