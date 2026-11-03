@@ -30,7 +30,7 @@
       <button class="nav nav-item" data-view="report" title="Report" aria-label="Report"><span class="nav-icon" aria-hidden="true">▤</span><span class="navigation-label">Report <kbd>5</kbd></span></button>
       <button class="nav nav-item" data-view="settings" title="Settings" aria-label="Settings"><span class="nav-icon" aria-hidden="true">⚙</span><span class="navigation-label">Settings <kbd>6</kbd></span></button>
     </nav>
-    <div class="rail-bottom sidebar-foot"><span class="small-dot" aria-hidden="true"></span><div class="navigation-label">Read-only dashboard<a href="https://github.com/pradeeptathineni/monitoring-ai" target="_blank" rel="noreferrer">Source & documentation ↗</a><small>EXPERIMENTAL · v0.8.25</small></div></div>
+    <div class="rail-bottom sidebar-foot"><span class="small-dot" aria-hidden="true"></span><div class="navigation-label">Read-only dashboard<a href="https://github.com/pradeeptathineni/monitoring-ai" target="_blank" rel="noreferrer">Source & documentation ↗</a><small>EXPERIMENTAL · v0.8.26</small></div></div>
   </aside>
   <aside id="section-navigation" class="section-navigation" aria-label="Settings sections" hidden>
     <h2>Settings</h2>
@@ -140,7 +140,7 @@ python3 -m monitoring_ai serve --sources /path/to/private-sources.json --db /pat
             <p>Sessions shows bounded cached turn and call metadata separately from ledger usage. Source and cache file times do not prove current activity. Conversation material is discarded before display. See docs/codeburn-session-cache.md.</p>
           </details>
           <details class="coverage-setup navigation-disclosure"><summary>Observe local AI processes</summary>
-            <p>Start the service with <code>--processes</code> on macOS. The default sample interval is five seconds; <code>--process-interval 2</code> through <code>60</code> adjusts it. The Sessions view then samples matching executable names every two seconds using OS process metadata. No command arguments or environment values are read. Process presence does not establish session or worker state.</p><pre><code>python3 -m monitoring_ai serve --db /path/to/private-ledger.sqlite --processes</code></pre>
+            <p>Start the service with <code>--processes</code> on macOS. The default sample interval is five seconds; <code>--process-interval 2</code> through <code>60</code> adjusts it. The owner samples matching executable names at that cadence; the browser refreshes its read-only view every two seconds. Overview shows the latest 60 successful aggregate samples in memory, with failed or missed reads left as gaps. No command arguments or environment values are read. Process presence does not establish session or worker state.</p><pre><code>python3 -m monitoring_ai serve --db /path/to/private-ledger.sqlite --processes</code></pre>
           </details>
         </article>
       </section>

@@ -4,7 +4,7 @@ import tempfile
 import unittest
 
 from monitoring_ai.metrics import Exchange, Pricing
-from monitoring_ai.process_observer import ProcessObserver, parse_ps
+from monitoring_ai.process_observer import HISTORY_SAMPLES, ProcessObserver, parse_ps
 from monitoring_ai.server import Observatory
 from monitoring_ai.store import Store
 
@@ -28,7 +28,8 @@ class ProcessObserverTests(unittest.TestCase):
         self.assertNotIn("Secret", encoded)
 
     def test_fresh_samples_and_disappearance_are_not_session_events(self):
-        frames = iter([FIRST + SECOND, SECOND, SECOND.replace("0.2", "1.2"), OSError("private path")])
+        frames = iter([FIRST + SECOND, SECOND, SECOND.replace("0.2", "1.2"),
+                       OSError("private path"), SECOND])
         def read():
             item = next(frames)
             if isinstance(item, Exception):
@@ -39,6 +40,10 @@ class ProcessObserverTests(unittest.TestCase):
         self.assertEqual(first["state"], "following")
         self.assertEqual(first["interval_seconds"], 5)
         self.assertEqual(len(first["processes"]), 2)
+        self.assertEqual(first["history"][0]["count"], 2)
+        self.assertEqual(first["history"][0]["cpu_percent"], 12.7)
+        self.assertEqual(first["history"][0]["rss_bytes"], 6144 * 1024)
+        self.assertNotIn("pid", json.dumps(first["history"]))
         second = observer.refresh()
         self.assertEqual([row["executable"] for row in second["processes"]], ["codex"])
         self.assertEqual(second["no_longer_observed"][0]["pid"], 401)
@@ -50,10 +55,34 @@ class ProcessObserverTests(unittest.TestCase):
         self.assertEqual(failed["state"], "unavailable")
         self.assertEqual(failed["processes"], [])
         self.assertEqual(failed["no_longer_observed"], [])
+        self.assertEqual(len(failed["history"]), 3)
+        resumed = observer.refresh()
+        self.assertEqual(resumed["history"][-1]["segment"], 1)
+        self.assertEqual(resumed["history"][-2]["segment"], 0)
+        self.assertEqual(resumed["no_longer_observed"], [])
+        copy = observer.snapshot()
+        copy["history"][0]["count"] = 99
+        self.assertEqual(observer.snapshot()["history"][0]["count"], 2)
         self.assertNotIn("private path", json.dumps(failed))
         self.assertRaises(ValueError, ProcessObserver, interval_seconds=1)
         self.assertRaises(ValueError, ProcessObserver, interval_seconds=61)
         self.assertEqual(ProcessObserver(interval_seconds=7).snapshot()["interval_seconds"], 7)
+
+    def test_bounded_successful_history_keeps_latest_samples_only(self):
+        observer = ProcessObserver(lambda: FIRST)
+        for _ in range(HISTORY_SAMPLES + 1):
+            observer.refresh()
+        value = observer.snapshot()
+        self.assertEqual(len(value["history"]), HISTORY_SAMPLES)
+        self.assertTrue(value["history_truncated"])
+        self.assertEqual({row["segment"] for row in value["history"]}, {0})
+
+    def test_missed_sample_interval_starts_a_new_trend_segment(self):
+        observer = ProcessObserver(lambda: FIRST, interval_seconds=5)
+        observer.refresh()
+        observer._history[-1]["sampled_at"] = "2026-11-02T00:00:00Z"
+        later = observer.refresh()
+        self.assertEqual(later["history"][-1]["segment"], 1)
 
     def test_snapshot_is_separate_from_event_accounting(self):
         with tempfile.TemporaryDirectory() as temp:

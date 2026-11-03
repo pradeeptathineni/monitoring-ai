@@ -1248,6 +1248,52 @@ function renderSelectedCache() {
   ]));
 }
 
+function renderProcessHistory(root, sample) {
+  const history = Array.isArray(sample.history) ? sample.history.slice(-60).filter((row) =>
+    row && Number.isFinite(Date.parse(row.sampled_at)) && Number.isSafeInteger(row.segment) && row.segment >= 0 &&
+    Number.isSafeInteger(row.count) && row.count >= 0 && Number.isFinite(row.cpu_percent) && row.cpu_percent >= 0 &&
+    Number.isSafeInteger(row.rss_bytes) && row.rss_bytes >= 0) : [];
+  if (history.length < 2) return;
+  const box = node("div", null, "process-history");
+  box.append(node("p", `Recent OS samples · ${number.format(history.length)} successful reads${sample.history_truncated ? " · latest 60 retained" : ""}. Gaps separate unavailable or missed reads.`, "confidence-note"));
+  const svgElement = (name) => document.createElementNS("http://www.w3.org/2000/svg", name);
+  for (const [key, label, unit, style] of [
+    ["count", "Matching processes", "", "count"],
+    ["cpu_percent", "Combined OS CPU", "%", "cpu"],
+    ["rss_bytes", "Combined resident memory", " MiB", "memory"],
+  ]) {
+    const values = history.map((row) => key === "rss_bytes" ? row[key] / 1048576 : row[key]);
+    const peak = Math.max(...values);
+    const format = (value) => key === "cpu_percent" ? value.toFixed(1) : number.format(Math.round(value));
+    const row = node("div", null, `process-trend-row process-trend-${style}`);
+    row.append(node("p", `${label} · latest ${format(values.at(-1))}${unit} · observed peak ${format(peak)}${unit}`, "process-trend-label"));
+    const svg = svgElement("svg");
+    svg.setAttribute("viewBox", "0 0 320 58");
+    svg.setAttribute("preserveAspectRatio", "none");
+    svg.setAttribute("aria-hidden", "true");
+    const segments = new Map();
+    history.forEach((point, index) => {
+      const x = 10 + (index / (history.length - 1)) * 300;
+      const y = 49 - (peak ? values[index] / peak : 0) * 39;
+      if (!segments.has(point.segment)) segments.set(point.segment, []);
+      segments.get(point.segment).push([x, y]);
+    });
+    for (const points of segments.values()) {
+      if (points.length > 1) {
+        const line = svgElement("polyline");
+        line.setAttribute("points", points.map(([x, y]) => `${x},${y}`).join(" "));
+        svg.append(line);
+      } else {
+        const dot = svgElement("circle");
+        dot.setAttribute("cx", points[0][0]); dot.setAttribute("cy", points[0][1]); dot.setAttribute("r", "2.5");
+        svg.append(dot);
+      }
+    }
+    row.append(svg); box.append(row);
+  }
+  root.append(box);
+}
+
 function renderOsProcesses() {
   const panel = $("#os-process-panel"), status = $("#os-process-status"), target = $("#os-process-table");
   const sample = data?.os_processes?.schema === "monitoring.os-processes.v1" ? data.os_processes : null;
@@ -1269,6 +1315,7 @@ function renderOsProcesses() {
   } else {
     overviewBody.append(node("p", sample.state === "unavailable" ? "OS process read unavailable. Current process presence is unknown." : "Waiting for the first OS process sample.", "confidence-note"));
   }
+  renderProcessHistory(overviewBody, sample);
   if (!current) {
     status.append(node("p", sample.state === "unavailable" ? "OS process read unavailable. Current process presence is unknown." :
       sample.state === "unread" ? "Waiting for the first OS process sample." :
