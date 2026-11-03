@@ -120,3 +120,5 @@ The local v0.8.41 browser and terminal change lists are original code over Monit
 The local session comparison is original browser code over Monitoring's existing report API. It reuses owned report aggregation and formatting without adding a runtime dependency or copying an upstream implementation.
 
 App task observations are original schema/capture/view code using an explicitly supplied projection of the supported app task inventory. Existing private JSON publication helpers are reused. No upstream product, credential reader or native session-directory implementation is imported.
+
+Session export reuses owned consistent read-only ledger snapshots, ledger verification, normalized event validation and import semantics. Its private atomic JSONL publication uses standard-library file operations and preserves source identities. No upstream product or runtime dependency is added.

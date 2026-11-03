@@ -221,6 +221,7 @@
         "status evidence age",
         "recorded timeline",
         "revision-pinned terminal entity pages",
+        "private importable session history export",
         "separate metadata-only app task observations with capture freshness",
         "tool outcomes",
         "live refresh",

@@ -105,6 +105,14 @@ def parser():
     history.add_argument("--after", type=int, default=0, help="Oldest-first record offset")
     history.add_argument("--expected-revision", type=int, help="Pin later pages to the first ledger revision")
     history.add_argument("--json", action="store_true", help="Local metadata-only history page")
+    session_export = sub.add_parser("export-session", help="Export one exact recorded session as new private normalized JSONL")
+    session_export.add_argument("--db", type=Path, required=True)
+    session_export.add_argument("--output", type=Path, required=True, help="New 0600 file; existing paths refuse")
+    session_export.add_argument("--source", required=True)
+    session_export.add_argument("--session", required=True)
+    for key in ("entity", "provider", "model", "surface", "project", "since", "until"):
+        session_export.add_argument("--" + key)
+    session_export.add_argument("--expected-revision", type=int)
     ledger = sub.add_parser("ledger", help="Back up or check an explicitly selected private ledger")
     ledger_actions = ledger.add_subparsers(dest="ledger_action", required=True)
     backup = ledger_actions.add_parser("backup", help="Save committed history to a new private SQLite file")
@@ -363,6 +371,18 @@ def _print_source_preview(value):
 
 
 def run(args):
+    if args.command == "export-session":
+        from .session_export import export_session
+        from .result_capture import ResultPublicationUncertain
+        query = {key: getattr(args, key) for key in ("provider", "model", "surface", "project", "since", "until") if getattr(args, key)}
+        try:
+            result = export_session(args.db, args.output, source=args.source, session=args.session,
+                                    entity=args.entity, query=query, expected_revision=args.expected_revision)
+        except ResultPublicationUncertain:
+            print("Export file exists, but publication durability is uncertain. Verify it before retrying.", file=sys.stderr)
+            raise SystemExit(2) from None
+        print(json.dumps(result, indent=2))
+        return
     if args.command == "ledger":
         from .ledger_backup import backup_ledger, inspect_ledger
         result = (backup_ledger(args.db, args.output) if args.ledger_action == "backup"
