@@ -146,6 +146,89 @@ class ClaudeStreamTests(unittest.TestCase):
         self.assertFalse(result_file.exists())
         self.assertEqual([row["state"] for row in self.rows()], ["running", "unknown"])
 
+    def test_append_two_invocations_to_one_selected_status_and_result_history(self):
+        from monitoring_ai.claude_results import claude_results
+        from monitoring_ai.source_setup import check_selection, select_claude_stream
+        result_file = Path(self.temp.name) / "results.jsonl"
+        manifest = Path(self.temp.name) / "sources.json"
+        first = {**SUCCESS, "modelUsage": {"claude-example": {
+            "inputTokens": 3, "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0, "outputTokens": 2,
+            "costUSD": 0.01, "provider": "firstParty"}}}
+        next_init = {**INIT, "session_id": "another-native-session", "uuid": "another-invocation"}
+        next_result = {**first, "session_id": "another-native-session"}
+        times = iter(f"2026-11-03T09:00:{second:02d}.000Z" for second in range(10))
+        capture_stream(stream(INIT, first), self.path, source="owned-cli", project="example",
+                       clock=lambda: next(times), result_output=result_file)
+        capture_stream(stream(next_init, next_result), self.path, source="owned-cli",
+                       project="example", clock=lambda: next(times), result_output=result_file,
+                       append=True)
+        select_claude_stream(manifest, status_file=self.path, result_file=result_file,
+                             source_id="owned-cli", project="example")
+        self.assertTrue(check_selection(manifest)["all_readable"])
+        status = self.rows()
+        usage = claude_results([json.loads(line) for line in result_file.read_text().splitlines()],
+                               "owned-cli", "example")
+        self.assertEqual([row["state"] for row in status],
+                         ["running", "completed", "running", "completed"])
+        self.assertEqual(len(usage), 2)
+        self.assertEqual(len({row["session"] for row in status + usage}), 2)
+        self.assertEqual(stat.S_IMODE(self.path.stat().st_mode), 0o600)
+        self.assertEqual(stat.S_IMODE(result_file.stat().st_mode), 0o600)
+        store = Store(Path(self.temp.name) / "append-ledger.sqlite")
+        self.assertEqual(store.ingest(status + usage)["added"], 6)
+        self.assertEqual(store.ingest(status + usage)["added"], 0)
+        before = self.path.read_bytes(), result_file.read_bytes()
+        with self.assertRaisesRegex(ValueError, "already captured"):
+            capture_stream(stream(next_init, next_result), self.path, source="owned-cli",
+                           project="example", result_output=result_file, append=True)
+        self.assertEqual((self.path.read_bytes(), result_file.read_bytes()), before)
+
+    def test_append_refuses_non_private_result_before_changing_status(self):
+        result_file = Path(self.temp.name) / "results.jsonl"
+        result_file.write_text("{}\n")
+        self.path.write_text("")
+        before = self.path.read_bytes()
+        with self.assertRaisesRegex(ValueError, "owned private"):
+            capture_stream(stream(INIT, SUCCESS), self.path, source="owned-cli",
+                           project="example", result_output=result_file, append=True)
+        self.assertEqual(self.path.read_bytes(), before)
+        result_file.chmod(0o600)
+        result_file.write_text("{}")
+        with self.assertRaisesRegex(ValueError, "incomplete final record"):
+            capture_stream(stream(INIT, SUCCESS), self.path, source="owned-cli",
+                           project="example", result_output=result_file, append=True)
+        self.assertEqual(self.path.read_bytes(), before)
+
+    def test_append_refuses_incomplete_status_file(self):
+        self.path.write_text('{"schema":')
+        self.path.chmod(0o600)
+        before = self.path.read_bytes()
+        with self.assertRaisesRegex(ValueError, "open an existing private event file"):
+            capture_stream(stream(INIT, SUCCESS), self.path, source="owned-cli",
+                           project="example", append=True)
+        self.assertEqual(self.path.read_bytes(), before)
+
+    def test_append_creates_missing_result_after_incomplete_first_invocation(self):
+        result_file = Path(self.temp.name) / "later-result.jsonl"
+        first_times = iter(f"2026-11-03T09:00:{second:02d}.000Z" for second in range(10))
+        capture_stream(stream(INIT), self.path, source="owned-cli", project="example",
+                       clock=lambda: next(first_times), result_output=result_file)
+        self.assertFalse(result_file.exists())
+        next_init = {**INIT, "session_id": "second-native", "uuid": "second-invocation"}
+        next_result = {**SUCCESS, "session_id": "second-native", "modelUsage": {
+            "claude-example": {"inputTokens": 1, "cacheReadInputTokens": 0,
+                               "cacheCreationInputTokens": 0, "outputTokens": 1}}}
+        second_times = iter(f"2026-11-03T09:01:{second:02d}.000Z" for second in range(10))
+        receipt = capture_stream(stream(next_init, next_result), self.path,
+                                 source="owned-cli", project="example",
+                                 clock=lambda: next(second_times), result_output=result_file,
+                                 append=True)
+        self.assertEqual(receipt["result_summary"], "captured")
+        self.assertEqual([row["state"] for row in self.rows()],
+                         ["running", "unknown", "running", "completed"])
+        self.assertEqual(stat.S_IMODE(result_file.stat().st_mode), 0o600)
+
     def test_result_target_is_checked_before_consuming_the_invocation(self):
         result_file = Path(self.temp.name) / "result.jsonl"
         result_file.write_text("keep")

@@ -127,8 +127,9 @@ def parser():
     capture.add_argument("--file", type=Path, required=True)
     capture.add_argument("--captured-at", required=True, help="Original receipt time, with timezone. Never inferred from a reread")
     capture.add_argument("--output", type=Path, required=True, help="New private metadata JSONL file. Existing files refuse")
-    live = actions.add_parser("capture-claude-stream", help="Capture one Claude CLI stream from stdin as invocation status only")
-    live.add_argument("--output", type=Path, required=True, help="New private normalized JSONL file; existing files refuse")
+    live = actions.add_parser("capture-claude-stream", help="Capture one Claude CLI invocation from stdin")
+    live.add_argument("--output", type=Path, required=True, help="New private normalized JSONL file; existing files require --append")
+    live.add_argument("--append", action="store_true", help="Append another invocation to existing owned private status/result files")
     live.add_argument("--source-id", required=True, help="Stable local alias for this CLI stream")
     live.add_argument("--project", required=True, help="Safe project alias")
     live.add_argument("--result-output", type=Path,
@@ -272,7 +273,8 @@ def run(args):
                                         source=args.source_id, project=args.project,
                                         forward=sys.stdout.buffer if args.forward else None,
                                         result_output=args.result_output,
-                                        quota_output=args.quota_output, quota_account=args.quota_account)
+                                        quota_output=args.quota_output, quota_account=args.quota_account,
+                                        append=args.append)
                 print(json.dumps(result), file=sys.stderr if args.forward else sys.stdout)
                 if (result.get("result_summary") in {"failed", "uncertain"} or
                         result.get("quota_observation") in {"failed", "partial", "uncertain"}):

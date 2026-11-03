@@ -4,8 +4,9 @@ from datetime import datetime, timedelta, timezone
 import json
 import os
 from pathlib import Path
+import stat
 
-from .adapters import reject_constant, safe_label, unique_keys
+from .adapters import parse_jsonl, read_source, reject_constant, safe_label, unique_keys
 from .claude_results import capture_result
 from .claude_rate_limits import claude_rate_limit_book
 from .claude_tools import tool_category
@@ -13,7 +14,8 @@ from .events import SCHEMA, label, validate
 from .insights import validate_quota_book
 from .metrics import now_iso
 from .producer import EventWriter, session_alias, status_event
-from .result_capture import ResultPublicationUncertain, publish_private_json, write_result_frame
+from .result_capture import (ResultPublicationUncertain, append_result_frame,
+                             publish_private_json, write_result_frame)
 from .store import stable_id
 
 MAX_LINE = 4 * 1024 * 1024
@@ -42,7 +44,7 @@ def _new_output_target(path, name):
 
 
 def capture_stream(stream, output, *, source, project, clock=now_iso, forward=None,
-                   result_output=None, quota_output=None, quota_account="local"):
+                   result_output=None, quota_output=None, quota_account="local", append=False):
     """Read one native JSONL invocation and save only observed start/end states.
 
     The CLI stream's init/result frames describe this invocation, not a native
@@ -58,11 +60,21 @@ def capture_stream(stream, output, *, source, project, clock=now_iso, forward=No
     if len(outputs) > 1:
         targets = [(name, _new_output_target(path, name)) for name, path in outputs]
         for index, (name, target) in enumerate(targets[1:], 1):
-            if os.path.lexists(target) or any(
+            if (os.path.lexists(target) and not (append and name == "Result summary")) or any(
                 target.parent == previous.parent and target.name.casefold() == previous.name.casefold()
                 for _, previous in targets[:index]
             ):
                 raise ValueError(f"{name} needs a separate new file")
+    result_existing = append and result_output is not None and os.path.lexists(result_output)
+    if result_existing:
+        from .claude_results import claude_results
+        info = Path(result_output).lstat()
+        if not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o600 or info.st_uid != os.getuid():
+            raise ValueError("Result append needs an owned private file")
+        existing_result = read_source(result_output)
+        if existing_result and not existing_result.endswith(b"\n"):
+            raise ValueError("Result append target has an incomplete final record")
+        claude_results(parse_jsonl(existing_result, strict=True), source, project)
     started = ended = None
     result_summary = "unavailable" if result_output is not None else "not-requested"
     quota_summary = "unavailable" if quota_output is not None else "not-requested"
@@ -70,7 +82,12 @@ def capture_stream(stream, output, *, source, project, clock=now_iso, forward=No
     quota_rejected = 0
     tool_uses = {}
     tool_results = {}
-    with EventWriter(output) as writer:
+    with EventWriter(output, append=append) as writer:
+        if append and any(row["source"] != source or row["project"] != project or
+                          row["surface"] != "claude-cli-stream" or
+                          row["kind"] not in ("status", "tool") for row in writer.existing):
+            raise ValueError("Existing Claude capture does not match source and project")
+        existing_entities = {row["entity"] for row in writer.existing if row["kind"] == "status"}
         try:
             for line in _lines(stream):
                 if forward is not None:
@@ -93,6 +110,8 @@ def capture_stream(stream, output, *, source, project, clock=now_iso, forward=No
                         continue
                     session = session_alias(native)
                     entity = "cli-" + stable_id(source, native, invocation)
+                    if entity in existing_entities:
+                        raise ValueError("Claude invocation was already captured")
                     model = safe_label(row.get("model"))
                     at = clock()
                     writer.write(status_event(
@@ -127,7 +146,11 @@ def capture_stream(stream, output, *, source, project, clock=now_iso, forward=No
                     ended = state
                     if result_output is not None:
                         try:
-                            write_result_frame(result_output, capture_result(row, at))
+                            frame = capture_result(row, at)
+                            if result_existing:
+                                append_result_frame(result_output, frame, source=source, project=project)
+                            else:
+                                write_result_frame(result_output, frame)
                             result_summary = "captured"
                         except ResultPublicationUncertain:
                             result_summary = "uncertain"

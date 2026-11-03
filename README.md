@@ -4,7 +4,7 @@ Local monitoring for AI sessions, agents, workers, tokens and costs. Use it in y
 
 **Experimental alpha.** It observes explicitly supplied sources. Personal source compatibility, additional collectors and full-vision acceptance remain incomplete. [Version policy and v1.0.0 requirements](docs/release-readiness.md) keep maturity separate from version numbers.
 
-Current checked version: **v0.8.35**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
+Current checked version: **v0.8.36**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
 
 ![Monitoring AI dashboard with fictional sessions and costs](docs/observatory.png)
 
@@ -84,6 +84,8 @@ Two native transcript adapters are included. Only use files you own or are autho
 For a Claude CLI invocation you explicitly run with structured stdout, [capture its live start and reported end](docs/claude-cli-stream.md) into a private normalized event file. Matched tool-use/result frames in that stream also yield metadata-only tool outcomes. Unanswered requests remain unknown. This supplies invocation and tool observations without reading saved transcripts or assuming that the whole conversation closed. The event file records no tokens or cost, so it does not duplicate the separate native usage ledger.
 
 `sources select-claude-stream` creates one private source selection for that capture's status and result files with the required shared alias. Existing files are checked before the selection is published. Missing files can be selected before the invocation and remain visibly unavailable until they arrive. A separate quota file is passed with `--quota-file`.
+
+After the first capture, use `capture-claude-stream --append` with the same private status and result paths, source alias and project to record another distinct invocation without changing the selection. Existing files must be owned, complete and mode 0600; a result file absent after an incomplete first invocation can be created later. This is an explicit CLI workflow, not automatic discovery or a hook. [Capture instructions](docs/claude-cli-stream.md) cover replay and failure limits.
 
 An optional second sanitized result file records cumulative per-model tokens and a client cost estimate at receipt time. Select it as `claude-results` and avoid counting the same work again through another source.
 

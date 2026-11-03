@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import stat
 import threading
+import fcntl
 
 from .events import SCHEMA, validate
 from .store import stable_id
@@ -47,13 +48,13 @@ def session_alias(native_id):
 
 
 class EventWriter:
-    """Append validated normalized observations to a new private JSONL file.
+    """Write validated observations to a new or explicitly appended private file.
 
     After an I/O error, don't retry automatically or erase the tail. Preserve
     the file and recover only by replaying the same immutable event ID and timestamp.
     """
 
-    def __init__(self, path):
+    def __init__(self, path, *, append=False):
         try:
             selected = Path(path).absolute()
             name = selected.name
@@ -63,28 +64,51 @@ class EventWriter:
             if not parent.is_dir():
                 raise ValueError
             target = parent / name
-            flags = (os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_APPEND
+            flags = ((os.O_RDWR if append else os.O_WRONLY) | os.O_NONBLOCK |
+                     (0 if append else os.O_CREAT | os.O_EXCL) | os.O_APPEND
                      | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0))
             fd = os.open(target, flags, 0o600)
             try:
-                os.fchmod(fd, 0o600)
-                if not stat.S_ISREG(os.fstat(fd).st_mode):
+                info = os.fstat(fd)
+                if not stat.S_ISREG(info.st_mode):
                     raise OSError("not a regular file")
-                # A flushed record also needs a durable name for its new file.
-                parent_fd = os.open(parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
-                try:
-                    os.fsync(parent_fd)
-                finally:
-                    os.close(parent_fd)
+                if append:
+                    from .adapters import parse_jsonl
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    if stat.S_IMODE(info.st_mode) != 0o600 or info.st_uid != os.getuid() or info.st_size > MAX_BYTES:
+                        raise ValueError("Append target must be an owned private event file")
+                    os.lseek(fd, 0, os.SEEK_SET)
+                    parts, remaining = [], info.st_size
+                    while remaining:
+                        part = os.read(fd, min(remaining, 1024 * 1024))
+                        if not part:
+                            raise ValueError("Append target changed during inspection")
+                        parts.append(part)
+                        remaining -= len(part)
+                    content = b"".join(parts)
+                    if content and not content.endswith(b"\n"):
+                        raise ValueError("Append target has an incomplete final record")
+                    existing = [validate(row) for row in parse_jsonl(content, strict=True)]
+                else:
+                    os.fchmod(fd, 0o600)
+                    existing = []
+                    # A flushed record also needs a durable name for its new file.
+                    parent_fd = os.open(parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+                    try:
+                        os.fsync(parent_fd)
+                    finally:
+                        os.close(parent_fd)
             except Exception:
                 os.close(fd)
                 raise
         except Exception:
-            raise ValueError("Unable to create a new private event file") from None
+            action = "open an existing private event file for append" if append else "create a new private event file"
+            raise ValueError(f"Unable to {action}") from None
         self._fd = fd
         self._lock = threading.Lock()
-        self._bytes = 0
-        self._records = 0
+        self._bytes = len(content) if append else 0
+        self._records = len(existing)
+        self.existing = existing
 
     def __enter__(self):
         return self

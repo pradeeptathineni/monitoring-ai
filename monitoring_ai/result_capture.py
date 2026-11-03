@@ -4,8 +4,10 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import fcntl
+import stat
 
-from .adapters import read_source, reject_constant, unique_keys
+from .adapters import MAX_BYTES, parse_jsonl, read_source, reject_constant, unique_keys
 
 
 class ResultPublicationUncertain(OSError):
@@ -35,6 +37,53 @@ def write_result_frame(output, frame):
         raise ValueError("Invalid sanitized result frame")
     frame = capture_result(frame, frame.get("captured_at"))
     publish_private_json(output, frame)
+
+
+def append_result_frame(output, frame, *, source, project):
+    """Append one sanitized cumulative result to an existing private history."""
+    from .claude_results import FRAME_SCHEMA, capture_result, claude_results
+
+    if not isinstance(frame, dict) or frame.get("schema") != FRAME_SCHEMA:
+        raise ValueError("Invalid sanitized result frame")
+    clean = capture_result(frame, frame.get("captured_at"))
+    payload = (json.dumps(clean, separators=(",", ":"), allow_nan=False) + "\n").encode()
+    selected = Path(output).absolute()
+    target = selected.parent.resolve(strict=True) / selected.name
+    fd = os.open(target, os.O_RDWR | os.O_APPEND | os.O_NONBLOCK |
+                 os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0))
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        info = os.fstat(fd)
+        if (not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o600
+                or info.st_uid != os.getuid() or info.st_size + len(payload) > MAX_BYTES):
+            raise ValueError("Result append needs an owned private file within the size limit")
+        os.lseek(fd, 0, os.SEEK_SET)
+        parts, remaining = [], info.st_size
+        while remaining:
+            part = os.read(fd, min(remaining, 1024 * 1024))
+            if not part:
+                raise ValueError("Result append target changed during inspection")
+            parts.append(part)
+            remaining -= len(part)
+        content = b"".join(parts)
+        if content and not content.endswith(b"\n"):
+            raise ValueError("Result append target has an incomplete final record")
+        frames = parse_jsonl(content, strict=True)
+        if len(frames) >= 50_000:
+            raise ValueError("Result append record limit reached")
+        claude_results(frames + [clean], source, project)
+        offset = 0
+        try:
+            while offset < len(payload):
+                written = os.write(fd, payload[offset:])
+                if written <= 0:
+                    raise OSError("short result write")
+                offset += written
+            os.fsync(fd)
+        except OSError:
+            raise ResultPublicationUncertain from None
+    finally:
+        os.close(fd)
 
 
 def publish_private_json(output, value):
