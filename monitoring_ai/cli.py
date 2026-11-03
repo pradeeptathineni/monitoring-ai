@@ -50,6 +50,8 @@ def parser():
                                  help="Explicit existing CodeBurn menubar status output. Recent writes, not process liveness")
             command.add_argument("--processes", action="store_true",
                                  help="Sample matching AI executable names from macOS; no arguments or session inference")
+            command.add_argument("--process-interval", type=int,
+                                 help="OS process sample interval in seconds (2–60; default 5; requires --processes)")
         if name == "top":
             command.add_argument("--json", action="store_true")
             command.add_argument("--watch", action="store_true", help="Refresh every two seconds in this terminal")
@@ -274,11 +276,13 @@ def run(args):
             alias_salt = secrets.token_bytes(32)
             activity_loader = lambda: read_codeburn_status(args.codeburn_status, alias_salt=alias_salt)
         process_observer = None
+        if args.process_interval is not None and not args.processes:
+            raise ValueError("--process-interval requires --processes")
         if args.processes:
             if sys.platform != "darwin":
                 raise ValueError("OS process sampling currently supports macOS")
             from .process_observer import ProcessObserver
-            process_observer = ProcessObserver()
+            process_observer = ProcessObserver(interval_seconds=args.process_interval if args.process_interval is not None else 5)
         serve(Observatory(store, pricing, fx, loader, quota_loader=quota_loader(args),
                           source_observer=observer,
                           cached_usage_loader=cache_loader,

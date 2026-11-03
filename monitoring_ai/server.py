@@ -339,7 +339,7 @@ def serve(observatory, port):
     def processes():
         while not stop.is_set():
             observatory.process_observer.refresh()
-            if stop.wait(2):
+            if stop.wait(observatory.process_observer.interval_seconds):
                 break
 
     observatory.refresh()

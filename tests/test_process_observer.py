@@ -37,6 +37,7 @@ class ProcessObserverTests(unittest.TestCase):
         observer = ProcessObserver(read)
         first = observer.refresh()
         self.assertEqual(first["state"], "following")
+        self.assertEqual(first["interval_seconds"], 5)
         self.assertEqual(len(first["processes"]), 2)
         second = observer.refresh()
         self.assertEqual([row["executable"] for row in second["processes"]], ["codex"])
@@ -50,6 +51,9 @@ class ProcessObserverTests(unittest.TestCase):
         self.assertEqual(failed["processes"], [])
         self.assertEqual(failed["no_longer_observed"], [])
         self.assertNotIn("private path", json.dumps(failed))
+        self.assertRaises(ValueError, ProcessObserver, interval_seconds=1)
+        self.assertRaises(ValueError, ProcessObserver, interval_seconds=61)
+        self.assertEqual(ProcessObserver(interval_seconds=7).snapshot()["interval_seconds"], 7)
 
     def test_snapshot_is_separate_from_event_accounting(self):
         with tempfile.TemporaryDirectory() as temp:

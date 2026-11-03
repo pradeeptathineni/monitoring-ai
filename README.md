@@ -4,7 +4,7 @@ Local monitoring for AI sessions, agents, workers, tokens and costs. Use it in y
 
 **Experimental alpha.** It observes explicitly supplied sources. Personal source compatibility, additional collectors and full-vision acceptance remain incomplete. [Version policy and v1.0.0 requirements](docs/release-readiness.md) keep maturity separate from version numbers.
 
-Current checked version: **v0.8.10**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
+Current checked version: **v0.8.11**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
 
 ![Monitoring AI dashboard with fictional sessions and costs](docs/observatory.png)
 
@@ -49,7 +49,7 @@ The producer appends usage and lifecycle evidence. The server imports complete l
 
 ## Connect your data
 
-On macOS, add `--processes` to `serve` to observe matching local AI executable names without reading command arguments or environment. The Sessions view keeps those OS samples separate from recorded sessions. See [coverage and limits](docs/os-processes.md).
+On macOS, add `--processes` to `serve` to observe matching local AI executable names without reading command arguments or environment. The default sample interval is five seconds; `--process-interval 2` through `60` adjusts it. Overview and Sessions keep those OS samples separate from recorded usage and entities. See [coverage and limits](docs/os-processes.md).
 
 For an existing CodeBurn v74 daily cache, use the [explicit cached-usage view](docs/codeburn-cache.md). Its replaceable daily totals and source-reported USD amounts stay separate from event accounting. The cache cannot establish live workers or billing evidence.
 

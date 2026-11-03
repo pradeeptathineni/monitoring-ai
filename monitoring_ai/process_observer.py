@@ -52,12 +52,15 @@ def parse_ps(output, *, names=PROCESS_NAMES):
 
 
 class ProcessObserver:
-    def __init__(self, reader=_ps, *, names=PROCESS_NAMES):
+    def __init__(self, reader=_ps, *, names=PROCESS_NAMES, interval_seconds=5):
+        if type(interval_seconds) is not int or not 2 <= interval_seconds <= 60:
+            raise ValueError("OS process interval must be 2–60 seconds")
         self.reader, self.names = reader, frozenset(name.casefold() for name in names)
+        self.interval_seconds = interval_seconds
         self.lock = threading.Lock()
         self.value = dict(schema="monitoring.os-processes.v1", state="unread", sampled_at=None,
                           processes=[], no_longer_observed=[], changed_count=0, truncated=False,
-                          coverage="matching-executable-names-only")
+                          coverage="matching-executable-names-only", interval_seconds=interval_seconds)
 
     def refresh(self):
         try:
@@ -67,7 +70,7 @@ class ProcessObserver:
                 # A failed read cannot establish that a formerly seen process still exists.
                 self.value = dict(schema="monitoring.os-processes.v1", state="unavailable", sampled_at=None,
                                   processes=[], no_longer_observed=[], changed_count=0, truncated=False,
-                                  coverage="matching-executable-names-only")
+                                  coverage="matching-executable-names-only", interval_seconds=self.interval_seconds)
             return self.snapshot()
         with self.lock:
             prior = {(r["pid"], r["started_at"]): r for r in self.value["processes"]}
@@ -80,7 +83,7 @@ class ProcessObserver:
                               sampled_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
                               processes=rows[:200], no_longer_observed=missing[:200],
                               changed_count=changed, truncated=len(rows) > 200 or len(missing) > 200,
-                              coverage="matching-executable-names-only")
+                              coverage="matching-executable-names-only", interval_seconds=self.interval_seconds)
         return self.snapshot()
 
     def snapshot(self):

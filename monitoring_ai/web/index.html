@@ -30,7 +30,7 @@
       <button class="nav nav-item" data-view="report" title="Report" aria-label="Report"><span class="nav-icon" aria-hidden="true">▤</span><span class="navigation-label">Report <kbd>5</kbd></span></button>
       <button class="nav nav-item" data-view="settings" title="Settings" aria-label="Settings"><span class="nav-icon" aria-hidden="true">⚙</span><span class="navigation-label">Settings <kbd>6</kbd></span></button>
     </nav>
-    <div class="rail-bottom sidebar-foot"><span class="small-dot" aria-hidden="true"></span><div class="navigation-label">Read-only dashboard<a href="https://github.com/pradeeptathineni/monitoring-ai" target="_blank" rel="noreferrer">Source & documentation ↗</a><small>EXPERIMENTAL · v0.8.10</small></div></div>
+    <div class="rail-bottom sidebar-foot"><span class="small-dot" aria-hidden="true"></span><div class="navigation-label">Read-only dashboard<a href="https://github.com/pradeeptathineni/monitoring-ai" target="_blank" rel="noreferrer">Source & documentation ↗</a><small>EXPERIMENTAL · v0.8.11</small></div></div>
   </aside>
   <aside id="section-navigation" class="section-navigation" aria-label="Settings sections" hidden>
     <h2>Settings</h2>
@@ -60,6 +60,7 @@
       <div id="scope" class="scope"></div>
       <section id="metrics" class="metrics" aria-label="Summary metrics"></section>
       <section id="overview" class="view">
+        <article id="os-process-overview-panel" class="panel" hidden><div class="panel-head"><div><h2>Local OS processes</h2><p>Recent executable samples, separate from recorded usage and sessions.</p></div><button class="text-button" data-view="sessions">Inspect processes ↗</button></div><div id="os-process-overview" role="status"></div></article>
         <div class="two-column"><article class="panel"><div class="panel-head"><div><h2>Usage by model</h2><p>Input, cache and output tokens counted once</p></div><span class="tag">TOKENS</span></div><div id="model-bars" class="bars"></div><div id="token-legend" class="legend"></div></article>
         <article class="panel"><div class="panel-head"><div><h2>Usage by project</h2><p>Usage across configured projects</p></div><span class="tag">PROJECTS</span></div><div id="project-bars" class="bars"></div></article></div>
         <article class="panel timeline-panel"><div class="panel-head"><div><h2>Session chronology</h2><p>Recorded event span · a long span does not establish continuous work</p></div><button class="text-button" data-view="sessions">Inspect all sessions ↗</button></div><div id="timeline"></div></article>
@@ -123,7 +124,7 @@ python3 -m monitoring_ai serve --sources /path/to/private-sources.json --db /pat
             <p>Sessions shows the source-reported recent transcript writes with generation time and file age. This optional adapter reads only the selected output file. It does not run CodeBurn, read native transcripts or infer process liveness. Unknown and stale observations stay qualified.</p>
           </details>
           <details class="coverage-setup navigation-disclosure"><summary>Observe local AI processes</summary>
-            <p>Start the service with <code>--processes</code> on macOS. The Sessions view then samples matching executable names every two seconds using OS process metadata. No command arguments or environment values are read. Process presence does not establish session or worker state.</p><pre><code>python3 -m monitoring_ai serve --db /path/to/private-ledger.sqlite --processes</code></pre>
+            <p>Start the service with <code>--processes</code> on macOS. The default sample interval is five seconds; <code>--process-interval 2</code> through <code>60</code> adjusts it. The Sessions view then samples matching executable names every two seconds using OS process metadata. No command arguments or environment values are read. Process presence does not establish session or worker state.</p><pre><code>python3 -m monitoring_ai serve --db /path/to/private-ledger.sqlite --processes</code></pre>
           </details>
         </article>
       </section>

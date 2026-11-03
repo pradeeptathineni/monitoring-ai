@@ -1070,16 +1070,29 @@ function renderOsProcesses() {
   const panel = $("#os-process-panel"), status = $("#os-process-status"), target = $("#os-process-table");
   const sample = data?.os_processes?.schema === "monitoring.os-processes.v1" ? data.os_processes : null;
   panel.hidden = !sample;
+  const overview = $("#os-process-overview-panel"), overviewBody = $("#os-process-overview");
+  overview.hidden = !sample;
+  overviewBody.replaceChildren();
   if (!sample) return;
   status.replaceChildren(); target.replaceChildren();
   const age = sample.sampled_at ? (Date.now() - Date.parse(sample.sampled_at)) / 1000 : null;
   const current = sample.state === "following" && Number.isFinite(age) && age >= 0 && age <= 10 && !paused && !snapshotReadUnavailable;
+  const interval = Number.isSafeInteger(sample.interval_seconds) ? `${sample.interval_seconds}s interval` : "interval unknown";
+  if (sample.state === "following") {
+    const counts = new Map();
+    for (const row of sample.processes) counts.set(row.executable, (counts.get(row.executable) || 0) + 1);
+    const names = [...counts].sort(([a], [b]) => a.localeCompare(b)).map(([name, count]) => `${name}: ${number.format(count)}`).join(" · ");
+    overviewBody.append(node("p", `${number.format(sample.processes.length)} matching executables in ${current ? "recent" : "last"} OS sample ${sample.sampled_at} · ${interval}. ${current ? "" : "Current presence is unknown. "}No process is linked to a recorded session or worker.`, "confidence-note"));
+    if (names) overviewBody.append(node("p", names, "confidence-note"));
+  } else {
+    overviewBody.append(node("p", sample.state === "unavailable" ? "OS process read unavailable. Current process presence is unknown." : "Waiting for the first OS process sample.", "confidence-note"));
+  }
   if (!current) {
     status.append(node("p", sample.state === "unavailable" ? "OS process read unavailable. Current process presence is unknown." :
       sample.state === "unread" ? "Waiting for the first OS process sample." :
       `Last OS sample ${sample.sampled_at || "unknown"} is retained; current process presence is unknown.`, "confidence-note"));
   } else {
-    status.append(node("p", `${number.format(sample.processes.length)} matching executables in OS sample ${sample.sampled_at}. Session and worker mappings are unknown.`, "confidence-note"));
+    status.append(node("p", `${number.format(sample.processes.length)} matching executables in OS sample ${sample.sampled_at} · ${interval}. Session and worker mappings are unknown.`, "confidence-note"));
   }
   if (sample.state !== "following") return;
   if (!sample.processes.length) status.append(node("p", "No matching executable names were visible in this OS sample. Other AI activity may exist.", "empty"));
@@ -1424,6 +1437,7 @@ setInterval(() => {
     renderInsights();
     renderSourceCoverage();
     renderInputHealth();
+    renderOsProcesses();
     renderCodeburnCache();
     renderCodeburnActivity();
   } else { refresh(); if (view === "report") loadReport(false); }
