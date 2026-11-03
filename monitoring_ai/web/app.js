@@ -1698,6 +1698,11 @@ function renderLedgerChanges() {
     const item = node("li", null, "ledger-change");
     item.append(node("strong", `${change.kind} ${row.kind} · ${row.source} / ${row.session}`),
       node("span", `${detail} · source time ${row.timestamp} · observed ${change.observed_at}`));
+    const history = node("button", "Inspect entity history", "ledger-change-inspect quiet");
+    history.type = "button";
+    history.setAttribute("aria-label", `Inspect history for ${row.entity} in ${row.session}`);
+    history.addEventListener("click", () => inspect(row));
+    item.append(history);
     root.append(item);
   }
 }
