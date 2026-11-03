@@ -162,6 +162,18 @@ class Observatory:
                 unavailable_sources=int(self.source_status["state"] == "unavailable"),
                 rows=[dict(row, source_state=self.source_status["state"]) for row in book["rows"]])
 
+    def _include_turns(self, value):
+        if self.source_observer is not None:
+            book = self.source_observer.turns()
+            if book["configured_sources"]:
+                value["codex_turns"] = book
+        elif getattr(self.loader, "supports_turns", False):
+            book = self.loader.turns()
+            value["codex_turns"] = dict(schema=book["schema"], truncated=book["truncated"],
+                ambiguous_turns=book["ambiguous_turns"], configured_sources=1,
+                unavailable_sources=int(self.source_status["state"] == "unavailable"),
+                rows=[dict(row, source_state=self.source_status["state"]) for row in book["rows"]])
+
     def read(self, query):
         with self.lock:
             inputs = self.input_status()
@@ -176,6 +188,7 @@ class Observatory:
             self._include_cached_usage(value)
             self._include_codeburn_activity(value)
             self._include_responses(value)
+            self._include_turns(value)
             if self.process_observer is not None:
                 value["os_processes"] = self.process_observer.snapshot()
             if inputs is not None:
@@ -194,6 +207,7 @@ class Observatory:
             self._include_cached_usage(value)
             self._include_codeburn_activity(value)
             self._include_responses(value)
+            self._include_turns(value)
             if self.process_observer is not None:
                 value["os_processes"] = self.process_observer.snapshot()
             if inputs is not None:
@@ -262,6 +276,10 @@ def handler(observatory):
                          observatory.source_observer.responses()["configured_sources"]) or
                             getattr(observatory.loader, "supports_responses", False)):
                         capabilities["claude_responses"] = "monitoring.claude-responses.v1"
+                    if ((observatory.source_observer is not None and
+                         observatory.source_observer.turns()["configured_sources"]) or
+                            getattr(observatory.loader, "supports_turns", False)):
+                        capabilities["codex_turns"] = "monitoring.codex-turns.v1"
                     self.send(200, capabilities)
                 elif parsed.path == "/api/v1/snapshot":
                     self.send(200, observatory.read(query))

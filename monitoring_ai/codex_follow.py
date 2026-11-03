@@ -6,9 +6,14 @@ from .claude_follow import NativeFollower
 
 class CodexFollower(NativeFollower):
     shape = staticmethod(codex_row)
+    supports_turns = True
 
     def _convert(self, rows):
         return codex(rows, self.source, self.project)
+
+    def turns(self):
+        from .codex_turns import turn_spans
+        return turn_spans(self._rows, self.source, self.project)
 
     def _validate_generation(self, events):
         # A replacement/truncation must replay all accepted deltas in order.

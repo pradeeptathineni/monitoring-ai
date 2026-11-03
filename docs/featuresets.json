@@ -217,7 +217,8 @@
         "recorded timeline",
         "tool outcomes",
         "live refresh",
-        "read-loss handling"
+        "read-loss handling",
+        "separate native turn-marker chronology"
       ],
       "dependencies": [
         "local-usage-ledger",
@@ -230,7 +231,7 @@
         "openlit/openlit",
         "langfuse/langfuse"
       ],
-      "decision": "Implemented metadata hierarchy, evidence aging, explicit multi-file health/coverage, private create/add setup checks and read-only ingestion readiness against a disposable ledger copy. Scoped chronological entity-history pages preserve process identity and one ledger revision. Shared contextual navigation is adopted without runtime authority. Native usage still supplies no live worker lifecycle; process discovery and full native lifecycle adapters remain deferred. Optional runtime-owned normalized emission is qualified against one actual task-owned Claude review process, including running observations, heartbeats, terminal outcome and conversation-usage joining. Sessions offers scoped parent-first hierarchy and local collapse. An optional original adapter reads one selected existing CodeBurn menubar status output as replaceable recent-transcript-write evidence with source age and anonymous aliases. Its actual old, empty source proves unknown-visibility handling, not live-worker coverage. Core native provider collectors and broad discovery remain unqualified.",
+      "decision": "Implemented metadata hierarchy, evidence aging, explicit multi-file health/coverage, private create/add setup checks and read-only ingestion readiness against a disposable ledger copy. Scoped chronological entity-history pages preserve process identity and one ledger revision. Shared contextual navigation is adopted without runtime authority. Native usage still supplies no live worker lifecycle; process discovery and full native lifecycle adapters remain deferred. Optional runtime-owned normalized emission is qualified against one actual task-owned Claude review process, including running observations, heartbeats, terminal outcome and conversation-usage joining. Sessions offers scoped parent-first hierarchy and local collapse. A selected historical Codex file supplies nine paired task start/completion marker groups in a separate panel with hashed turn IDs and source-reported timing; these are not normalized session or worker lifecycle. An optional original adapter reads one selected existing CodeBurn menubar status output as replaceable recent-transcript-write evidence with source age and anonymous aliases. Its actual old, empty source proves unknown-visibility handling, not live-worker coverage. Core native provider collectors and broad discovery remain unqualified.",
       "evidence": [
         "tests/browser/dashboard.spec.mjs",
         "tests/test_monitoring.py",
@@ -255,7 +256,11 @@
         "monitoring_ai/codeburn_status.py",
         "docs/codeburn-status.md",
         "tests/test_codeburn_status.py",
-        "tests/browser/codeburn-activity.spec.mjs"
+        "tests/browser/codeburn-activity.spec.mjs",
+        "monitoring_ai/codex_turns.py",
+        "tests/test_codex_turns.py",
+        "tests/browser/codex-turns.spec.mjs",
+        "docs/codex-native.md"
       ]
     },
     {

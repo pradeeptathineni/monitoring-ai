@@ -29,6 +29,7 @@ export type Report = {
   fx?: { base: string; as_of: string; provenance: string; rates: Record<string, string | number> } | null;
   inputs?: ManagedInputs;
   source_coverage?: SourceCoverage;
+  codex_turns?: CodexTurns;
   summary: Metrics & { observed_sessions: number; estimated_session_count: number;
     known_estimate_per_priced_session: string | null; cache_read_share_percent: string | null };
   breakdowns: Record<"projects" | "models" | "daily", { rows: Array<{
@@ -53,6 +54,7 @@ export type Snapshot = {
   inputs?: ManagedInputs;
   source_coverage?: SourceCoverage;
   token_threshold?: TokenThreshold;
+  codex_turns?: CodexTurns;
   summary: Metrics & { sessions: number; entities: number; active: number; attention: number };
   entities: Entity[];
   insights?: {
@@ -84,6 +86,17 @@ export type TokenThreshold = {
   state: "no-observations" | "observed-below" | "observed-reached";
   usage_records: number; excluded_receipt_summaries: number; excluded_future_records: number;
   note: string;
+};
+
+export type CodexTurns = {
+  schema: "monitoring.codex-turns.v1";
+  rows: Array<{ source: string; project: string; session: string; turn: string;
+    start_at: string | null; complete_at: string | null;
+    duration_ms: number | null; time_to_first_token_ms: number | null;
+    evidence: "paired" | "start-only" | "completion-only";
+    source_state: "unread" | "following" | "unavailable" }>;
+  truncated: boolean; ambiguous_turns: number;
+  configured_sources: number; unavailable_sources: number;
 };
 
 export type ManagedInput = {
@@ -192,6 +205,33 @@ function tokenThreshold(value: unknown): value is TokenThreshold {
       (value.state === "observed-reached") !== ((value.observed_tokens as number) >= (value.limit_tokens as number) && (value.usage_records as number) > 0) ||
       typeof value.note !== "string" || value.note.length > 300) return false;
   return true;
+}
+
+function codexTurns(value: unknown): value is CodexTurns {
+  if (!record(value) || Object.keys(value).sort().join(",") !==
+      ["schema", "rows", "truncated", "ambiguous_turns", "configured_sources", "unavailable_sources"].sort().join(",") ||
+      value.schema !== "monitoring.codex-turns.v1" || !Array.isArray(value.rows) || value.rows.length > 100 ||
+      typeof value.truncated !== "boolean" ||
+      ![value.ambiguous_turns, value.configured_sources, value.unavailable_sources].every(nonnegativeInteger) ||
+      (value.configured_sources as number) < 1 || (value.unavailable_sources as number) > (value.configured_sources as number)) return false;
+  return value.rows.every((row) => {
+    if (!record(row) || Object.keys(row).sort().join(",") !==
+        ["source", "project", "session", "turn", "start_at", "complete_at", "duration_ms",
+         "time_to_first_token_ms", "evidence", "source_state"].sort().join(",") ||
+        !alias(row.source) || !alias(row.project) ||
+        typeof row.session !== "string" || !/^s-[0-9a-f]{32}$/.test(row.session) ||
+        typeof row.turn !== "string" || !/^t-[0-9a-f]{32}$/.test(row.turn) ||
+        !nullableTimestamp(row.start_at) || !nullableTimestamp(row.complete_at) ||
+        (row.start_at === null && row.complete_at === null) ||
+        !(row.duration_ms === null || nonnegativeInteger(row.duration_ms)) ||
+        !(row.time_to_first_token_ms === null || nonnegativeInteger(row.time_to_first_token_ms)) ||
+        !["unread", "following", "unavailable"].includes(String(row.source_state))) return false;
+    if (row.start_at !== null && row.complete_at !== null &&
+        Date.parse(row.complete_at as string) < Date.parse(row.start_at as string)) return false;
+    if (row.complete_at === null && (row.duration_ms !== null || row.time_to_first_token_ms !== null)) return false;
+    return row.evidence === (row.start_at !== null && row.complete_at !== null ? "paired" :
+      row.start_at !== null ? "start-only" : "completion-only");
+  });
 }
 
 function managedInputs(value: unknown): value is ManagedInputs {
@@ -327,6 +367,7 @@ export function decodeSnapshot(value: unknown): Snapshot {
       (value.inputs !== undefined && !managedInputs(value.inputs)) ||
       (value.source_coverage !== undefined && !sourceCoverage(value.source_coverage)) ||
       (value.token_threshold !== undefined && !tokenThreshold(value.token_threshold)) ||
+      (value.codex_turns !== undefined && !codexTurns(value.codex_turns)) ||
       (value.insights !== undefined && !insights(value.insights)) ||
       !value.entities.every((row) => record(row) && typeof row.source === "string" &&
         typeof row.session === "string" && typeof row.entity === "string" &&
@@ -344,6 +385,7 @@ export function decodeReport(value: unknown): Report {
       !record(value.range) || !metrics(value.summary) || !record(value.breakdowns) ||
       (value.inputs !== undefined && !managedInputs(value.inputs)) ||
       (value.source_coverage !== undefined && !sourceCoverage(value.source_coverage)) ||
+      (value.codex_turns !== undefined && !codexTurns(value.codex_turns)) ||
       !record(value.coverage) ||
       (value.coverage.receipt_time_summary_records !== undefined && !nonnegativeInteger(value.coverage.receipt_time_summary_records)) ||
       !["projects", "models", "daily"].every((name) => {

@@ -4,7 +4,7 @@ Local monitoring for AI sessions, agents, workers, tokens and costs. Use it in y
 
 **Experimental alpha.** It observes explicitly supplied sources. Personal source compatibility, additional collectors and full-vision acceptance remain incomplete. [Version policy and v1.0.0 requirements](docs/release-readiness.md) keep maturity separate from version numbers.
 
-Current checked version: **v0.8.19**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
+Current checked version: **v0.8.20**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
 
 ![Monitoring AI dashboard with fictional sessions and costs](docs/observatory.png)
 
@@ -47,6 +47,7 @@ The producer appends usage and lifecycle evidence. The server imports complete l
 - An explicit multi-file manifest with independent input health, replay counts and retained history when one source fails. Input aliases and event-source filters remain distinct.
 - [Entity history](docs/session-history.md) with chronological pages scoped to its source and session. Pages retain one ledger revision, with an explicit restart when history changes.
 - Opt-in [macOS process samples](docs/os-processes.md) with executable name, PID/parent PID, CPU, resident memory and start time. These remain separate from session and worker status.
+- Metadata-only Codex turn start/completion markers in Sessions when an explicitly selected Codex JSONL file supplies them. The markers and source-reported timing are separate from session lifecycle and OS process observations.
 
 ## Connect your data
 
@@ -71,6 +72,8 @@ python3 -m monitoring_ai serve --file /path/to/authorized-events.jsonl --db /tmp
 ```
 
 Two native transcript adapters are included. Only use files you own or are authorized to read. Select one explicit Claude Code JSONL file for [bounded live following](docs/claude-native.md), or a complete [Codex session JSONL file](docs/codex-native.md). There is no home-directory scan, credential reader, hook installation or account connection.
+
+When a selected Codex file contains `task_started` and `task_complete` markers, **Sessions** shows their paired or unpaired chronology and source-reported timing separately from ledger lifecycle. The panel does not claim a task succeeded, a session closed or a process remains running. A historical selected file supplied nine paired groups in a private local qualification; a fresh native Codex append remains unverified.
 
 ```sh
 python3 -m monitoring_ai import --file /path/to/authorized-session.jsonl \

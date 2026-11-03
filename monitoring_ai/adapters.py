@@ -116,7 +116,7 @@ def claude_row(row):
 
 
 def codex_row(row):
-    """Keep only fields consumed by cumulative Codex usage reconstruction."""
+    """Keep only cumulative usage and bounded turn-marker metadata."""
     kind, payload = row.get("type"), row.get("payload")
     if not isinstance(payload, dict):
         return {}
@@ -126,6 +126,20 @@ def codex_row(row):
     if kind == "turn_context":
         model = payload.get("model")
         return {"type": kind, "payload": {"model": safe_label(model)}}
+    if kind == "event_msg" and payload.get("type") in ("task_started", "task_complete"):
+        identity = payload.get("turn_id")
+        if not isinstance(identity, str) or not 0 < len(identity) <= 1000:
+            return {}
+        try:
+            at = timestamp(row.get("timestamp"))
+        except ValueError:
+            return {}  # Optional markers never make valid usage unreadable.
+        marker = {"type": payload["type"], "turn": "t-" + stable_id(identity)}
+        if payload["type"] == "task_complete":
+            for key in ("duration_ms", "time_to_first_token_ms"):
+                value = payload.get(key)
+                marker[key] = value if type(value) is int and 0 <= value <= 10**12 else None
+        return {"type": kind, "timestamp": at, "payload": marker}
     if kind == "event_msg" and payload.get("type") == "token_count":
         info = payload.get("info")
         total = info.get("total_token_usage") if isinstance(info, dict) else None

@@ -91,6 +91,28 @@ test("optional daily token threshold is qualified and rejects inconsistent total
   }
 });
 
+test("optional Codex turn markers stay separate and reject private or contradictory fields", () => {
+  const value = structuredClone(snapshot);
+  value.codex_turns = { schema: "monitoring.codex-turns.v1", configured_sources: 1,
+    unavailable_sources: 0, ambiguous_turns: 0, truncated: false, rows: [{
+      source: "chosen", project: "fictional", session: `s-${"a".repeat(32)}`,
+      turn: `t-${"b".repeat(32)}`, start_at: "2026-11-02T19:00:00.000Z",
+      complete_at: "2026-11-02T19:00:04.000Z", duration_ms: 4000,
+      time_to_first_token_ms: 700, evidence: "paired", source_state: "following",
+    }] };
+  assert.equal(decodeSnapshot(value).codex_turns.rows[0].evidence, "paired");
+  for (const mutate of [
+    (row) => { row.raw_turn_id = "private"; },
+    (row) => { row.start_at = "2026-11-02T19:00:05.000Z"; },
+    (row) => { row.evidence = "session-completed"; },
+    (row) => { row.duration_ms = -1; },
+  ]) {
+    const invalid = structuredClone(value);
+    mutate(invalid.codex_turns.rows[0]);
+    assert.throws(() => decodeSnapshot(invalid), /incompatible/);
+  }
+});
+
 test("optional managed-input health is strict and remains backward compatible", () => {
   assert.equal(decodeSnapshot(snapshot).identity, "owner-one"); // Older owners omit inputs.
   const value = structuredClone(snapshot);

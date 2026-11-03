@@ -1133,6 +1133,33 @@ function renderClaudeResponses() {
   ]));
 }
 
+function renderCodexTurns() {
+  const panel = $("#codex-turn-panel"), status = $("#codex-turn-status"), target = $("#codex-turn-table");
+  const book = data?.codex_turns?.schema === "monitoring.codex-turns.v1" ? data.codex_turns : null;
+  panel.hidden = !book;
+  if (!book) return;
+  status.replaceChildren(); target.replaceChildren();
+  const selectedSource = $("#filters [name=source]")?.value || "";
+  const selectedProject = $("#filters [name=project]")?.value || "";
+  const selectedSession = $("#filters [name=session]")?.value || "";
+  const rows = (Array.isArray(book.rows) ? book.rows : []).filter((row) =>
+    (!selectedSource || row.source === selectedSource) && (!selectedProject || row.project === selectedProject) &&
+    (!selectedSession || row.session === selectedSession));
+  status.append(node("p", `${number.format(rows.length)} turn marker group${rows.length === 1 ? "" : "s"} in the selected source/project/session scope. Other event filters do not apply. Current session and process activity are unknown.`, "confidence-note"));
+  if (book.unavailable_sources || snapshotReadUnavailable || paused) status.append(node("p", "A source read or dashboard refresh is unavailable or paused; markers are retained history.", "confidence-note"));
+  if (book.ambiguous_turns) status.append(node("p", `${number.format(book.ambiguous_turns)} turn identity group${book.ambiguous_turns === 1 ? " was" : "s were"} omitted because markers conflicted or reversed time.`, "confidence-note"));
+  if (book.truncated) status.append(node("p", "Only the latest 100 unambiguous turn groups are shown.", "confidence-note"));
+  if (!rows.length) return;
+  const evidence = { paired: "Both markers", "start-only": "Start only", "completion-only": "Completion only" };
+  table("#codex-turn-table", ["Source / session / turn", "Start · UTC", "Completion · UTC", "Duration", "First token", "Markers"], rows.map((row) => [
+    `${row.source} / ${row.session?.slice(0, 10) || "Unknown"}… / ${row.turn?.slice(0, 10) || "Unknown"}…`,
+    row.start_at || "Not observed", row.complete_at || "Not observed",
+    Number.isSafeInteger(row.duration_ms) ? `${number.format(row.duration_ms)} ms` : "Unknown",
+    Number.isSafeInteger(row.time_to_first_token_ms) ? `${number.format(row.time_to_first_token_ms)} ms` : "Unknown",
+    `${evidence[row.evidence] || "Unknown"}${row.source_state === "unavailable" ? " · source unavailable" : ""}`,
+  ]));
+}
+
 function renderOsProcesses() {
   const panel = $("#os-process-panel"), status = $("#os-process-status"), target = $("#os-process-table");
   const sample = data?.os_processes?.schema === "monitoring.os-processes.v1" ? data.os_processes : null;
@@ -1371,6 +1398,7 @@ function render() {
   renderInputHealth();
   renderEntityTable();
   renderClaudeResponses();
+  renderCodexTurns();
   renderOsProcesses();
   renderCodeburnActivity();
   renderUsage(); renderEvents();
@@ -1507,6 +1535,7 @@ setInterval(() => {
     renderSourceCoverage();
     renderInputHealth();
     renderClaudeResponses();
+    renderCodexTurns();
     renderOsProcesses();
     renderCodeburnCache();
     renderCodeburnActivity();

@@ -125,3 +125,16 @@ class SourceObserver:
                     truncated=len(rows) > 100 or any(book["truncated"] for _, book, _ in books),
                     configured_sources=len(books),
                     unavailable_sources=sum(state == "unavailable" for _, _, state in books))
+
+    def turns(self):
+        """Keep Codex task markers separate from ledger session lifecycle."""
+        with self._lock:
+            books = [(follower.turns(), self._status[source_id]["state"])
+                     for source_id, follower in self._followers.items() if getattr(follower, "supports_turns", False)]
+        rows = [dict(row, source_state=state) for book, state in books for row in book["rows"]]
+        rows.sort(key=lambda row: (row["start_at"] or row["complete_at"], row["source"], row["turn"]))
+        return dict(schema="monitoring.codex-turns.v1", rows=rows[-100:],
+                    truncated=len(rows) > 100 or any(book["truncated"] for book, _ in books),
+                    ambiguous_turns=sum(book["ambiguous_turns"] for book, _ in books),
+                    configured_sources=len(books),
+                    unavailable_sources=sum(state == "unavailable" for _, state in books))
