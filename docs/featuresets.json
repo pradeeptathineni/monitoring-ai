@@ -160,6 +160,7 @@
       "workflow": "Select authorized source \u2192 parse provider usage \u2192 deduplicate \u2192 normalize deltas \u2192 retain history",
       "subfeatures": [
         "provider adapters",
+        "metadata-only completed OpenAI API request receipts",
         "cumulative counter deltas",
         "cache buckets",
         "replay refusal",
@@ -179,6 +180,8 @@
       "evidence": [
         "tests/test_monitoring.py",
         "monitoring_ai/adapters.py",
+        "monitoring_ai/openai_receipt.py",
+        "tests/test_openai_receipt.py",
         "docs/contract.md",
         "monitoring_ai/claude_tools.py",
         "tests/test_claude_tools.py",

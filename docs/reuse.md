@@ -122,3 +122,5 @@ The local session comparison is original browser code over Monitoring's existing
 App task observations are original schema/capture/view code using an explicitly supplied projection of the supported app task inventory. Existing private JSON publication helpers are reused. No upstream product, credential reader or native session-directory implementation is imported.
 
 Session export reuses owned consistent read-only ledger snapshots, ledger verification, normalized event validation and import semantics. Its private atomic JSONL publication uses standard-library file operations and preserves source identities. No upstream product or runtime dependency is added.
+
+The completed Responses API receipt projector is original standard-library code based on inspected task-owned response metadata and OpenAI's primary token-accounting documentation. It reuses owned normalized validation and private JSON publication. It copies no upstream product implementation or prompt/output content.

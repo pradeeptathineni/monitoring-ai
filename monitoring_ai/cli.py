@@ -126,6 +126,12 @@ def parser():
     setup.add_argument("--db", type=Path, help="Preview selected inputs against this existing ledger before suggesting a restart")
     sources = sub.add_parser("sources", help="Select explicit inputs and check their supplied evidence")
     actions = sources.add_subparsers(dest="source_action", required=True)
+    api_receipt = actions.add_parser("capture-openai-response", help="Extract only metadata from one selected completed API response")
+    api_receipt.add_argument("--file", type=Path, required=True)
+    api_receipt.add_argument("--output", type=Path, required=True, help="New private normalized JSONL file")
+    api_receipt.add_argument("--source-id", required=True)
+    api_receipt.add_argument("--project", required=True)
+    api_receipt.add_argument("--session", required=True, help="Application grouping alias, not an inferred provider conversation")
     app_capture = actions.add_parser("capture-app-threads", help="Capture only selected app inventory metadata from stdin")
     app_capture.add_argument("--output", type=Path, required=True)
     app_capture.add_argument("--captured-at", required=True, help="Original supported inventory observation time")
@@ -394,6 +400,16 @@ def run(args):
         run_setup(args.output, args.from_selection, args.db)
         return
     if args.command == "sources":
+        if args.source_action == "capture-openai-response":
+            from .openai_receipt import capture_response
+            from .result_capture import ResultPublicationUncertain
+            try:
+                receipt = capture_response(args.file, args.output, source=args.source_id, project=args.project, session=args.session)
+            except ResultPublicationUncertain:
+                print("Capture file exists, but publication durability is uncertain. Verify it before retrying.", file=sys.stderr)
+                raise SystemExit(2) from None
+            print(json.dumps(receipt))
+            return
         if args.source_action == "capture-app-threads":
             from .app_threads import capture_app_threads
             print(json.dumps(capture_app_threads(sys.stdin.buffer, args.output, args.captured_at, replace=args.replace)))
