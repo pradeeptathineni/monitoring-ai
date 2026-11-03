@@ -8,6 +8,8 @@ import stat
 from .events import label, timestamp
 from .metrics import now_iso, seconds
 
+SCOPES = {"codex-app-task-inventory": "recent-app-page", "codex-local-app-server": "selected-cwd-page"}
+
 
 def _object(pairs):
     result = {}
@@ -18,8 +20,10 @@ def _object(pairs):
     return result
 
 
-def capture_app_threads(stream, output, captured_at, *, replace=False):
+def capture_app_threads(stream, output, captured_at, *, replace=False, source="codex-app-task-inventory"):
     from .result_capture import publish_private_json, replace_private_json
+    if not isinstance(source, str) or source not in SCOPES:
+        raise ValueError("Unsupported inventory source")
     captured_at = timestamp(captured_at)
     payload = stream.read(256_001)
     if len(payload) > 256_000:
@@ -34,7 +38,12 @@ def capture_app_threads(stream, output, captured_at, *, replace=False):
             row["kind"] not in {"codex", "chatgpt"} or row["host"] not in {"local", "connected", "unknown"}:
             raise ValueError("Select only supported inventory metadata fields")
         ident = label(row["id"], "thread id")
-        alias = "task-" + hashlib.sha256((row["kind"] + ":" + ident).encode()).hexdigest()[:24]
+        if source == "codex-local-app-server" and (row["kind"] != "codex" or row["host"] != "local"):
+            raise ValueError("Local Codex source cannot report another app or host")
+        identity = row["kind"] + ":" + ident
+        if source != "codex-app-task-inventory":
+            identity = source + ":" + identity
+        alias = "task-" + hashlib.sha256(identity.encode()).hexdigest()[:24]
         value = dict(alias=alias, kind=row["kind"], host=row["host"],
                      status=row["status"] if row["status"] in {"active", "idle"} else "unknown",
                      updated_at=timestamp(row["updated_at"]))
@@ -42,10 +51,12 @@ def capture_app_threads(stream, output, captured_at, *, replace=False):
             raise ValueError("Duplicate task identity")
         seen.add(alias); rows.append(value)
     value = dict(schema="monitoring.app-threads.v1", captured_at=captured_at,
-                 source="codex-app-task-inventory", scope="recent-app-page", complete_coverage=False,
+                 source=source, scope=SCOPES[source], complete_coverage=False,
                  threads=sorted(rows, key=lambda row: row["alias"]))
     if replace:
         previous = read_app_threads(output)
+        if previous["source"] != source:
+            raise ValueError("Cannot replace another inventory source")
         if previous["captured_at"] > captured_at:
             raise ValueError("Older capture cannot replace newer observations")
         if previous["captured_at"] == captured_at and previous["threads"] != value["threads"]:
@@ -67,8 +78,8 @@ def read_app_threads(path):
     finally:
         os.close(fd)
     if not isinstance(raw, dict) or set(raw) != {"schema", "captured_at", "source", "scope", "complete_coverage", "threads"} or \
-        raw["schema"] != "monitoring.app-threads.v1" or raw["source"] != "codex-app-task-inventory" or \
-        raw["scope"] != "recent-app-page" or raw["complete_coverage"] is not False or \
+        raw["schema"] != "monitoring.app-threads.v1" or not isinstance(raw.get("source"), str) or raw["source"] not in SCOPES or \
+        raw["scope"] != SCOPES[raw["source"]] or raw["complete_coverage"] is not False or \
         not isinstance(raw["threads"], list) or len(raw["threads"]) > 100:
         raise ValueError("Unsupported app inventory")
     captured = timestamp(raw["captured_at"])
@@ -79,6 +90,8 @@ def read_app_threads(path):
             row["kind"] not in {"codex", "chatgpt"} or row["status"] not in {"active", "idle", "unknown"} or \
             row["host"] not in {"local", "connected", "unknown"}:
             raise ValueError("Unsupported app task row")
+        if raw["source"] == "codex-local-app-server" and (row["kind"] != "codex" or row["host"] != "local"):
+            raise ValueError("Unsupported local Codex row")
         alias = label(row["alias"], "alias")
         if alias in seen:
             raise ValueError("Duplicate app task alias")

@@ -1556,10 +1556,14 @@ function renderAppThreads() {
   const book = data?.app_threads, panel = $("#app-threads-panel");
   panel.hidden = !book;
   if (!book) return;
+  const runtime = book.source === "codex-local-app-server";
+  $("#app-thread-title").textContent = runtime ? "Codex runtime observations" : "App task observations";
+  $("#app-thread-description").textContent = runtime ? "One database-only page from the selected local Codex host and project. Separate from ledger sessions." : "Codex and ChatGPT statuses reported by the app inventory, separate from ledger sessions.";
+  $("#app-thread-limit").textContent = `${runtime ? "Selected project page only. Other hosts and ChatGPT conversations are unobserved." : "Recent app page only."} Titles, summaries, paths and raw thread IDs are omitted. Reported active/idle does not establish model inference, worker lifecycle, tokens or billing. Ledger filters do not apply. Capture older than 30 seconds has unknown current status.`;
   const age = (Date.now() - Date.parse(book.captured_at)) / 1000;
   const recent = Number.isFinite(age) && age >= -5 && age <= 30 && !paused && !snapshotReadUnavailable && book.read_state === "following";
-  $("#app-thread-status").textContent = `Capture ${book.captured_at || "unavailable"} · ${recent ? "recent app inventory" : "current app status unknown; capture stale, unreadable or refresh paused"}. ${(book.threads || []).length} reported task rows; source coverage is incomplete.`;
-  table("#app-thread-table", ["Task alias", "App kind", "Reported app status", "Thread updated · UTC", "Host class"],
+  $("#app-thread-status").textContent = `Capture ${book.captured_at || "unavailable"} · ${recent ? (runtime ? "recent Codex runtime snapshot" : "recent app inventory") : `${runtime ? "current Codex runtime status unknown" : "current app status unknown"}; capture stale, unreadable or refresh paused`}. ${(book.threads || []).length} reported task rows; source coverage is incomplete.`;
+  table("#app-thread-table", ["Task alias", "Source kind", "Reported status", "Thread updated · UTC", "Host class"],
     (book.threads || []).map((row) => [row.alias, row.kind, recent ? row.status : `Previously ${row.status} · current unknown`, row.updated_at, row.host]));
 }
 

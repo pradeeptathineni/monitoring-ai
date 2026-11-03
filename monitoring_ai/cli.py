@@ -133,6 +133,11 @@ def parser():
     api_receipt.add_argument("--source-id", required=True)
     api_receipt.add_argument("--project", required=True)
     api_receipt.add_argument("--session", required=True, help="Application grouping alias, not an inferred provider conversation")
+    host_capture = actions.add_parser("capture-codex-host", help="Read one database-only metadata page from an existing approved local Codex host")
+    host_capture.add_argument("--socket", type=Path, required=True, help="Existing owned private socket; no discovery or startup")
+    host_capture.add_argument("--cwd", type=Path, required=True, help="Exact authorized project scope")
+    host_capture.add_argument("--output", type=Path, required=True)
+    host_capture.add_argument("--replace", action="store_true", help="Refresh an existing private export of this same source")
     app_capture = actions.add_parser("capture-app-threads", help="Capture only selected app inventory metadata from stdin")
     app_capture.add_argument("--output", type=Path, required=True)
     app_capture.add_argument("--captured-at", required=True, help="Original supported inventory observation time")
@@ -213,7 +218,8 @@ def terminal(value):
             lines.append(f"  {len(rows) - 8} more selected inputs; inspect --json for all read states.")
     app = value.get("app_threads")
     if app:
-        lines.append(f"App task inventory: {app.get('freshness', 'unknown')} capture · recent page only; app status is not worker lifecycle.")
+        source_label = "Codex runtime metadata" if app.get("source") == "codex-local-app-server" else "App task inventory"
+        lines.append(f"{source_label}: {app.get('freshness', 'unknown')} capture · selected page only; reported status is not worker lifecycle.")
         for row in app.get("threads", []):
             status = row["status"] if app.get("freshness") == "recent" and app.get("read_state") == "following" else f"previously {row['status']}; current unknown"
             lines.append(f"  {row['alias']} · {row['kind']} · app status {status} · updated {row['updated_at']}")
@@ -415,6 +421,10 @@ def run(args):
                 print("Capture file exists, but publication durability is uncertain. Verify it before retrying.", file=sys.stderr)
                 raise SystemExit(2) from None
             print(json.dumps(receipt))
+            return
+        if args.source_action == "capture-codex-host":
+            from .codex_host import capture_host
+            print(json.dumps(capture_host(args.socket, args.cwd, args.output, replace=args.replace)))
             return
         if args.source_action == "capture-app-threads":
             from .app_threads import capture_app_threads

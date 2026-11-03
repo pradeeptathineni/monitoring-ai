@@ -18,3 +18,22 @@ test("app-reported statuses stay separate from ledger activity and become unknow
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
 });
+
+
+test("selected Codex host metadata stays distinct from app inventory and worker activity", async ({ page }) => {
+  const base = await (await page.request.get("/api/v1/snapshot")).json();
+  const book = { schema: "monitoring.app-threads.v1", source: "codex-local-app-server",
+    scope: "selected-cwd-page", complete_coverage: false, captured_at: new Date().toISOString(),
+    read_state: "following", threads: [
+      { alias: "task-runtime-fixture", kind: "codex", status: "active", host: "local", updated_at: new Date().toISOString() }
+    ] };
+  await page.route("**/api/v1/snapshot?**", route => route.fulfill({ json: { ...base, app_threads: book } }));
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Codex runtime observations", exact: true })).toBeVisible();
+  await expect(page.locator("#app-thread-description")).toContainText("database-only");
+  await expect(page.locator("#app-thread-limit")).toContainText("Other hosts and ChatGPT conversations are unobserved");
+  await expect(page.locator("#app-thread-status")).toContainText("recent Codex runtime snapshot");
+  await page.locator("#pause").click();
+  await expect(page.locator("#app-thread-status")).toContainText("current Codex runtime status unknown");
+  await expect(page.locator("#app-thread-table")).toContainText("Previously active · current unknown");
+});
