@@ -1572,6 +1572,7 @@ function renderAppTurns() {
     if (query && !task.alias.toLowerCase().includes(query)) continue;
     for (const turn of task.turns.length ? task.turns : [null]) {
       const state = current && turn ? turn.status : "unknown";
+      const reported = turn?.status === "inProgress" ? "in progress" : turn?.status;
       if (filter && state !== filter) continue;
       const taskCell = node("div", task.alias);
       const app = data.app_threads;
@@ -1586,7 +1587,7 @@ function renderAppTurns() {
         taskCell.append(focus);
       }
       rows.push([taskCell, turn?.alias || "No supplied turns",
-        turn ? current ? turn.status : `Previously ${turn.status} · current unknown` : "Unknown",
+        turn ? current ? reported : `Previously ${reported} · current unknown` : "Unknown",
         turn?.started_at || "Unknown", turn?.completed_at || "Not supplied", turn?.duration_ms ?? "Unknown",
         turn ? turn.error_present ? "Error reported · details omitted" : "None reported in capture" : "Unknown", task.observed_at]);
     }

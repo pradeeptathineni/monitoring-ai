@@ -258,7 +258,8 @@ def terminal(value, *, app_kind=None, app_status=None, app_alias=None, app_limit
             age = seconds(value["observed_at"]) - seconds(task["observed_at"])
             current = app_turns.get("read_state") == "following" and app_turns.get("freshness") == "recent" and -5 <= age <= 30
             for turn in task["turns"]:
-                state = turn["status"] if current else f"previously {turn['status']}; current unknown"
+                reported = "in progress" if turn["status"] == "inProgress" else turn["status"]
+                state = reported if current else f"previously {reported}; current unknown"
                 lines.append(f"  {task['alias']} · {turn['alias']} · reported {state} · started {turn['started_at'] or 'unknown'} · ended {turn['completed_at'] or 'unknown'}")
             if not task["turns"]:
                 lines.append(f"  {task['alias']} · no supplied turns; current turn status unknown")

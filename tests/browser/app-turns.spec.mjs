@@ -14,7 +14,7 @@ test("selected Codex turns remain separate from ledger sessions and focus an aut
   await page.goto("/#sessions");
   await expect(page.getByRole("heading", { name: "Selected Codex app turns", exact: true })).toBeVisible();
   await expect(page.locator("#app-turns-status")).toContainText("1 of 1 selected tasks have recent metadata");
-  await expect(page.locator("#app-turns-table")).toContainText("inProgress");
+  await expect(page.locator("#app-turns-table")).toContainText("in progress");
   await expect(page.locator("#app-turns-panel")).toContainText("does not prove model inference");
   await page.getByRole("button", { name: "Show app task", exact: true }).click();
   await expect(page.locator("#overview")).toBeVisible();
@@ -26,7 +26,7 @@ test("selected Codex turns remain separate from ledger sessions and focus an aut
   await page.locator("#pause").click();
   await expect(page.locator("#app-turns-table tbody tr")).toHaveCount(0);
   await page.locator("#app-turn-state-filter").selectOption("unknown");
-  await expect(page.locator("#app-turns-table")).toContainText("Previously inProgress · current unknown");
+  await expect(page.locator("#app-turns-table")).toContainText("Previously in progress · current unknown");
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
 });
