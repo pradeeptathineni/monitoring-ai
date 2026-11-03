@@ -15,3 +15,5 @@ The goal is one useful view of local and explicitly connected AI activity, indep
 Public demos remain synthetic. A capability is implemented when its complete input-to-consumer journey works and its meaningful failure behavior is checked. Live personal-source qualification, user acceptance and production readiness remain separate evidence.
 
 The [v1.0.0 acceptance requirements](release-readiness.md) govern release readiness separately from version numbers. Completed Claude CLI result capture adds a narrower authorized source with cumulative model-level accounting. It does not qualify interactive transcripts, general lifecycle discovery or cloud tracing.
+
+Runtime-owned normalized emission and the parent-first Sessions view are qualified against one actual owned CLI review process. Source health responses now derive their aggregate status from the included inventory. General session discovery, continuous large-source retention and provider-internal lifecycle remain unqualified.

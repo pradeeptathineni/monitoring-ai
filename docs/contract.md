@@ -26,6 +26,8 @@ Usage records are deltas, never cumulative snapshots. Producers must identify a 
 
 Imports are transactional. Identical source/ID content is replay. Changed content refuses the entire batch. There is no implicit correction or deletion API in v1. Corrected source accounting needs a reviewed migration, not a second alias added to the same ledger. Separate source IDs intentionally have separate identities. Cross-source overlap is not inferred or automatically deduplicated.
 
+From `v0.8.2`, the optional [runtime producer helper](runtime-producers.md) writes this same contract to a new private file. It accepts caller-owned metadata and does not inspect, execute or cancel processes. Runtime authority and observation identity remain separate. No input or read-API schema changes are required.
+
 ## Read API
 
 The standalone server listens only on `127.0.0.1`, default port 5274. Host checking and no browser CORS prevent casual cross-origin access. This is a local boundary, not multi-user authentication. Host applications should proxy reads through their own server. Do not expose this service on a public interface or add it to a tunnel.
@@ -62,7 +64,7 @@ Rows expose only `id`, `format`, `project`, `state`, `last_attempt_at`, `last_su
 
 Each source batch commits atomically and independently. Replay remains idempotent, conflicting identities refuse that batch, and a failed input does not remove prior ledger events or stop later inputs. Recovery accepts the originally selected file without re-reading the manifest. Changing the manifest requires a deliberate restart. File replacement, truncation or source removal never deletes accepted history. Duplicate content under different paths and native aliases is not reconciled automatically; operators must select one observation route per activity.
 
-Legacy `source_status.state` retains its `static`/`following`/`unavailable` vocabulary. A completed multi-input refresh is `following` only if all inputs succeeded. Otherwise it is `unavailable`, with additive `degraded: true` when some inputs succeeded. Per-input outcomes provide the more specific explanation. Polling success and instance identity never establish worker liveness. Event evidence age remains independent. Slow input reads do not hold the API's observation lock.
+Legacy `source_status.state` retains its `static`/`following`/`unavailable` vocabulary. A completed multi-input refresh is `following` only if all inputs succeeded. Otherwise it is `unavailable`, with additive `degraded: true` when some inputs succeeded. Per-input outcomes provide the more specific explanation. Snapshot, report and health responses derive aggregate source status from the same copied input inventory they include, so a recovered input does not leave the response with a stale unavailable summary. Polling success and instance identity never establish worker liveness. Event evidence age remains independent. Slow input reads do not hold the API's observation lock.
 
 ## Source coverage
 

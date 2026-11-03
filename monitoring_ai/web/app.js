@@ -15,6 +15,7 @@ const titles = { overview: ["Overview", "Status evidence and usage from the sour
 let data, paused = false, busy = false, view = "overview", entity = null;
 let settingsCategory = "all";
 let entityHistory = null;
+let collapsedHierarchyKeys = new Set();
 let lastSuccess = 0;
 let snapshotReadUnavailable = false;
 let reportController = null, reportRequestId = 0, reportData = null;
@@ -594,7 +595,7 @@ function timeline() {
 
 function state(row) {
   const status = node("span", row.state, "state " + row.state);
-  const age = lifecycleAgeText(row), stale = age.includes("stale");
+  const age = lifecycleAgeText(row), stale = lifecycleEvidenceStale(row);
   status.title = `Reported: ${row.reported_state}. Evidence: ${row.status_at || "not supplied"}. ${age}. Stale: ${stale}.`;
   status.append(node("small", age, "state-evidence-age"));
   return status;
@@ -623,17 +624,32 @@ function lifecycleAgeText(row) {
   return `Lifecycle evidence ${number.format(Math.floor(age))} seconds old${qualifier}`;
 }
 
+function lifecycleEvidenceStale(row) {
+  const age = evidenceAgeSeconds(row.status_at);
+  return Boolean(row.stale) || age === null || age > 60 || age < -5;
+}
+
+function lastEvidenceCellText(row) {
+  const at = Date.parse(row.status_at || "");
+  const label = Number.isFinite(at) ? `${new Date(at).toISOString().slice(11, 19)} UTC` : "Not supplied";
+  return `${label}${lifecycleEvidenceStale(row) ? " · stale" : ""}`;
+}
+
 function updateLifecycleEvidenceAges() {
   if (!data) return;
-  const updateStates = (labels, rows) => labels.forEach((label, index) => {
-    const row = rows[index];
+  const updateState = (label, row) => {
     if (!row) return;
     label.textContent = lifecycleAgeText(row);
     const state = label.closest(".state");
-    if (state) state.title = `Reported: ${row.reported_state}. Evidence: ${row.status_at || "not supplied"}. ${lifecycleAgeText(row)}. Stale: ${lifecycleAgeText(row).includes("stale")}.`;
+    if (state) state.title = `Reported: ${row.reported_state}. Evidence: ${row.status_at || "not supplied"}. ${lifecycleAgeText(row)}. Stale: ${lifecycleEvidenceStale(row)}.`;
+  };
+  const entitiesByKey = new Map(data.entities.map((row) => [entityIdentityKey(row), row]));
+  $$("#entity-table .state-evidence-age").forEach((label) => updateState(label, entitiesByKey.get(label.closest("tr")?.dataset.entityKey)));
+  $$("#entity-table .last-evidence-cell").forEach((cell) => {
+    const row = entitiesByKey.get(cell.closest("tr")?.dataset.entityKey);
+    if (row) cell.textContent = lastEvidenceCellText(row);
   });
-  updateStates($$("#entity-table .state-evidence-age"), data.entities);
-  updateStates($$("#timeline .state-evidence-age"), data.entities.slice(0, 8));
+  $$("#timeline .state-evidence-age").forEach((label, index) => updateState(label, data.entities[index]));
   $$("#timeline .timeline-row").forEach((line, index) => {
     const row = data.entities[index];
     if (!row) return;
@@ -661,6 +677,125 @@ function table(target, headers, rows) {
     body.append(row);
   }
   grid.append(body); root.append(grid);
+}
+
+function entityIdentityKey(row) {
+  return JSON.stringify([row.source, row.session, row.entity]);
+}
+
+function compareEntities(a, b) {
+  return [a.source, a.session, a.entity, a.entity_type].map(String).join("\u0000")
+    .localeCompare([b.source, b.session, b.entity, b.entity_type].map(String).join("\u0000"));
+}
+
+function entityForest() {
+  const rows = Array.isArray(data?.entities) ? [...data.entities].sort(compareEntities) : [];
+  const byKey = new Map(), children = new Map(), roots = [], cycleKeys = new Set();
+  for (const row of rows) {
+    const key = entityIdentityKey(row);
+    if (!byKey.has(key)) byKey.set(key, row);
+    if (!children.has(key)) children.set(key, []);
+  }
+  for (const row of rows) {
+    const key = entityIdentityKey(row);
+    if (row.parent == null) { roots.push(row); continue; }
+    const parentKey = entityIdentityKey({ source: row.source, session: row.session, entity: row.parent });
+    if (parentKey === key) { cycleKeys.add(key); roots.push(row); }
+    else if (byKey.has(parentKey)) children.get(parentKey).push(row);
+    else roots.push(row);
+  }
+  for (const siblings of children.values()) siblings.sort(compareEntities);
+  roots.sort(compareEntities);
+
+  const discovered = new Set(), path = [];
+  function discover(row) {
+    const key = entityIdentityKey(row);
+    const cycleAt = path.indexOf(key);
+    if (cycleAt >= 0) {
+      for (const member of path.slice(cycleAt)) cycleKeys.add(member);
+      cycleKeys.add(key);
+      return;
+    }
+    if (discovered.has(key)) return;
+    discovered.add(key); path.push(key);
+    for (const child of children.get(key) || []) discover(child);
+    path.pop();
+  }
+  for (const root of roots) discover(root);
+  // A malformed response may contain a cycle with no root. Show each component
+  // from a deterministic starting point and cut the repeated edge during walk.
+  for (const row of rows) if (!discovered.has(entityIdentityKey(row))) discover(row);
+
+  const entries = [], visible = new Set();
+  function display(row, depth) {
+    const key = entityIdentityKey(row);
+    if (visible.has(key)) return;
+    visible.add(key);
+    entries.push({ row, key, depth, childCount: (children.get(key) || []).length });
+    if (!collapsedHierarchyKeys.has(key)) for (const child of children.get(key) || []) display(child, depth + 1);
+  }
+  for (const root of roots) display(root, 0);
+  for (const row of rows) if (cycleKeys.has(entityIdentityKey(row)) && !visible.has(entityIdentityKey(row))) display(row, 0);
+  return { entries, byKey, cycleKeys };
+}
+
+function renderEntityTable() {
+  const { entries, byKey, cycleKeys } = entityForest();
+  const note = $("#entity-hierarchy-note"), truncated = Boolean(data.coverage.entities_truncated);
+  const notes = [];
+  if (truncated) notes.push("The returned entity list is truncated at 500. Some parents or descendants may be outside this display.");
+  if (cycleKeys.size) notes.push("A cyclic parent link was present in the response. The affected loop was cut for display.");
+  if (!truncated && !cycleKeys.size) notes.push("Parent links use source, session and entity together. Missing parents and parents outside the current selection are identified below.");
+  note.textContent = notes.join(" ");
+  const values = entries.map(({ row, key, depth, childCount }) => {
+    const treeCell = node("div", null, "entity-tree-cell");
+    treeCell.style.paddingInlineStart = `${Math.min(depth, 7) * 14}px`;
+    if (childCount > 0) {
+      const collapsed = collapsedHierarchyKeys.has(key);
+      const toggle = node("button", collapsed ? "▸" : "▾", "hierarchy-toggle");
+      toggle.type = "button";
+      toggle.setAttribute("aria-expanded", String(!collapsed));
+      toggle.setAttribute("aria-label", `${collapsed ? "Expand" : "Collapse"} descendants of ${row.entity} · source ${row.source} · session ${row.session}`);
+      toggle.title = toggle.getAttribute("aria-label");
+      toggle.addEventListener("click", () => {
+        if (collapsedHierarchyKeys.has(key)) collapsedHierarchyKeys.delete(key);
+        else collapsedHierarchyKeys.add(key);
+        renderEntityTable();
+      });
+      treeCell.append(toggle);
+    } else {
+      treeCell.append(node("span", "", "hierarchy-toggle-placeholder"));
+    }
+
+    const name = node("button", (row.parent ? "↳ " : "") + row.entity, "entity-button");
+    name.addEventListener("click", () => inspect(row));
+    const title = node("div", null, "entity-tree-label");
+    title.append(name, node("small", `${row.entity_type} · ${row.project}${row.parent ? ` · parent ${row.parent}` : ""}`));
+    const parentKey = row.parent == null ? null : entityIdentityKey({ source: row.source, session: row.session, entity: row.parent });
+    let relation = "";
+    if (row.parent != null && parentKey !== key && !byKey.has(parentKey)) {
+      if (row.parent_observed === false) relation = `Parent ${row.parent} not observed in the available ledger.`;
+      else if (row.parent_observed === true && truncated) relation = `Parent ${row.parent} was observed but is outside this selection or the truncated display.`;
+      else if (row.parent_observed === true) relation = `Parent ${row.parent} was observed but is outside the current selection.`;
+      else relation = `Parent ${row.parent} is not shown in the current selection.`;
+    }
+    const warnings = [];
+    if (relation) warnings.push(relation);
+    if (cycleKeys.has(key)) warnings.push("Cyclic hierarchy link. Display is safely cut.");
+    if (warnings.length) title.append(node("small", warnings.join(" "), "hierarchy-qualification"));
+    treeCell.append(title);
+    const model = node("div", row.model); model.append(node("small", row.surface));
+    const lastEvidence = node("span", lastEvidenceCellText(row), "last-evidence-cell");
+    const rendered = [treeCell, state(row), model, number.format(row.metrics.total_tokens), cash(row.metrics.costs.estimated.amount), cash(row.metrics.costs.billed.amount), lastEvidence];
+    rendered.entityKey = key;
+    rendered.depth = depth;
+    return rendered;
+  });
+  table("#entity-table", ["Entity / hierarchy", "State", "Model / surface", "Tokens", "Estimated", "Billed", "Last evidence · UTC"], values);
+  $$("#entity-table tbody tr").forEach((row, index) => {
+    row.dataset.entityKey = values[index].entityKey;
+    row.dataset.depth = String(values[index].depth);
+  });
 }
 
 function inspect(row) {
@@ -939,13 +1074,7 @@ function render() {
   renderInsights();
   renderSourceCoverage();
   renderInputHealth();
-  table("#entity-table", ["Entity / hierarchy", "State", "Model / surface", "Tokens", "Estimated", "Billed", "Last evidence · UTC"], data.entities.map((row) => {
-    const name = node("button", (row.parent ? "↳ " : "") + row.entity, "entity-button");
-    name.addEventListener("click", () => inspect(row));
-    const title = node("div"); title.append(name, node("small", `${row.entity_type} · ${row.project}${row.parent ? ` · parent ${row.parent}${row.parent_observed ? "" : " (unobserved)"}` : ""}`));
-    const model = node("div", row.model); model.append(node("small", row.surface));
-    return [title, state(row), model, number.format(row.metrics.total_tokens), cash(row.metrics.costs.estimated.amount), cash(row.metrics.costs.billed.amount), row.status_at ? row.status_at.slice(11, 19) + (row.stale ? " · stale" : "") : "Not supplied"];
-  }));
+  renderEntityTable();
   renderUsage(); renderEvents();
   const info = $("#currency-info"); info.replaceChildren();
   info.append(node("p", `Display currency: ${data.currency}. ${data.fx ? `USD-based conversion as of ${data.fx.as_of}, provenance ${data.fx.provenance}. This is a display conversion, not an invoice exchange rate.` : "No conversion rates supplied. Amounts in other currencies stay unconverted."}`));
@@ -963,6 +1092,7 @@ async function refresh() {
     if (!response.ok) throw new Error(`Read failed (${response.status}). Check the filters and ledger limits.`);
     const value = await response.json();
     if (value.schema !== "monitoring.snapshot.v1") throw new Error("The Monitoring service returned an unsupported data format.");
+    if (data && value.identity !== data.identity) collapsedHierarchyKeys.clear();
     data = value; lastSuccess = Date.now(); snapshotReadUnavailable = false;
     $("#notice").hidden = data.source_status.state !== "unavailable";
     $("#notice").textContent = data.source_status.error || "";

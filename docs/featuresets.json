@@ -205,7 +205,7 @@
         "openlit/openlit",
         "langfuse/langfuse"
       ],
-      "decision": "Implemented metadata hierarchy, evidence aging, explicit multi-file health/coverage, private setup checks and read-only ingestion readiness against a disposable ledger copy. Scoped chronological entity-history pages preserve process identity and one ledger revision. Shared contextual navigation is adopted without runtime authority. Native usage still supplies no live worker lifecycle; process discovery and full native lifecycle adapters remain deferred.",
+      "decision": "Implemented metadata hierarchy, evidence aging, explicit multi-file health/coverage, private setup checks and read-only ingestion readiness against a disposable ledger copy. Scoped chronological entity-history pages preserve process identity and one ledger revision. Shared contextual navigation is adopted without runtime authority. Native usage still supplies no live worker lifecycle; process discovery and full native lifecycle adapters remain deferred. Optional runtime-owned normalized emission is qualified against one actual task-owned Claude review process, including running observations, heartbeats, terminal outcome and conversation-usage joining. Sessions now offers scoped parent-first hierarchy and local collapse. Broad native discovery remains unqualified.",
       "evidence": [
         "tests/browser/dashboard.spec.mjs",
         "tests/test_monitoring.py",
@@ -221,7 +221,12 @@
         "monitoring_ai/ledger_preview.py",
         "tests/test_readiness_journey.py",
         "tests/test_entity_events.py",
-        "tests/browser/entity-history.spec.mjs"
+        "tests/browser/entity-history.spec.mjs",
+        "monitoring_ai/producer.py",
+        "tests/test_producer.py",
+        "tests/browser/hierarchy.spec.mjs",
+        "tests/test_source_health_consistency.py",
+        "docs/runtime-producers.md"
       ]
     },
     {
