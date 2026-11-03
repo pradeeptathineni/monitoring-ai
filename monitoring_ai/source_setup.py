@@ -124,7 +124,7 @@ def check_selection(path):
         status, result = accepted_rows.get(status_id), accepted_rows.get(source.id)
         if status is None or result is None:
             continue
-        if (any(row["kind"] != "status" or row["surface"] != "claude-cli-stream" or
+        if (any(row["kind"] not in ("status", "tool") or row["surface"] != "claude-cli-stream" or
                 row["source"] != source.id or row["project"] != source.project for row in status) or
                 status and result and not {row["session"] for row in status} & {row["session"] for row in result}):
             by_id[status_id].update(state="invalid", error="Claude capture files do not share the selected alias and session.")

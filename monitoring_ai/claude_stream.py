@@ -8,7 +8,8 @@ from pathlib import Path
 from .adapters import reject_constant, safe_label, unique_keys
 from .claude_results import capture_result
 from .claude_rate_limits import claude_rate_limit_book
-from .events import label
+from .claude_tools import tool_category
+from .events import SCHEMA, label, validate
 from .insights import validate_quota_book
 from .metrics import now_iso
 from .producer import EventWriter, session_alias, status_event
@@ -67,6 +68,8 @@ def capture_stream(stream, output, *, source, project, clock=now_iso, forward=No
     quota_summary = "unavailable" if quota_output is not None else "not-requested"
     quota_windows = {}
     quota_rejected = 0
+    tool_uses = {}
+    tool_results = {}
     with EventWriter(output) as writer:
         try:
             for line in _lines(stream):
@@ -99,6 +102,12 @@ def capture_stream(stream, output, *, source, project, clock=now_iso, forward=No
                         surface="claude-cli-stream"))
                     started = dict(native=native, invocation=invocation, session=session,
                                    entity=entity, model=model, at=at)
+                elif row.get("type") in ("assistant", "user") and started is not None and ended is None:
+                    # CLI frames can repeat assistant messages. Keep only the
+                    # metadata needed to pair one request with one result.
+                    if row.get("session_id") == started["native"]:
+                        _observe_tools(row, started, tool_uses, tool_results,
+                                       writer, source, project, clock)
                 elif row.get("type") == "result":
                     if started is None or ended is not None or row.get("session_id") != started["native"]:
                         raise ValueError("Claude stream result has no matching invocation")
@@ -107,6 +116,7 @@ def capture_stream(stream, output, *, source, project, clock=now_iso, forward=No
                         raise ValueError("Claude stream result has no qualified outcome")
                     state = ("failed" if is_error else "completed" if row.get("subtype") == "success"
                              else "unknown")
+                    _flush_unknown_tools(tool_uses, tool_results, started, writer, source, project)
                     at = _after(started["at"], clock())
                     writer.write(status_event(
                         id=started["entity"] + "-1", source=source, project=project,
@@ -140,9 +150,11 @@ def capture_stream(stream, output, *, source, project, clock=now_iso, forward=No
                         quota_summary = "partial" if quota_windows else "failed"
         except (ValueError, OSError):
             if started is not None and ended is None:
+                _flush_unknown_tools(tool_uses, tool_results, started, writer, source, project)
                 _unknown(writer, source, project, started, clock())
             raise
         if started is not None and ended is None:
+            _flush_unknown_tools(tool_uses, tool_results, started, writer, source, project)
             _unknown(writer, source, project, started, clock())
             ended = "unknown"
         if quota_windows:
@@ -174,3 +186,63 @@ def _unknown(writer, source, project, started, at):
         parent=started["session"], entity_type="agent", state="unknown",
         timestamp=_after(started["at"], at), provider="anthropic",
         model=started["model"], surface="claude-cli-stream"))
+
+
+def _observe_tools(row, started, uses, results, writer, source, project, clock):
+    message = row.get("message")
+    if not isinstance(message, dict) or not isinstance(message.get("content"), list):
+        return
+    for block in message["content"]:
+        if not isinstance(block, dict):
+            continue
+        if row["type"] == "assistant" and block.get("type") == "tool_use":
+            call, name = block.get("id"), block.get("name")
+            if not all(isinstance(value, str) and 0 < len(value) <= 1000
+                       for value in (call, name)):
+                continue
+            model = safe_label(message.get("model"), started["model"])
+            prior = uses.get(call)
+            if prior is not None:
+                if prior[:2] != (name, model):
+                    raise ValueError("Conflicting Claude stream tool metadata")
+                continue
+            if len(uses) >= 50_000:
+                raise ValueError("Too many Claude stream tool calls")
+            uses[call] = (name, model, _after(started["at"], clock()))
+        elif row["type"] == "user" and block.get("type") == "tool_result":
+            call = block.get("tool_use_id")
+            if not isinstance(call, str) or call not in uses:
+                continue
+            outcome = ("error" if block.get("is_error") is True else
+                       "ok" if block.get("is_error") is False else "unknown")
+            if call in results:
+                if results[call] != outcome:
+                    raise ValueError("Conflicting Claude stream tool outcome")
+                continue
+            _write_tool(writer, started, source, project, call, uses[call],
+                        outcome, _after(uses[call][2], clock()))
+            results[call] = outcome
+
+
+def _flush_unknown_tools(uses, results, started, writer, source, project):
+    for call, use in uses.items():
+        if call not in results:
+            _write_tool(writer, started, source, project, call, use, "unknown", use[2])
+            results[call] = "unknown"
+
+
+def _write_tool(writer, started, source, project, call, use, outcome, at):
+    name, model, _ = use
+    category, server = tool_category(name)
+    event = dict(
+        schema=SCHEMA, id="tool-" + stable_id(source, started["native"],
+                                               started["invocation"], call),
+        source=source, project=project, session=started["session"],
+        entity=started["entity"], parent=started["session"], entity_type="agent",
+        timestamp=at, kind="tool", provider="anthropic", model=model,
+        surface="claude-cli-stream", tool=safe_label(name), tool_category=category,
+        outcome=outcome,
+    )
+    if server is not None:
+        event["tool_server"] = safe_label(server)
+    writer.write(validate(event))

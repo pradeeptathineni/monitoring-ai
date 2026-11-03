@@ -32,6 +32,8 @@ From `v0.8.29`, [Claude CLI stream capture](claude-cli-stream.md) projects one e
 
 From v0.8.34, `sources select-claude-stream` creates the matching two-input private manifest in one step. Existing selected files are parsed before publication to check aliases and observed session overlap. Missing outputs can be selected before capture and stay visibly unavailable until written. Quota windows remain a separate file configured with `--quota-file`. This convenience command does not change event identity, the read API or the Deep consumer contract.
 
+From v0.8.35, the same Claude CLI event file can include `tool` events when matching tool-use and tool-result blocks appear during the captured invocation. Repeated identical blocks yield one call. An unanswered request has `unknown` outcome at capture end, and an unmatched result yields no event. Tool events use local frame-receipt time and the invocation agent entity. No tool input, result body, path, duration, token count or cost is projected. Source selection accepts these events without changing the normalized schema or Deep read API. The path has fictional fixture validation but no actual tool-bearing CLI stream qualification yet.
+
 ## Read API
 
 The standalone server listens only on `127.0.0.1`, default port 5274. Host checking and no browser CORS prevent casual cross-origin access. This is a local boundary, not multi-user authentication. Host applications should proxy reads through their own server. Do not expose this service on a public interface or add it to a tunnel.

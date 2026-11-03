@@ -60,6 +60,60 @@ class ClaudeStreamTests(unittest.TestCase):
         self.assertEqual(result["terminal_state"], "unknown")
         self.assertEqual([row["state"] for row in self.rows()], ["running", "unknown"])
 
+    def test_tool_pairs_keep_only_name_category_and_outcome(self):
+        tool_use = {"type": "assistant", "session_id": INIT["session_id"],
+                    "message": {"model": "claude-example", "content": [
+                        {"type": "tool_use", "id": "private-call", "name": "Bash",
+                         "input": {"command": "private command text"}}]}}
+        tool_result = {"type": "user", "session_id": INIT["session_id"],
+                       "message": {"content": [
+                           {"type": "tool_result", "tool_use_id": "private-call",
+                            "is_error": False, "content": "private tool output"}]}}
+        times = iter(f"2026-11-03T09:00:{second:02d}.000Z" for second in range(10))
+        capture_stream(stream(INIT, tool_use, tool_use, tool_result, tool_result, SUCCESS),
+                       self.path, source="owned-cli", project="example",
+                       clock=lambda: next(times))
+        rows = self.rows()
+        self.assertEqual([row["kind"] for row in rows], ["status", "tool", "status"])
+        self.assertEqual(rows[1]["tool"], "Bash")
+        self.assertEqual(rows[1]["tool_category"], "shell")
+        self.assertEqual(rows[1]["outcome"], "ok")
+        self.assertEqual(rows[1]["entity"], rows[0]["entity"])
+        self.assertEqual(rows[1]["parent"], rows[0]["session"])
+        self.assertLess(rows[0]["timestamp"], rows[1]["timestamp"])
+        self.assertLess(rows[1]["timestamp"], rows[2]["timestamp"])
+        self.assertNotIn("private", self.path.read_text())
+        store = Store(Path(self.temp.name) / "tool-ledger.sqlite")
+        self.assertEqual(store.ingest(rows)["added"], 3)
+        self.assertEqual(store.ingest(rows)["added"], 0)
+
+    def test_unanswered_tool_request_remains_unknown(self):
+        tool_use = {"type": "assistant", "session_id": INIT["session_id"],
+                    "message": {"model": "claude-example", "content": [
+                        {"type": "tool_use", "id": "native-call", "name": "mcp__files__lookup",
+                         "input": {"path": "/private/example"}}]}}
+        times = iter(f"2026-11-03T09:00:{second:02d}.000Z" for second in range(10))
+        receipt = capture_stream(stream(INIT, tool_use), self.path,
+                                 source="owned-cli", project="example",
+                                 clock=lambda: next(times))
+        rows = self.rows()
+        self.assertEqual(receipt["terminal_state"], "unknown")
+        self.assertEqual([row["kind"] for row in rows], ["status", "tool", "status"])
+        self.assertEqual(rows[1]["outcome"], "unknown")
+        self.assertEqual(rows[1]["tool_category"], "mcp")
+        self.assertEqual(rows[1]["tool_server"], "files")
+        self.assertNotIn("/private/example", self.path.read_text())
+
+    def test_tool_result_without_explicit_error_flag_is_not_assumed_successful(self):
+        use = {"type": "assistant", "session_id": INIT["session_id"],
+               "message": {"content": [{"type": "tool_use", "id": "call", "name": "Read"}]}}
+        answer = {"type": "user", "session_id": INIT["session_id"],
+                  "message": {"content": [{"type": "tool_result", "tool_use_id": "call"}]}}
+        times = iter(f"2026-11-03T09:00:{second:02d}.000Z" for second in range(10))
+        capture_stream(stream(INIT, use, answer, SUCCESS), self.path,
+                       source="owned-cli", project="example", clock=lambda: next(times))
+        self.assertEqual(self.rows()[1]["outcome"], "unknown")
+
     def test_opt_in_result_frame_links_to_invocation_without_copying_content(self):
         result_file = Path(self.temp.name) / "result.jsonl"
         result = {**SUCCESS, "modelUsage": {"claude-example": {

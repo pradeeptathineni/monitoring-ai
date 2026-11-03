@@ -109,11 +109,20 @@ class SourceSetupTests(unittest.TestCase):
             "inputTokens": 7, "cacheReadInputTokens": 2,
             "cacheCreationInputTokens": 1, "outputTokens": 3,
             "costUSD": 0.04, "provider": "firstParty"}}}
-        capture_stream(stream(INIT, receipt), status, source="owned-cli", project="example",
+        use = {"type": "assistant", "session_id": INIT["session_id"],
+               "message": {"model": "claude-example", "content": [
+                   {"type": "tool_use", "id": "call-one", "name": "Read",
+                    "input": {"file_path": "/private/example"}}]}}
+        answer = {"type": "user", "session_id": INIT["session_id"],
+                  "message": {"content": [
+                      {"type": "tool_result", "tool_use_id": "call-one", "is_error": False,
+                       "content": "private file text"}]}}
+        capture_stream(stream(INIT, use, answer, receipt), status, source="owned-cli", project="example",
                        clock=lambda: "2026-11-03T09:00:00.000Z", result_output=result)
         checked = check_selection(self.manifest)
         self.assertTrue(checked["all_readable"])
-        self.assertEqual([row["summary"]["records"]["total"] for row in checked["checks"]], [2, 1])
+        self.assertEqual([row["summary"]["records"]["total"] for row in checked["checks"]], [3, 1])
+        self.assertEqual(checked["checks"][0]["summary"]["records"]["tool"], 1)
         self.assertNotIn(str(self.root), json.dumps(checked))
         self.assertEqual(stat.S_IMODE(self.manifest.stat().st_mode), 0o600)
 
