@@ -20,7 +20,7 @@ WEB = Path(__file__).with_name("web")
 
 class Observatory:
     def __init__(self, store, pricing, fx, loader=None, quota_loader=None, quota_book=None, source_observer=None,
-                 cached_usage_loader=None, codeburn_activity_loader=None, process_observer=None,
+                 cached_usage_loader=None, codeburn_activity_loader=None, session_cache_loader=None, process_observer=None,
                  token_threshold=None):
         if loader is not None and source_observer is not None:
             raise ValueError("Choose one input configuration")
@@ -38,6 +38,9 @@ class Observatory:
         self.codeburn_activity_loader = codeburn_activity_loader
         self.codeburn_activity = None
         self.codeburn_activity_status = dict(state="unread", last_success_at=None, error=None)
+        self.session_cache_loader = session_cache_loader
+        self.session_cache = None
+        self.session_cache_status = dict(state="unread", last_success_at=None, error=None)
         self.process_observer = process_observer
         if token_threshold is not None:
             from .token_threshold import validate_limit
@@ -66,6 +69,27 @@ class Observatory:
             value["codeburn_activity"] = None if self.codeburn_activity is None else dict(
                 self.codeburn_activity, read_status=status, retained=status["state"] != "following",
             )
+
+    def refresh_session_cache(self):
+        if self.session_cache_loader is None:
+            return
+        try:
+            book = self.session_cache_loader()
+            with self.lock:
+                self.session_cache = book
+                self.session_cache_status = dict(state="following", last_success_at=now_iso(), error=None)
+        except (ValueError, OSError):
+            with self.lock:
+                self.session_cache_status = dict(
+                    state="unavailable", last_success_at=self.session_cache_status["last_success_at"],
+                    error="Selected cache member unavailable. Last accepted turn metadata is retained.")
+
+    def _include_session_cache(self, value):
+        if self.session_cache_loader is not None:
+            status = dict(self.session_cache_status)
+            value["selected_cache_status"] = status
+            value["selected_cache_session"] = None if self.session_cache is None else dict(
+                self.session_cache, read_status=status, retained=status["state"] != "following")
 
     def refresh_cached_usage(self):
         if self.cached_usage_loader is None:
@@ -187,6 +211,7 @@ class Observatory:
             value.update(identity=self.identity, source_status=dict(self.source_status))
             self._include_cached_usage(value)
             self._include_codeburn_activity(value)
+            self._include_session_cache(value)
             self._include_responses(value)
             self._include_turns(value)
             if self.process_observer is not None:
@@ -206,6 +231,7 @@ class Observatory:
             value.update(identity=self.identity, source_status=dict(self.source_status))
             self._include_cached_usage(value)
             self._include_codeburn_activity(value)
+            self._include_session_cache(value)
             self._include_responses(value)
             self._include_turns(value)
             if self.process_observer is not None:
@@ -270,6 +296,8 @@ def handler(observatory):
                     )
                     if observatory.process_observer is not None:
                         capabilities["os_processes"] = "monitoring.os-processes.v1"
+                    if observatory.session_cache_loader is not None:
+                        capabilities["selected_cache_session"] = "monitoring.selected-cache-session.v1"
                     if observatory.token_threshold is not None:
                         capabilities["token_threshold"] = "monitoring.token-threshold.v1"
                     if ((observatory.source_observer is not None and
@@ -322,6 +350,8 @@ def handler(observatory):
                             value["cached_usage_status"] = dict(observatory.cached_usage_status)
                         if observatory.codeburn_activity_loader is not None:
                             value["codeburn_activity_status"] = dict(observatory.codeburn_activity_status)
+                        if observatory.session_cache_loader is not None:
+                            value["selected_cache_status"] = dict(observatory.session_cache_status)
                         if observatory.process_observer is not None:
                             value["os_process_status"] = observatory.process_observer.snapshot()["state"]
                     if inputs is not None:
@@ -382,6 +412,12 @@ def serve(observatory, port):
             if stop.wait(5):
                 break
 
+    def selected_cache():
+        while not stop.is_set():
+            observatory.refresh_session_cache()
+            if stop.wait(5):
+                break
+
     def processes():
         while not stop.is_set():
             observatory.process_observer.refresh()
@@ -404,6 +440,10 @@ def serve(observatory, port):
     if observatory.codeburn_activity_loader is not None:
         activity_worker = threading.Thread(target=codeburn_activity, daemon=True)
         activity_worker.start()
+    session_cache_worker = None
+    if observatory.session_cache_loader is not None:
+        session_cache_worker = threading.Thread(target=selected_cache, daemon=True)
+        session_cache_worker.start()
     process_worker = None
     if observatory.process_observer is not None:
         process_worker = threading.Thread(target=processes, daemon=True)
@@ -422,6 +462,8 @@ def serve(observatory, port):
             cache_worker.join(timeout=5)
         if activity_worker:
             activity_worker.join(timeout=5)
+        if session_cache_worker:
+            session_cache_worker.join(timeout=5)
         if process_worker:
             process_worker.join(timeout=5)
         if previous_term is not None:

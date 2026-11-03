@@ -51,6 +51,9 @@ def parser():
                                  help="Explicit CodeBurn v74 daily cache. Separate totals with unknown billing basis")
             command.add_argument("--codeburn-status", type=Path,
                                  help="Explicit existing CodeBurn menubar status output. Recent writes, not process liveness")
+            command.add_argument("--codeburn-session-cache", type=Path,
+                                 help="Optional CodeBurn v10 cache directory; requires --sources and --cache-source-id")
+            command.add_argument("--cache-source-id", help="Exact selected native source ID to inspect in the session cache")
             command.add_argument("--processes", action="store_true",
                                  help="Sample matching AI executable names from macOS; no arguments or session inference")
             command.add_argument("--process-interval", type=int,
@@ -109,6 +112,10 @@ def parser():
     preview.add_argument("--sources", type=Path, required=True)
     preview.add_argument("--db", type=Path, help="Explicit existing ledger to copy read-only. Omit for an empty base")
     preview.add_argument("--json", action="store_true")
+    inspect = actions.add_parser("inspect-cache", help="Inspect cached turns for one directly readable selected native file")
+    inspect.add_argument("--sources", type=Path, required=True)
+    inspect.add_argument("--id", required=True, help="Exact selected Claude or Codex source ID")
+    inspect.add_argument("--cache-dir", type=Path, required=True, help="Explicit CodeBurn v10 session-cache directory")
     return cli
 
 
@@ -180,6 +187,14 @@ def run(args):
         from .source_setup import add_selection, create_selection, check_selection
         from .sources import SourceManifestError
         try:
+            if args.source_action == "inspect-cache":
+                from .sources import load_sources
+                from .codeburn_sessions import inspect_selected_session
+                selected = [source for source in load_sources(args.sources) if source.id == args.id]
+                if len(selected) != 1:
+                    raise ValueError("Selected native source ID is unavailable")
+                print(json.dumps(inspect_selected_session(args.cache_dir, selected[0]), indent=2))
+                return
             if args.source_action == "capture-claude":
                 from .result_capture import capture_cli_result
                 capture_cli_result(args.file, args.output, captured_at=args.captured_at)
@@ -286,11 +301,22 @@ def run(args):
             raise ValueError("Choose --demo, --file or --sources")
         if args.sources and (args.format != "normalized" or args.source_id or args.project):
             raise ValueError("Source aliases and formats belong in the manifest")
+        if bool(args.codeburn_session_cache) != bool(args.cache_source_id) or (args.cache_source_id and not args.sources):
+            raise ValueError("Session cache inspection needs --sources, --codeburn-session-cache and --cache-source-id")
         observer = None
+        selected_sources = None
         if args.sources:
             from .sources import load_sources
             from .source_observer import SourceObserver
-            observer = SourceObserver(load_sources(args.sources))
+            selected_sources = load_sources(args.sources)
+            observer = SourceObserver(selected_sources)
+        session_cache_loader = None
+        if args.cache_source_id:
+            from .codeburn_sessions import inspect_selected_session
+            matching = [source for source in selected_sources if source.id == args.cache_source_id]
+            if len(matching) != 1 or matching[0].format not in ("claude", "codex"):
+                raise ValueError("Session cache inspection needs one selected native Claude or Codex source")
+            session_cache_loader = lambda: inspect_selected_session(args.codeburn_session_cache, matching[0])
         if args.demo:
             if store.read()[0]:
                 raise ValueError("Demo seeding requires an empty ledger")
@@ -322,6 +348,7 @@ def run(args):
                           source_observer=observer,
                           cached_usage_loader=cache_loader,
                           codeburn_activity_loader=activity_loader,
+                          session_cache_loader=session_cache_loader,
                           process_observer=process_observer,
                           token_threshold=args.token_threshold,
                           quota_book=demo_quotas() if args.demo and not args.quota_file and not args.codex_quota else None), args.port)

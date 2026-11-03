@@ -68,6 +68,10 @@ Each source batch commits atomically and independently. Replay remains idempoten
 
 Legacy `source_status.state` retains its `static`/`following`/`unavailable` vocabulary. A completed multi-input refresh is `following` only if all inputs succeeded. Otherwise it is `unavailable`, with additive `degraded: true` when some inputs succeeded. Per-input outcomes provide the more specific explanation. Snapshot, report and health responses derive aggregate source status from the same copied input inventory they include, so a recovered input does not leave the response with a stale unavailable summary. Polling success and instance identity never establish worker liveness. Event evidence age remains independent. Slow input reads do not hold the API's observation lock.
 
+## Selected cached session metadata
+
+The optional [selected CodeBurn session-cache view](codeburn-session-cache.md) adds `monitoring.selected-cache-session.v1` only when explicitly configured with one selected native source ID and a cache directory. Its `selected_cache_status` and nullable `selected_cache_session` are independent of the event ledger and daily cache. It reads only the exact matching member after direct native-file access and fingerprint checks. Native and cache timestamps are file-write evidence, not running work. Cached calls may overlap native normalized usage and are never added to event totals or costs. Older Deep consumers may ignore this optional field.
+
 ## Cached daily usage
 
 The optional [CodeBurn cached-usage view](codeburn-cache.md) uses its own `monitoring.cached-usage.v1` replacement contract. Its local-calendar daily totals never become events or advance the ledger revision. Snapshot/report event filters do not apply to that separate view. The supplied Deep reader remains unchanged and does not project this optional addition.

@@ -1211,6 +1211,37 @@ function renderCodexTurns() {
   ]));
 }
 
+function renderSelectedCache() {
+  const panel = $("#selected-cache-panel"), status = $("#selected-cache-status"), target = $("#selected-cache-table");
+  const book = data?.selected_cache_session?.schema === "monitoring.selected-cache-session.v1" ? data.selected_cache_session : null;
+  const readStatus = data?.selected_cache_status;
+  panel.hidden = !book && !readStatus;
+  if (panel.hidden) return;
+  status.replaceChildren(); target.replaceChildren();
+  if (!book) {
+    status.append(node("p", readStatus?.state === "unavailable" ? "Selected cache metadata is unavailable. Current activity is unknown." : "Waiting for selected cache metadata.", "confidence-note"));
+    return;
+  }
+  const selectedSource = $("#filters [name=source]")?.value || "";
+  const selectedProject = $("#filters [name=project]")?.value || "";
+  if ((selectedSource && selectedSource !== book.source) || (selectedProject && selectedProject !== book.project)) {
+    status.append(node("p", "The selected source or project filter excludes this cache view. Other event filters do not apply.", "confidence-note"));
+    return;
+  }
+  status.append(node("p", `${number.format(book.total_turns)} cached turns · ${number.format(book.total_calls)} cached calls for ${book.source}. Native file modified ${book.native_modified_at}; cache member modified ${book.cache_modified_at}. Neither time proves current activity.`, "confidence-note"));
+  if (readStatus?.state !== "following" || paused || snapshotReadUnavailable) status.append(node("p", "This view is retained; the current selected cache read is unavailable or paused.", "confidence-note"));
+  if (book.truncated) status.append(node("p", "Only the latest 100 cached turns are shown.", "confidence-note"));
+  if (!Array.isArray(book.turns) || !book.turns.length) {
+    status.append(node("p", "No turns are represented in this cache member. Source coverage remains unknown.", "empty"));
+    return;
+  }
+  table("#selected-cache-table", ["Turn", "Source timestamp · UTC", "Calls", "Models", "Input", "Output", "Cache read", "Cache write"], book.turns.map((row) => [
+    number.format(row.ordinal), row.at, number.format(row.calls),
+    (row.models || []).map((model) => `${model.id} (${number.format(model.calls)})`).join(", ") || "Unknown",
+    number.format(row.tokens.input), number.format(row.tokens.output), number.format(row.tokens.cache_read), number.format(row.tokens.cache_write),
+  ]));
+}
+
 function renderOsProcesses() {
   const panel = $("#os-process-panel"), status = $("#os-process-status"), target = $("#os-process-table");
   const sample = data?.os_processes?.schema === "monitoring.os-processes.v1" ? data.os_processes : null;
@@ -1450,6 +1481,7 @@ function render() {
   renderEntityTable();
   renderClaudeResponses();
   renderCodexTurns();
+  renderSelectedCache();
   renderOsProcesses();
   renderCodeburnActivity();
   renderUsage(); renderEvents();
@@ -1587,6 +1619,7 @@ setInterval(() => {
     renderInputHealth();
     renderClaudeResponses();
     renderCodexTurns();
+    renderSelectedCache();
     renderOsProcesses();
     renderCodeburnCache();
     renderCodeburnActivity();
