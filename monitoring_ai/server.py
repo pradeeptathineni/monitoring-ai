@@ -127,7 +127,7 @@ class Observatory:
             return
         try:
             result = self.store.ingest(self.loader(),
-                                       claude_timestamp_replay=getattr(self.loader, "replay_timestamp", False))
+                                       claude_corrections=getattr(self.loader, "correct_usage", False))
             if hasattr(self.loader, "commit"):
                 self.loader.commit()
             with self.lock:

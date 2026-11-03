@@ -128,8 +128,8 @@ def count(value):
     return value
 
 
-def claude(rows, source, project):
-    events = {}
+def claude(rows, source, project, *, versions=False):
+    events = {} if not versions else []
     for row in rows:
         message = row.get("message")
         if not isinstance(message, dict) or message.get("role") != "assistant":
@@ -149,6 +149,11 @@ def claude(rows, source, project):
             "cache_write": count(usage.get("cache_creation_input_tokens", 0)),
             "output": count(usage.get("output_tokens", 0)),
         }
+        if versions:
+            # The follower gives the ledger every source version in file order.
+            # It alone decides whether a newer record is replay or correction.
+            events.append(event)
+            continue
         # Repeated rows for one native message can carry later row timestamps even when usage is unchanged.
         previous = events.get(event["id"])
         if previous:
@@ -160,7 +165,7 @@ def claude(rows, source, project):
         events[event["id"]] = event
     from .claude_tools import claude_tool_events
 
-    return list(events.values()) + claude_tool_events(rows, source, project)
+    return (events if versions else list(events.values())) + claude_tool_events(rows, source, project)
 
 
 def codex(rows, source, project):

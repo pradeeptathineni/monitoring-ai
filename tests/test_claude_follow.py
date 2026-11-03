@@ -8,6 +8,7 @@ import tempfile
 import time
 import unittest
 from unittest.mock import patch
+from urllib.error import HTTPError
 from urllib.request import urlopen
 
 from monitoring_ai.claude_follow import ClaudeFollower
@@ -36,7 +37,7 @@ class ClaudeFollowTest(unittest.TestCase):
 
     def accept(self):
         rows = self.reader()
-        result = self.store.ingest(rows, claude_timestamp_replay=True)
+        result = self.store.ingest(rows, claude_corrections=True)
         self.reader.commit()
         return result
 
@@ -44,14 +45,14 @@ class ClaudeFollowTest(unittest.TestCase):
         first = assistant("one", "2026-11-02T20:00:00Z", 10)
         second = assistant("two", "2026-11-02T20:00:01Z", 20)
         self.path.write_text(first + second[:30])
-        self.assertEqual(self.accept(), {"added": 1, "replayed": 0})
+        self.assertEqual(self.accept(), {"added": 1, "replayed": 0, "corrected": 0})
         self.assertEqual(self.reader._offset, len(first.encode()))
         with patch("monitoring_ai.claude_follow.parse_jsonl") as parse:
-            self.assertEqual(self.accept(), {"added": 0, "replayed": 1})
+            self.assertEqual(self.accept(), {"added": 0, "replayed": 1, "corrected": 0})
             parse.assert_not_called()
         with self.path.open("a") as stream:
             stream.write(second[30:])
-        self.assertEqual(self.accept(), {"added": 1, "replayed": 1})
+        self.assertEqual(self.accept(), {"added": 1, "replayed": 1, "corrected": 0})
         revision, rows = self.store.read()
         self.assertEqual((revision, len(rows)), (2, 2))
         self.assertNotIn("private text", json.dumps(rows))
@@ -66,40 +67,77 @@ class ClaudeFollowTest(unittest.TestCase):
         replacement.write_text(assistant("one", "2026-11-02T20:00:03Z", 10)
                                + assistant("two", "2026-11-02T20:00:04Z", 20))
         replacement.replace(self.path)
-        self.assertEqual(self.accept(), {"added": 1, "replayed": 1})
+        self.assertEqual(self.accept(), {"added": 1, "replayed": 1, "corrected": 0})
         self.assertEqual(self.store.read()[0], 2)
         self.assertEqual(next(row for row in self.store.read()[1] if row["id"] == before["id"])["timestamp"],
                          before["timestamp"])
 
         # Same inode may be truncated and rewritten; an accepted event remains.
         self.path.write_text(assistant("two", "2026-11-02T20:00:09Z", 20))
-        self.assertEqual(self.accept(), {"added": 0, "replayed": 1})
+        self.assertEqual(self.accept(), {"added": 0, "replayed": 1, "corrected": 0})
         self.assertEqual(self.store.read()[0], 2)
 
         self.path.write_text(assistant("two", "2026-11-02T20:00:10Z", 21))
-        with self.assertRaises(ValueError):
-            self.accept()
-        self.reader.discard()
-        self.assertEqual(self.store.read()[0], 2)
+        self.assertEqual(self.accept(), {"added": 0, "replayed": 1, "corrected": 1})
+        self.assertEqual(self.store.read()[0], 3)
+        with self.store.connect() as db:
+            audit = db.execute("SELECT prior_payload,next_payload,ledger_revision FROM corrections").fetchall()
+        self.assertEqual(len(audit), 1)
+        self.assertEqual(json.loads(audit[0][0])["tokens"]["input"], 20)
+        self.assertEqual(json.loads(audit[0][1])["tokens"]["input"], 21)
+        self.assertEqual(audit[0][2], 3)
         # A normal immutable import gets no timestamp exception.
         with self.assertRaises(ValueError):
             self.store.ingest([dict(before, timestamp="2026-11-02T20:00:11Z")])
 
-    def test_changed_usage_rejects_atomically_and_cursor_retries_after_repair(self):
+    def test_changed_usage_corrects_once_and_ambiguous_version_rolls_back(self):
         first = assistant("one", "2026-11-02T20:00:00Z", 10)
         self.path.write_text(first)
         self.accept()
-        offset = self.reader._offset
         with self.path.open("a") as stream:
             stream.write(assistant("two", "2026-11-02T20:00:01Z", 20))
             stream.write(assistant("one", "2026-11-02T20:00:02Z", 11))
+        self.assertEqual(self.accept(), {"added": 1, "replayed": 2, "corrected": 1})
+        revision, rows = self.store.read()
+        self.assertEqual((revision, len(rows)), (3, 2))
+        self.assertEqual(next(row for row in rows if row["timestamp"] == "2026-11-02T20:00:00.000Z")
+                         ["tokens"]["input"], 11)
+        self.assertEqual(self.accept(), {"added": 0, "replayed": 3, "corrected": 0})
+        self.assertEqual(self.store.read()[0], 3)
+        offset = self.reader._offset
+        with self.path.open("a") as stream:
+            stream.write(assistant("three", "2026-11-02T20:00:03Z", 30))
+            stream.write(assistant("one", "2026-11-02T20:00:02Z", 12))
         with self.assertRaises(ValueError):
             self.accept()
         self.reader.discard()
         self.assertEqual(self.reader._offset, offset)
-        self.assertEqual(self.store.read()[0], 1)
-        self.path.write_text(first + assistant("two", "2026-11-02T20:00:01Z", 20))
-        self.assertEqual(self.accept(), {"added": 1, "replayed": 1})
+        self.assertEqual(self.store.read()[0], 3)
+        self.path.write_text(first + assistant("two", "2026-11-02T20:00:01Z", 20)
+                             + assistant("one", "2026-11-02T20:00:02Z", 11)
+                             + assistant("three", "2026-11-02T20:00:03Z", 30))
+        self.assertEqual(self.accept(), {"added": 1, "replayed": 3, "corrected": 0})
+        self.assertEqual(self.store.read()[0], 4)
+        restarted = ClaudeFollower(self.path, "chosen", "fictional-project")
+        replay = self.store.ingest(restarted(), claude_corrections=True)
+        restarted.commit()
+        self.assertEqual(replay, {"added": 0, "replayed": 4, "corrected": 0})
+        self.assertEqual(self.store.read()[0], 4)
+
+    def test_later_lower_token_count_revises_current_total_without_new_call(self):
+        self.path.write_text(assistant("one", "2026-11-02T20:00:00Z", 10))
+        self.accept()
+        with self.path.open("a") as stream:
+            stream.write(assistant("one", "2026-11-02T20:00:01Z", 7))
+        self.assertEqual(self.accept(), {"added": 0, "replayed": 2, "corrected": 1})
+        revision, rows = self.store.read()
+        self.assertEqual((revision, len(rows), rows[0]["tokens"]["input"]), (2, 1, 7))
+        with self.store.connect() as db:
+            before, after = db.execute(
+                "SELECT prior_payload,next_payload FROM corrections"
+            ).fetchone()
+        self.assertEqual((json.loads(before)["tokens"]["input"], json.loads(after)["tokens"]["input"]),
+                         (10, 7))
 
     def test_tool_pair_across_appends_stays_metadata_only(self):
         use = {"type": "assistant", "sessionId": "fictional-session", "timestamp": "2026-11-02T20:00:00Z",
@@ -164,11 +202,21 @@ class ClaudeFollowTest(unittest.TestCase):
             self.assertNotIn(str(self.root), json.dumps(moved))
             with self.path.open("a") as stream:
                 stream.write(assistant("one", "2026-11-02T20:00:10Z", 11))
+            corrected = until(lambda value: value["revision"] == 3)
+            self.assertEqual((corrected["summary"]["calls"], corrected["source_status"]["state"]),
+                             (2, "following"))
+            self.assertEqual(corrected["summary"]["total_tokens"], 33)
+            self.assertEqual(corrected["source_status"]["corrected"], 1)
+            with self.assertRaises(HTTPError) as outdated:
+                urlopen(origin + "/api/v1/events?expected_revision=2", timeout=3)
+            self.assertEqual(outdated.exception.code, 409)
+            with self.path.open("a") as stream:
+                stream.write(assistant("one", "2026-11-02T20:00:10Z", 12))
             failed = until(lambda value: value["source_status"]["state"] == "unavailable")
-            self.assertEqual((failed["revision"], failed["summary"]["calls"]), (2, 2))
-            self.path.write_text(original + second)
+            self.assertEqual((failed["revision"], failed["summary"]["calls"]), (3, 2))
+            self.path.write_text(original + second + assistant("one", "2026-11-02T20:00:10Z", 11))
             recovered = until(lambda value: value["source_status"]["state"] == "following")
-            self.assertEqual((recovered["revision"], recovered["summary"]["calls"]), (2, 2))
+            self.assertEqual((recovered["revision"], recovered["summary"]["calls"]), (3, 2))
             self.assertEqual(first["summary"]["calls"], 1)
         finally:
             process.terminate()

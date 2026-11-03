@@ -60,14 +60,14 @@ class SourceObserver:
             try:
                 rows = list(follower() if follower else source.load(live=True))
                 records_seen = len(rows)
-                summary = source_summary(source, rows, sampled_at=now_iso())
-                result = store.ingest(rows, claude_timestamp_replay=bool(follower),
+                if not follower:
+                    summary = source_summary(source, rows, sampled_at=now_iso())
+                result = store.ingest(rows, claude_corrections=bool(follower),
                                       accepted_rows=bool(follower))
                 if follower:
-                    # A rotated file may contain only a later row timestamp for
-                    # a previously accepted message. Coverage uses ledger time.
+                    # Versions of one message resolve to one current ledger row.
+                    # Coverage uses its original event time and corrected tokens.
                     summary = source_summary(source, result.pop("rows"), sampled_at=now_iso())
-                if follower:
                     follower.commit()
                 added, replayed = result["added"], result["replayed"]
             except Exception as exc:

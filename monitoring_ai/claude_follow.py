@@ -13,7 +13,7 @@ from .adapters import MAX_BYTES, claude, claude_row, parse_jsonl
 
 
 class ClaudeFollower:
-    replay_timestamp = True
+    correct_usage = True
 
     def __init__(self, path, source, project):
         if not source or not project:
@@ -65,7 +65,7 @@ class ClaudeFollower:
             rows = ([] if reset else self._rows) + parse_jsonl(chunk[:complete], shape=claude_row)
             if len(rows) > 50000:
                 raise ValueError("Source exceeds 50,000 records")
-            events = claude(rows, self.source, self.project)
+            events = claude(rows, self.source, self.project, versions=True)
             new_offset = offset + complete
             tail_hash = self._hash_tail(stream, new_offset)
             self._pending = (identity, new_offset, info.st_mtime_ns, tail_hash, rows, events)
