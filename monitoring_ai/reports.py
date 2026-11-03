@@ -113,6 +113,7 @@ def _tool_row(key, category, events):
         "category": category,
         "records": len(events),
         "errors": sum(event.get("outcome") == "error" for event in events),
+        "unknown_outcomes": sum(event.get("outcome") == "unknown" for event in events),
         "duration_records": len(durations),
         "total_duration_ms": sum(durations) if durations else None,
         "p50_ms": _percentile(durations, 50),
@@ -147,6 +148,7 @@ def _tool_groups(events):
         elif category == "agent":
             agents[name].append(event)
     error_count = sum(event.get("outcome") == "error" for event in tools)
+    unknown_count = sum(event.get("outcome") == "unknown" for event in tools)
 
     def plain(rows):
         return [_tool_row(key, category, grouped) for key, category, grouped in rows]
@@ -165,6 +167,7 @@ def _tool_groups(events):
     return {
         "records": len(tools),
         "errors": error_count,
+        "unknown_outcomes": unknown_count,
         "unclassified_records": len(categories.get("unclassified", [])),
         **{name: rows[:GROUP_LIMIT] for name, rows in grouped.items()},
         "truncated": truncated,

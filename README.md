@@ -4,7 +4,7 @@ Local monitoring for AI sessions, agents, workers, tokens and costs. Use it in y
 
 **Experimental alpha.** It observes explicitly supplied sources. Personal source compatibility, additional collectors and full-vision acceptance remain incomplete. [Version policy and v1.0.0 requirements](docs/release-readiness.md) keep maturity separate from version numbers.
 
-Current checked version: **v0.8.20**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
+Current checked version: **v0.8.21**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
 
 ![Monitoring AI dashboard with fictional sessions and costs](docs/observatory.png)
 
@@ -48,6 +48,7 @@ The producer appends usage and lifecycle evidence. The server imports complete l
 - [Entity history](docs/session-history.md) with chronological pages scoped to its source and session. Pages retain one ledger revision, with an explicit restart when history changes.
 - Opt-in [macOS process samples](docs/os-processes.md) with executable name, PID/parent PID, CPU, resident memory and start time. These remain separate from session and worker status.
 - Metadata-only Codex turn start/completion markers in Sessions when an explicitly selected Codex JSONL file supplies them. The markers and source-reported timing are separate from session lifecycle and OS process observations.
+- Completed Codex command, MCP and file-change item observations in Events and Report when the selected file supplies them. Commands, arguments, results and changed file paths are discarded; unknown outcomes stay unknown.
 
 ## Connect your data
 
@@ -74,6 +75,8 @@ python3 -m monitoring_ai serve --file /path/to/authorized-events.jsonl --db /tmp
 Two native transcript adapters are included. Only use files you own or are authorized to read. Select one explicit Claude Code JSONL file for [bounded live following](docs/claude-native.md), or a complete [Codex session JSONL file](docs/codex-native.md). There is no home-directory scan, credential reader, hook installation or account connection.
 
 When a selected Codex file contains `task_started` and `task_complete` markers, **Sessions** shows their paired or unpaired chronology and source-reported timing separately from ledger lifecycle. The panel does not claim a task succeeded, a session closed or a process remains running. A historical selected file supplied nine paired groups in a private local qualification; a fresh native Codex append remains unverified.
+
+When that file contains supported completed tool items, **Events** and **Report** show their categorized timestamps, counts, error evidence and available durations. A completed MCP call or file change without explicit failure has an unknown outcome; it is not counted as a verified success. A selected historical source yielded 213 tool observations in a private local check. These are historical item records, not live worker status or billed usage.
 
 ```sh
 python3 -m monitoring_ai import --file /path/to/authorized-session.jsonl \
@@ -147,7 +150,7 @@ For pricing, adapt [the fictional price book](examples/pricing.json) to your ver
 
 ### Understand connected coverage
 
-The dashboard separates **what an adapter can supply** from **what its latest accepted read actually contains**. Claude and Codex files reconstruct usage, with completed tool-pair metadata supported for Claude. Neither adapter supplies worker lifecycle. Normalized producers can supply explicit usage, status and tool observations, but a file with no status records does not provide lifecycle evidence merely because that format permits it.
+The dashboard separates **what an adapter can supply** from **what its latest accepted read actually contains**. Claude and Codex files reconstruct usage. Claude supplies metadata-only completed tool pairs; Codex supplies completed command, MCP and file-change items from supported selected files. Neither adapter supplies worker lifecycle. Normalized producers can supply explicit usage, status and tool observations, but a file with no status records does not provide lifecycle evidence merely because that format permits it.
 
 Coverage counts unique `(source, id)` observations within each input's latest accepted read. Raw read-attempt counts, replay counts and all-time ledger totals are different measures. Separate inputs can overlap, so their coverage counts are never summed into a claim of complete activity. Entity and session identities are observed metadata, not an operating-system process roster.
 

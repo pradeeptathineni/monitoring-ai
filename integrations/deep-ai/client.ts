@@ -297,7 +297,8 @@ function sourceCoverageInput(value: unknown, seen: Set<string>): value is Source
   }[value.format as "normalized" | "claude" | "claude-results" | "codex"];
   if (value.capabilities.usage !== expectedCapabilities.usage ||
       value.capabilities.lifecycle !== expectedCapabilities.lifecycle ||
-      value.capabilities.tools !== expectedCapabilities.tools) return false;
+      (value.format === "codex" ? !["unsupported", "completed-items"].includes(String(value.capabilities.tools)) :
+        value.capabilities.tools !== expectedCapabilities.tools)) return false;
 
   seen.add(value.id);
   const timestamps = [value.latest_event_at, value.latest_usage_at, value.latest_status_at, value.latest_tool_at];

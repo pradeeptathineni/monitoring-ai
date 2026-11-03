@@ -1,3 +1,3 @@
 """Observe explicitly supplied AI usage without controlling the agents."""
 
-__version__ = "0.8.20"
+__version__ = "0.8.21"

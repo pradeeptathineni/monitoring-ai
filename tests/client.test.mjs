@@ -207,6 +207,18 @@ test("claude-results is a distinct cumulative-result source format with closed c
   assert.throws(() => decodeSnapshot(unknownFormat), /incompatible/);
 });
 
+test("Codex completed-item tool coverage is additive and older owners remain readable", () => {
+  const value = structuredClone(snapshot);
+  value.source_coverage = sourceCoverage();
+  const codex = value.source_coverage.inputs[2];
+  codex.capabilities.tools = "completed-items";
+  assert.equal(decodeSnapshot(value).source_coverage.inputs[2].capabilities.tools, "completed-items");
+  codex.capabilities.tools = "unsupported";
+  assert.equal(decodeSnapshot(value).source_coverage.inputs[2].capabilities.tools, "unsupported");
+  codex.capabilities.tools = "producer-supplied";
+  assert.throws(() => decodeSnapshot(value), /incompatible/);
+});
+
 test("only an operator-supplied plain loopback origin is accepted", () => {
   for (const url of ["https://example.com", "http://localhost:5274", "http://127.0.0.1:5274/private", "http://secret@127.0.0.1:5274"]) {
     assert.throws(() => monitoringOwner(url), /loopback/);

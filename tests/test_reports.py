@@ -148,6 +148,7 @@ class ReportTests(unittest.TestCase):
         tools = self.report(rows)["tools"]
         self.assertEqual(tools["records"], 5)
         self.assertEqual(tools["errors"], 1)
+        self.assertEqual(tools["unknown_outcomes"], 0)
         self.assertEqual(tools["unclassified_records"], 1)
         self.assertEqual([row["key"] for row in tools["mcp_servers"]], ["docs-server"])
         self.assertEqual([row["key"] for row in tools["shell_commands"]], ["exec"])

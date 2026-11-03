@@ -116,7 +116,7 @@ def claude_row(row):
 
 
 def codex_row(row):
-    """Keep only cumulative usage and bounded turn-marker metadata."""
+    """Keep only cumulative usage, turn markers and completed tool metadata."""
     kind, payload = row.get("type"), row.get("payload")
     if not isinstance(payload, dict):
         return {}
@@ -140,6 +140,9 @@ def codex_row(row):
                 value = payload.get(key)
                 marker[key] = value if type(value) is int and 0 <= value <= 10**12 else None
         return {"type": kind, "timestamp": at, "payload": marker}
+    if kind == "event_msg" and payload.get("type") == "item_completed":
+        from .codex_tools import project_completed_item
+        return project_completed_item(row)
     if kind == "event_msg" and payload.get("type") == "token_count":
         info = payload.get("info")
         total = info.get("total_token_usage") if isinstance(info, dict) else None
@@ -233,6 +236,13 @@ def codex(rows, source, project):
             session = identity
         elif row.get("type") == "turn_context":
             model = payload.get("model") or "unknown"
+        elif row.get("type") == "event_msg" and payload.get("type") == "item_completed":
+            from .codex_tools import completed_tool_event
+            if not session:
+                raise ValueError("Codex tool item needs preceding session metadata")
+            event = completed_tool_event(row, source, project, session, model)
+            if event is not None:
+                events.append(event)
         elif row.get("type") == "event_msg" and payload.get("type") == "token_count":
             info = payload.get("info")
             total = info.get("total_token_usage") if isinstance(info, dict) else None

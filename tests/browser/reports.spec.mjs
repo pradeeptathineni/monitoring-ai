@@ -22,7 +22,7 @@ function reportFor(url) {
       models: { rows: [{ key: "demo-model", metrics: { calls: 2, total_tokens: 50, costs: { estimated: { amount: "0.01", events: 1 }, billed: { amount: "0.02", events: 1 } } }, observed_sessions: 1, estimated_session_count: 1, known_estimate_per_priced_session: "0.01", cache_read_share_percent: "25", timing: { records: 1, p50_ms: 800, p95_ms: 800, output_tokens_per_second: "12.5", output_rate_records: 1 } }], truncated: false },
       daily: { rows: [{ key: "2026-11-02", metrics: { calls: 2, total_tokens: 50, costs: { estimated: { amount: "0.01", events: 1 }, billed: { amount: "0.02", events: 1 } } }, observed_sessions: 1, estimated_session_count: 1, known_estimate_per_priced_session: "0.01", cache_read_share_percent: "25", timing: { records: 1, p50_ms: 800, p95_ms: 800, output_tokens_per_second: "12.5", output_rate_records: 1 } }], truncated: false },
     },
-    tools: { records: 1, errors: 0, unclassified_records: 0, categories: [{ key: "core", category: "core", records: 1, errors: 0, duration_records: 1, total_duration_ms: 20, p50_ms: 20, p95_ms: 20 }], names: [], mcp_servers: [], shell_commands: [], skills: [], agents: [], truncated: { categories: false } },
+    tools: { records: 1, errors: 0, unknown_outcomes: 1, unclassified_records: 0, categories: [{ key: "core", category: "core", records: 1, errors: 0, unknown_outcomes: 1, duration_records: 1, total_duration_ms: 20, p50_ms: 20, p95_ms: 20 }], names: [], mcp_servers: [], shell_commands: [], skills: [], agents: [], truncated: { categories: false } },
     comparisons: {
       records: { current: 2, previous: 1, change: 1, percent_change: "100" },
       tokens: { current: 50, previous: 25, change: 25, percent_change: "100" },
@@ -65,6 +65,7 @@ test("report loads only in its view, applies UTC presets and ignores stale respo
   await expect(page.locator("#report-models")).toContainText("rate records");
   await expect(page.locator("#report-daily")).toContainText("2026-11-02");
   await expect(page.locator("#report-tool-groups")).toContainText("core");
+  await expect(page.locator("#report-tools-summary")).toContainText("Outcome unknown");
   await expect(page.locator("#report-comparisons")).toContainText("incomplete cost coverage");
   await expect(page.locator("#report-coverage")).toContainText("missing usage duration records");
   await expect(page.locator("#report-coverage")).toContainText("Unavailable measures");

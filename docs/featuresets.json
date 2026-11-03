@@ -175,7 +175,7 @@
         "ccusage/ccusage",
         "Helicone/helicone"
       ],
-      "decision": "Implemented normalized and Claude/Codex usage imports plus metadata-only completed Claude tool pairs. Replay identities remain stable. Explicit multi-source configuration is implemented. More native tools and wider correction qualification remain planned. Completed Claude CLI result snapshots supply per-model cumulative deltas and client-side estimates without private transcript discovery. One task-owned Claude Code 2.1.308 native JSONL source now has actual first-message, resumed append, metadata projection, disjoint-token, API-revision and private dashboard proof. Repeated identical usage with different row timestamps keeps the first source event time. Changed accepted usage requires a strictly later native row and an audited ledger revision; ambiguous versions refuse. An in-memory Claude follower now reads complete appended lines incrementally, detects replacement/truncation, and keeps first accepted time for timestamp-only replay; actual owned-source idle/restart checks and fictional rotation/partial-line checks pass. A same-message later token version now atomically revises current usage with a private prior/next audit and a new ledger revision. Actual owned-source migration/replay produced no correction; changed-token behavior is qualified by fictional tests only. One historical Codex `0.162.0-alpha.17.2` JSONL source now has projected parser, cumulative-bucket, ledger replay, API and private dashboard proof. Separate per-response rows are excluded because their sum did not match final cumulative counts. An in-memory Codex follower now reads complete appended lines incrementally, with actual historical idle/restart parity and fictional append/replacement checks. Fresh Codex producer append, nonzero cache-write meaning, provider-driven segmented rotation, larger histories and general lifecycle remain unqualified.",
+      "decision": "Implemented normalized and Claude/Codex usage imports plus metadata-only completed Claude tool pairs. Replay identities remain stable. Explicit multi-source configuration is implemented. More native tools and wider correction qualification remain planned. Completed Claude CLI result snapshots supply per-model cumulative deltas and client-side estimates without private transcript discovery. One task-owned Claude Code 2.1.308 native JSONL source now has actual first-message, resumed append, metadata projection, disjoint-token, API-revision and private dashboard proof. Repeated identical usage with different row timestamps keeps the first source event time. Changed accepted usage requires a strictly later native row and an audited ledger revision; ambiguous versions refuse. An in-memory Claude follower now reads complete appended lines incrementally, detects replacement/truncation, and keeps first accepted time for timestamp-only replay; actual owned-source idle/restart checks and fictional rotation/partial-line checks pass. A same-message later token version now atomically revises current usage with a private prior/next audit and a new ledger revision. Actual owned-source migration/replay produced no correction; changed-token behavior is qualified by fictional tests only. One historical Codex `0.162.0-alpha.17.2` JSONL source now has projected parser, cumulative-bucket, ledger replay, API and private dashboard proof. Separate per-response rows are excluded because their sum did not match final cumulative counts. An in-memory Codex follower now reads complete appended lines incrementally, with actual historical idle/restart parity and fictional append/replacement checks. Fresh Codex producer append, nonzero cache-write meaning, provider-driven segmented rotation, larger histories and general lifecycle remain unqualified. A selected historical Codex 0.162.0-alpha.17.2 file now also supplies 213 completed command/MCP/file-change tool observations with hashed IDs and no raw content; 26 outcomes remain unknown. The native follower retains exact-prefix replay and adds zero on idle replay. This is historical item evidence, not current workers, general producer-version support or billed usage.",
       "evidence": [
         "tests/test_monitoring.py",
         "monitoring_ai/adapters.py",
@@ -195,7 +195,9 @@
         "docs/codex-native.md",
         "tests/test_codex_projection.py",
         "monitoring_ai/codex_follow.py",
-        "tests/test_codex_follow.py"
+        "tests/test_codex_follow.py",
+        "monitoring_ai/codex_tools.py",
+        "tests/test_codex_tools.py"
       ]
     },
     {
@@ -303,7 +305,7 @@
         "langfuse/langfuse",
         "Helicone/helicone"
       ],
-      "decision": "Implemented detailed UTC period reports and qualified comparisons, project/model/day breakdowns, timed-record statistics and categorized tool activity. The browser downloads the exact displayed aggregate report with observation time, filters, revision and coverage, while the existing CLI emits the same JSON schema; neither includes raw event rows. Unsupported workflow quality remains unavailable. Richer charts and configurable views remain planned. An explicitly selected CodeBurn v74 daily cache supplies separate replaceable local-calendar aggregates, with source-reported USD of unknown billing basis and independent read/file ages. No sessions or ledger events are invented. Separate daily provider/model views preserve absent attribution and legacy unknown counters without cross-filtering marginals or summing across days.",
+      "decision": "Implemented detailed UTC period reports and qualified comparisons, project/model/day breakdowns, timed-record statistics and categorized tool activity. The browser downloads the exact displayed aggregate report with observation time, filters, revision and coverage, while the existing CLI emits the same JSON schema; neither includes raw event rows. Unsupported workflow quality remains unavailable. Richer charts and configurable views remain planned. An explicitly selected CodeBurn v74 daily cache supplies separate replaceable local-calendar aggregates, with source-reported USD of unknown billing basis and independent read/file ages. No sessions or ledger events are invented. Separate daily provider/model views preserve absent attribution and legacy unknown counters without cross-filtering marginals or summing across days. The native Codex completed-item observations now enter Report tool categories, durations and explicit error/unknown outcome counts; the same selected historical source reached the private API and dashboard. No command or result text is retained.",
       "evidence": [
         "monitoring_ai/metrics.py",
         "tests/test_monitoring.py",
@@ -317,7 +319,9 @@
         "tests/test_cached_usage_observation.py",
         "tests/browser/cached-usage.spec.mjs",
         "monitoring_ai/codeburn_breakdowns.py",
-        "tests/test_codeburn_breakdowns.py"
+        "tests/test_codeburn_breakdowns.py",
+        "monitoring_ai/codex_tools.py",
+        "tests/test_codex_tools.py"
       ]
     },
     {

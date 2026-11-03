@@ -254,7 +254,7 @@ function renderReport() {
   setBreakdownNote("#report-daily-note", "Days", daily);
 
   const tools = report.tools || {}, toolSummary = $("#report-tools-summary"); toolSummary.replaceChildren();
-  for (const [label, key] of [["Tool records", "records"], ["Errors", "errors"], ["Unclassified", "unclassified_records"]]) toolSummary.append(confidenceRow(label, reportNumber(tools[key])));
+  for (const [label, key] of [["Tool records", "records"], ["Errors", "errors"], ["Outcome unknown", "unknown_outcomes"], ["Unclassified", "unclassified_records"]]) toolSummary.append(confidenceRow(label, reportNumber(tools[key])));
   const groups = $("#report-tool-groups"); groups.replaceChildren();
   const toolLabels = { categories: "Categories", names: "Tool names", mcp_servers: "MCP server aliases", shell_commands: "Shell tool / command aliases", skills: "Skill invocation aliases", agents: "Agent invocation aliases" };
   let foundGroup = false;
@@ -262,8 +262,8 @@ function renderReport() {
     const values = tools[key]; if (!Array.isArray(values) || !values.length) continue;
     foundGroup = true; groups.append(node("h3", label));
     const wrap = node("div", null, "table-wrap"); groups.append(wrap);
-    const headers = ["Name", "Category", "Records", "Errors", "Duration records", "Total duration", "P50", "P95"];
-    const rows = values.map((row) => [row.key ?? "Unknown", row.category ?? "Unknown", reportNumber(row.records), reportNumber(row.errors), reportNumber(row.duration_records), row.total_duration_ms == null ? "Unknown" : `${reportNumber(row.total_duration_ms)} ms`, row.p50_ms == null ? "Unknown" : `${reportNumber(row.p50_ms)} ms`, row.p95_ms == null ? "Unknown" : `${reportNumber(row.p95_ms)} ms`]);
+    const headers = ["Name", "Category", "Records", "Errors", "Outcome unknown", "Duration records", "Total duration", "P50", "P95"];
+    const rows = values.map((row) => [row.key ?? "Unknown", row.category ?? "Unknown", reportNumber(row.records), reportNumber(row.errors), reportNumber(row.unknown_outcomes), reportNumber(row.duration_records), row.total_duration_ms == null ? "Unknown" : `${reportNumber(row.total_duration_ms)} ms`, row.p50_ms == null ? "Unknown" : `${reportNumber(row.p50_ms)} ms`, row.p95_ms == null ? "Unknown" : `${reportNumber(row.p95_ms)} ms`]);
     const grid = node("table"), head = node("thead"), heading = node("tr"); headers.forEach((text) => heading.append(node("th", text))); head.append(heading); grid.append(head);
     const body = node("tbody"); rows.forEach((values) => { const tr = node("tr"); values.forEach((value) => tr.append(node("td", value))); body.append(tr); }); grid.append(body); wrap.append(grid);
   }
@@ -448,7 +448,7 @@ function capabilityText(kind, value) {
   const labels = {
     usage: { "normalized-deltas": "Normalized usage deltas", "native-reconstruction": "Native usage reconstruction", "cumulative-result-deltas": "Claude CLI cumulative-result deltas" },
     lifecycle: { "producer-supplied": "Producer-supplied lifecycle", unsupported: "Lifecycle unsupported" },
-    tools: { "producer-supplied": "Producer-supplied tool events", "completed-pairs": "Completed tool pairs", unsupported: "Tool events unsupported" },
+    tools: { "producer-supplied": "Producer-supplied tool events", "completed-pairs": "Completed tool pairs", "completed-items": "Completed tool items", unsupported: "Tool events unsupported" },
   };
   return labels[kind]?.[value] || `${kind}: ${value || "Unknown"}`;
 }
