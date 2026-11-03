@@ -109,3 +109,36 @@ def publish_private_json(output, value):
             raise ResultPublicationUncertain from None
     finally:
         Path(temporary).unlink(missing_ok=True)
+
+
+def replace_private_json(output, value):
+    """Atomically replace one existing owned 0600 JSON observation file."""
+    if not isinstance(value, dict):
+        raise ValueError("Private JSON output needs an object")
+    selected = Path(output).absolute()
+    target = selected.parent.resolve(strict=True) / selected.name
+    fd = os.open(target, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW |
+                 getattr(os, "O_CLOEXEC", 0))
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o600 or info.st_uid != os.getuid():
+            raise ValueError("Quota replacement needs an owned private file")
+    finally:
+        os.close(fd)
+    descriptor, temporary = tempfile.mkstemp(prefix=".monitoring-private-", suffix=".tmp", dir=target.parent)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            stream.write(json.dumps(value, separators=(",", ":"), allow_nan=False) + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, target)
+        try:
+            parent_fd = os.open(target.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+            try:
+                os.fsync(parent_fd)
+            finally:
+                os.close(parent_fd)
+        except OSError:
+            raise ResultPublicationUncertain from None
+    finally:
+        Path(temporary).unlink(missing_ok=True)

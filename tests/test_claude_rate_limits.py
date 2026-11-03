@@ -7,7 +7,7 @@ import stat
 import tempfile
 import unittest
 
-from monitoring_ai.claude_rate_limits import claude_rate_limit_book
+from monitoring_ai.claude_rate_limits import claude_rate_limit_book, merge_quota_books
 from monitoring_ai.claude_stream import capture_stream
 from monitoring_ai.quota_sources import quota_file
 
@@ -90,6 +90,79 @@ class ClaudeRateLimitTests(unittest.TestCase):
             self.assertEqual(snaps["five-hour"]["captured_at"], "2026-11-03T09:00:02.000Z")
             self.assertEqual(snaps["five-hour"]["windows"][0]["used_percent"], 31.0)
             self.assertEqual(snaps["seven-day"]["captured_at"], "2026-11-03T09:00:01.000Z")
+
+    def test_later_invocation_refreshes_same_selected_quota_file(self):
+        with tempfile.TemporaryDirectory() as root:
+            status, quota = Path(root) / "status.jsonl", Path(root) / "quota.json"
+            first_times = iter(("2026-11-03T09:00:00Z", "2026-11-03T09:00:01Z",
+                                "2026-11-03T09:00:02Z"))
+            capture_stream(stream(INIT, RATE, RESULT), status, source="cli", project="example",
+                           quota_output=quota, clock=lambda: next(first_times))
+            second_init = {**INIT, "session_id": "second-session", "uuid": "second-invocation"}
+            second_rate = {**RATE, "session_id": "second-session", "rate_limit_info": {
+                "status": "allowed", "unifiedWindows": {
+                    "five_hour": {"utilization": 0.31, "resetsAt": 1793690000}}}}
+            second_result = {**RESULT, "session_id": "second-session"}
+            second_times = iter(("2026-11-03T09:01:00Z", "2026-11-03T09:01:01Z",
+                                 "2026-11-03T09:01:02Z"))
+            receipt = capture_stream(stream(second_init, second_rate, second_result), status,
+                                     source="cli", project="example", quota_output=quota,
+                                     clock=lambda: next(second_times), append=True)
+            self.assertEqual(receipt["quota_observation"], "captured")
+            windows = {s["windows"][0]["id"]: s for s in quota_file(quota)["snapshots"]}
+            self.assertEqual(windows["five-hour"]["captured_at"], "2026-11-03T09:01:01.000Z")
+            self.assertEqual(windows["five-hour"]["windows"][0]["used_percent"], 31.0)
+            self.assertEqual(windows["seven-day"]["captured_at"], "2026-11-03T09:00:01.000Z")
+            self.assertEqual(stat.S_IMODE(quota.stat().st_mode), 0o600)
+            self.assertEqual(len(status.read_text().splitlines()), 4)
+
+    def test_quota_alias_mismatch_refuses_before_status_append(self):
+        with tempfile.TemporaryDirectory() as root:
+            status, quota = Path(root) / "status.jsonl", Path(root) / "quota.json"
+            capture_stream(stream(INIT, RATE, RESULT), status, source="cli", project="example",
+                           quota_output=quota)
+            original = status.read_bytes(), quota.read_bytes()
+            second_init = {**INIT, "session_id": "second-session", "uuid": "second-invocation"}
+            second_rate = {**RATE, "session_id": "second-session"}
+            second_result = {**RESULT, "session_id": "second-session"}
+            with self.assertRaisesRegex(ValueError, "does not match"):
+                capture_stream(stream(second_init, second_rate, second_result), status,
+                               source="cli", project="example", quota_output=quota,
+                               quota_account="different-account", append=True)
+            self.assertEqual((status.read_bytes(), quota.read_bytes()), original)
+
+    def test_later_invocation_without_rate_event_keeps_prior_quota_observation(self):
+        with tempfile.TemporaryDirectory() as root:
+            status, quota = Path(root) / "status.jsonl", Path(root) / "quota.json"
+            capture_stream(stream(INIT, RATE, RESULT), status, source="cli", project="example",
+                           quota_output=quota)
+            before = quota.read_bytes()
+            second_init = {**INIT, "session_id": "second-session", "uuid": "second-invocation"}
+            second_result = {**RESULT, "session_id": "second-session"}
+            receipt = capture_stream(stream(second_init, second_result), status,
+                                     source="cli", project="example", quota_output=quota,
+                                     append=True)
+            self.assertEqual(receipt["quota_observation"], "unavailable")
+            self.assertEqual(quota.read_bytes(), before)
+            self.assertEqual(len(status.read_text().splitlines()), 4)
+
+    def test_older_window_observation_does_not_replace_newer_value(self):
+        newer = claude_rate_limit_book(RATE, captured_at="2026-11-03T09:01:00Z",
+                                      source="cli", account="local")
+        older = claude_rate_limit_book({**RATE, "rate_limit_info": {
+            "status": "allowed", "unifiedWindows": {
+                "five_hour": {"utilization": 0.1, "resetsAt": 1793690000}}}},
+            captured_at="2026-11-03T09:00:00Z", source="cli", account="local")
+        merged = merge_quota_books(newer, older, source="cli", account="local")
+        windows = {s["windows"][0]["id"]: s for s in merged["snapshots"]}
+        self.assertEqual(windows["five-hour"]["windows"][0]["used_percent"], 27.0)
+        self.assertEqual(windows["seven-day"]["windows"][0]["used_percent"], 54.0)
+        conflicting = claude_rate_limit_book({**RATE, "rate_limit_info": {
+            "status": "allowed", "unifiedWindows": {
+                "five_hour": {"utilization": 0.1, "resetsAt": 1793690000}}}},
+            captured_at="2026-11-03T09:01:00Z", source="cli", account="local")
+        with self.assertRaisesRegex(ValueError, "Conflicting"):
+            merge_quota_books(newer, conflicting, source="cli", account="local")
 
     def test_documented_top_level_utilization_and_unknown_window(self):
         row = {"type": "rate_limit_event", "rate_limit_info": {

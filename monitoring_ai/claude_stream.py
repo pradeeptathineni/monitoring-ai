@@ -8,14 +8,15 @@ import stat
 
 from .adapters import parse_jsonl, read_source, reject_constant, safe_label, unique_keys
 from .claude_results import capture_result
-from .claude_rate_limits import claude_rate_limit_book
+from .claude_rate_limits import claude_rate_limit_book, merge_quota_books
 from .claude_tools import tool_category
 from .events import SCHEMA, label, validate
 from .insights import validate_quota_book
 from .metrics import now_iso
 from .producer import EventWriter, session_alias, status_event
 from .result_capture import (ResultPublicationUncertain, append_result_frame,
-                             publish_private_json, write_result_frame)
+                             publish_private_json, replace_private_json,
+                             write_result_frame)
 from .store import stable_id
 
 MAX_LINE = 4 * 1024 * 1024
@@ -60,7 +61,7 @@ def capture_stream(stream, output, *, source, project, clock=now_iso, forward=No
     if len(outputs) > 1:
         targets = [(name, _new_output_target(path, name)) for name, path in outputs]
         for index, (name, target) in enumerate(targets[1:], 1):
-            if (os.path.lexists(target) and not (append and name == "Result summary")) or any(
+            if (os.path.lexists(target) and not (append and name in ("Result summary", "Quota observation"))) or any(
                 target.parent == previous.parent and target.name.casefold() == previous.name.casefold()
                 for _, previous in targets[:index]
             ):
@@ -75,6 +76,15 @@ def capture_stream(stream, output, *, source, project, clock=now_iso, forward=No
         if existing_result and not existing_result.endswith(b"\n"):
             raise ValueError("Result append target has an incomplete final record")
         claude_results(parse_jsonl(existing_result, strict=True), source, project)
+    quota_existing = append and quota_output is not None and os.path.lexists(quota_output)
+    if quota_existing:
+        from .quota_sources import quota_file
+        info = Path(quota_output).lstat()
+        if not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o600 or info.st_uid != os.getuid():
+            raise ValueError("Quota append needs an owned private file")
+        merge_quota_books(quota_file(quota_output),
+                          {"schema": "monitoring.quotas.v1", "snapshots": []},
+                          source=source, account=quota_account)
     started = ended = None
     result_summary = "unavailable" if result_output is not None else "not-requested"
     quota_summary = "unavailable" if quota_output is not None else "not-requested"
@@ -186,7 +196,13 @@ def capture_stream(stream, output, *, source, project, clock=now_iso, forward=No
                     "schema": "monitoring.quotas.v1",
                     "snapshots": [quota_windows[key] for key in sorted(quota_windows)],
                 })
-                publish_private_json(quota_output, quota_book)
+                if quota_existing:
+                    from .quota_sources import quota_file
+                    quota_book = merge_quota_books(quota_file(quota_output), quota_book,
+                                                   source=source, account=quota_account)
+                    replace_private_json(quota_output, quota_book)
+                else:
+                    publish_private_json(quota_output, quota_book)
                 quota_summary = "partial" if quota_rejected else "captured"
             except ResultPublicationUncertain:
                 quota_summary = "uncertain"

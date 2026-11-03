@@ -1,6 +1,6 @@
 # Versions and release readiness
 
-Public versions use `vX.Y.Z`. Python package metadata and the read API use `X.Y.Z`, without the display prefix. The current checked version is `v0.8.36`. Its maturity is **Experimental alpha**. The number is not a fraction of the work completed.
+Public versions use `vX.Y.Z`. Python package metadata and the read API use `X.Y.Z`, without the display prefix. The current checked version is `v0.8.37`. Its maturity is **Experimental alpha**. The number is not a fraction of the work completed.
 
 Earlier source declarations such as `0.8.0a1` remain in published history. They have not been renamed or retagged. No Git tags existed when this policy was reconciled on 2026-11-03. Minor numbers will not advance for each development checkpoint. Version selection follows the scope of an accepted change, with compatibility and maturity stated separately.
 
@@ -31,3 +31,5 @@ At v0.8.34, one explicit selection command reduces the steps required to observe
 At v0.8.35, the explicit CLI capture can retain sanitized tool outcomes for a matching request/result pair in the selected event file. Fixture validation covers duplicate, answered and unanswered frames. The available real project-only capture contained no tool calls, so actual tool-bearing CLI compatibility is still a release gap. No generic worker roster, provider bill or separate process identity is inferred.
 
 At v0.8.36, one already selected private status/result pair can receive successive explicit CLI invocations through `--append`. Two earlier task-owned Claude Code 2.1.308 streams with distinct identities replayed into one pair and one terminal ledger, producing two sessions, four statuses and two estimated usage receipts at revision 6. Re-reading was idempotent. This proves repeatable historical capture and selected-file ingestion without a new model call; it does not prove a new live invocation, actual CLI tool calls, crash recovery across a partially written result, or automatic ongoing coverage.
+
+At v0.8.37, an explicit later `--append` capture can refresh the same selected private Claude CLI quota file while preserving each supported window's newest dated observation. Two earlier task-owned Claude Code 2.1.308 streams replayed sequentially into one status/result/quota set. The second reported both five-hour and seven-day windows, and the terminal read showed two separate windows alongside two sessions and six ledger events. This is historical real-source replay, not a fresh account poll, verified subscription balance, tool-bearing stream or spending authority.

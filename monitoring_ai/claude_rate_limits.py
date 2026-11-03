@@ -52,3 +52,23 @@ def claude_rate_limit_book(row, *, captured_at, source, account):
         "provenance": "claude-cli-rate-limit-" + info["status"],
         "windows": windows,
     }]})
+
+
+def merge_quota_books(existing, observed, *, source, account):
+    """Keep the latest dated observation for each selected CLI window."""
+    existing = validate_quota_book(existing)
+    observed = validate_quota_book(observed)
+    latest = {}
+    for book in (existing, observed):
+        for snapshot in book["snapshots"]:
+            if (snapshot["source"], snapshot["provider"], snapshot["account"]) != (source, "anthropic", account):
+                raise ValueError("Quota file does not match this Claude capture alias")
+            for window in snapshot["windows"]:
+                prior = latest.get(window["id"])
+                if prior is None or snapshot["captured_at"] > prior["captured_at"]:
+                    latest[window["id"]] = dict(snapshot, windows=[window])
+                elif snapshot["captured_at"] == prior["captured_at"] and (window != prior["windows"][0] or
+                                                                            snapshot["provenance"] != prior["provenance"]):
+                    raise ValueError("Conflicting Claude quota observation at the same time")
+    return validate_quota_book({"schema": "monitoring.quotas.v1",
+                                "snapshots": [latest[key] for key in sorted(latest)]})

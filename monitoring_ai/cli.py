@@ -135,7 +135,7 @@ def parser():
     live.add_argument("--result-output", type=Path,
                       help="New private sanitized cumulative result frame at completion; separate accounting source")
     live.add_argument("--quota-output", type=Path,
-                      help="New private CLI-reported rate-limit window snapshot; separate from usage and cost")
+                      help="Private CLI-reported quota file; --append refreshes an existing owned file")
     live.add_argument("--quota-account", default="local", help="Local alias for the CLI-reported quota observation")
     live.add_argument("--forward", action="store_true", help="Pass raw native stream to stdout for an explicit downstream consumer")
     check = actions.add_parser("check", help="Check selected file parsing and coverage without changing a ledger")
