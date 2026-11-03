@@ -69,7 +69,7 @@ test("report loads only in its view, applies UTC presets and ignores stale respo
   await expect(page.locator("#report-coverage")).toContainText("Unavailable measures");
   await expect(page.locator("#report-coverage")).toContainText("Truncated sections");
   await expect(page.locator("#report-coverage")).toContainText("Target currency USD; supplied USD-base conversion book dated 2026-10-15, provenance dated-fixture.");
-  await expect(page.locator("#report-coverage")).toContainText("makes no current-rate claim");
+  await expect(page.locator("#report-coverage")).toContainText("Rates are from that date.");
   await expect(page.locator("#report-coverage")).not.toContainText("{\"");
   await expect(page.locator("#report-content")).toContainText("time to first edit");
   await page.waitForTimeout(550);

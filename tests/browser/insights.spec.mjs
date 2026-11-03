@@ -47,7 +47,7 @@ test("older snapshots show insights as unavailable and source/session filters re
     await route.fulfill({ json: snapshot });
   });
   await page.goto("/");
-  await expect(page.locator("#freshness")).toContainText("Insights are unavailable");
+  await expect(page.locator("#freshness")).toContainText("Usage analysis is unavailable");
   await expect(page.locator('[name="source"] option').nth(1)).toBeAttached();
   await expect(page.locator('[name="session"] option').nth(1)).toBeAttached();
   const source = await page.locator('[name="source"] option').nth(1).getAttribute("value");

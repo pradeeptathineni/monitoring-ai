@@ -54,7 +54,7 @@ test("older owners show unknown coverage, keep analytics, and expose private-man
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ colorScheme: "light" });
   await page.goto("/");
-  await expect(page.locator("#source-coverage-status")).toContainText("Coverage inventory is unavailable in this snapshot");
+  await expect(page.locator("#source-coverage-status")).toContainText("Source coverage is unavailable in this snapshot");
   await expect(page.locator("#input-health-status")).toContainText("Partial input availability");
   await openSettings(page);
   await expect(page.locator("#coverage-setup")).toHaveJSProperty("open", true);
@@ -98,7 +98,7 @@ test("event age advances while paused without reads and retained inventory is qu
   unavailable = true;
   await page.locator("#pause").click();
   await expect(page.locator("#connection")).toContainText("Disconnected");
-  await expect(page.locator("#source-coverage-status")).toContainText("Monitoring owner is unavailable to this browser");
+  await expect(page.locator("#source-coverage-status")).toContainText("The Monitoring service is unavailable");
   await expect(page.locator("#source-coverage-status")).toContainText("retained from the last successful browser snapshot");
   await expect(coverage).toContainText("Following at last owner read · retained browser read");
   expect(requestCount).toBe(readsAtPause + 1);

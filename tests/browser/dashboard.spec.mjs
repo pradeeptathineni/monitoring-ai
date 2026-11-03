@@ -37,7 +37,7 @@ test("read loss preserves observations and removes current running claims", asyn
   await expect(page.locator("#entity-table .state.running")).toHaveCount(0);
   await expect(page.locator("#entity-table tbody tr")).toHaveCount(6);
   await page.locator('.nav[data-view="usage"]').click();
-  await expect(page.locator("#quotas")).toContainText("Monitoring owner unavailable");
+  await expect(page.locator("#quotas")).toContainText("The Monitoring service is unavailable");
 });
 
 test("narrow view remains usable and keyboard navigation works", async ({ page }) => {

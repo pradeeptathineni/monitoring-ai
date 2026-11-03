@@ -10,7 +10,7 @@ test("Settings owns appearance and source setup while analytics stay in their vi
   await expect(page.locator("#coverage-setup")).toBeHidden();
   await expect(page.locator("#filters")).toBeVisible();
   await expect(page.locator("#metrics")).toBeVisible();
-  await expect(page.locator('#overview [data-view="settings"]')).toContainText("Configure explicitly selected sources");
+  await expect(page.locator('#overview [data-view="settings"]')).toContainText("Set up sources");
   await expect(page.locator("#source-coverage-status")).toBeVisible();
 
   await page.locator('.mobile-nav button[data-view="settings"]').click();

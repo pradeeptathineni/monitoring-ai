@@ -5,7 +5,7 @@ const $$ = (selector) => [...document.querySelectorAll(selector)];
 const number = new Intl.NumberFormat("en-US");
 const compact = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
 const bucketNames = { input: "Input", cache_read: "Cache read", cache_write: "Cache write", output: "Output" };
-const insightUnavailable = "Insights are unavailable in this snapshot.";
+const insightUnavailable = "Usage analysis is unavailable in this snapshot.";
 const titles = { overview: ["Overview", "Status evidence and usage from the sources selected for this ledger."],
   sessions: ["Sessions, agents and workers", "Recorded entities and parent relationships. Status uses the latest supplied lifecycle event."],
   usage: ["Usage and costs", "Group token usage and costs by model, provider, surface, project or date."],
@@ -194,9 +194,9 @@ function renderReport() {
   const estimated = metrics.costs?.estimated?.amount ?? metrics.estimated_cost ?? null;
   const estimatedRecords = metrics.costs?.estimated?.events ?? summary.estimated_records;
   $("#report-metrics").replaceChildren(
-    metric("Usage records", reportCalls(metrics), "Recorded usage events; not calls across unconnected sources", "≋"),
-    metric("Observed tokens", metrics.total_tokens == null ? reportTokens(metrics) : compact.format(metrics.total_tokens), "Disjoint token buckets counted once", "◷"),
-    metric("Observed sessions", reportNumber(summary.observed_sessions ?? metrics.observed_sessions ?? summary.sessions), "Observed session identities; source coverage may be limited", "⌘"),
+    metric("Usage records", reportCalls(metrics), "Recorded usage events. Does not count calls from unconnected sources.", "≋"),
+    metric("Observed tokens", metrics.total_tokens == null ? reportTokens(metrics) : compact.format(metrics.total_tokens), "Input, cache and output tokens counted once", "◷"),
+    metric("Observed sessions", reportNumber(summary.observed_sessions ?? metrics.observed_sessions ?? summary.sessions), "Recorded session identities. Source coverage may be limited.", "⌘"),
     metric("Known estimated cost", reportCurrency(estimated, currency), `${estimatedRecords == null ? "Coverage unknown" : `${reportNumber(estimatedRecords)} priced records`} · not a complete bill`, "≈"),
   );
   const measures = $("#report-session-measures"); measures.replaceChildren();
@@ -245,7 +245,7 @@ function renderReport() {
   const coverage = report.coverage || {}, coverageRoot = $("#report-coverage"); coverageRoot.replaceChildren();
   const fx = report.fx;
   const fxSummary = fx
-    ? `Target currency ${currency}; supplied ${fx.base || "USD"}-base conversion book dated ${fx.as_of || "date unknown"}, provenance ${fx.provenance || "unknown"}. This dated display conversion makes no current-rate claim.`
+    ? `Target currency ${currency}; supplied ${fx.base || "USD"}-base conversion book dated ${fx.as_of || "date unknown"}, provenance ${fx.provenance || "unknown"}. Rates are from that date.`
     : `Target currency ${currency}; no conversion book supplied. Amounts requiring conversion remain excluded from converted totals or unknown. No current-rate claim is made.`;
   coverageRoot.append(confidenceRow("Currency and FX provenance", fxSummary));
   const entries = Object.entries(coverage);
@@ -437,7 +437,7 @@ function renderSourceCoverage() {
     setup.open = !valid;
   }
   if (!valid) {
-    status.textContent = "Coverage inventory is unavailable in this snapshot. Existing analytics remain available; source coverage is not known.";
+    status.textContent = "Source coverage is unavailable in this snapshot. Existing analysis remains available.";
     root.append(node("p", "This inventory requires the newer source-coverage contract. Setup guidance is available in Settings.", "empty"));
     return;
   }
@@ -449,8 +449,8 @@ function renderSourceCoverage() {
   const ownerQualification = paused
     ? ` Browser refresh is paused; this inventory is retained from the last successful browser snapshot received ${inputTimestamp(lastSuccess ? new Date(lastSuccess).toISOString() : null)}.`
     : snapshotReadUnavailable
-      ? ` Monitoring owner is unavailable to this browser; this inventory is retained from the last successful browser snapshot received ${inputTimestamp(lastSuccess ? new Date(lastSuccess).toISOString() : null)}.`
-      : " This describes the latest owner snapshot, not live worker liveness.";
+      ? ` The Monitoring service is unavailable. This inventory is retained from the last successful browser snapshot received ${inputTimestamp(lastSuccess ? new Date(lastSuccess).toISOString() : null)}.`
+      : " This describes the latest service response. It does not show whether workers are running.";
   status.textContent = `Global inventory · latest accepted input reads · ${inputCount(inputs.length)} inputs · ${unavailable} unavailable · ${unread} unread · owner snapshot observed ${inputTimestamp(coverage.observed_at)}.${ownerQualification} Coverage is incomplete across unconnected sources. Counts below may overlap and are not summed as total activity.`;
   status.classList.toggle("partial", partial);
   if (!inputs.length) { root.append(node("p", "No accepted input reads are listed in this coverage snapshot.", "empty")); return; }
@@ -498,7 +498,7 @@ function renderInputHealth() {
   root.replaceChildren(); status.classList.remove("partial");
   if (data?.source_coverage?.schema === "monitoring.source-coverage.v1") return;
   if (inventory?.schema !== "monitoring.inputs.v1") {
-    status.textContent = "Input inventory is unavailable in this snapshot. Explicit event history remains available.";
+    status.textContent = "The input list is unavailable in this snapshot. Recorded event history remains available.";
     root.append(node("p", "Connect an explicitly selected input to see read health here.", "empty"));
     return;
   }
@@ -516,8 +516,8 @@ function renderInputHealth() {
   const ownerQualification = paused
     ? ` Browser refresh is paused; this is retained from the last successful browser snapshot received ${inputTimestamp(lastSuccess ? new Date(lastSuccess).toISOString() : null)}.`
     : snapshotReadUnavailable
-      ? ` Monitoring owner is unavailable to this browser; this inventory is retained from the last successful browser snapshot received ${inputTimestamp(lastSuccess ? new Date(lastSuccess).toISOString() : null)}.`
-      : " This describes the latest owner snapshot, not live worker liveness.";
+      ? ` The Monitoring service is unavailable. This inventory is retained from the last successful browser snapshot received ${inputTimestamp(lastSuccess ? new Date(lastSuccess).toISOString() : null)}.`
+      : " This describes the latest service response. It does not show whether workers are running.";
   status.textContent = partial
     ? `Partial input availability · ${inputCount(healthy)} following · ${inputCount(unavailable)} unavailable · ${inputCount(unread)} unread. Following means at last owner read. Failed reads retain previously accepted event history. Owner snapshot observed ${inputTimestamp(data.observed_at)}.${ownerQualification}`
     : `${inputCount(healthy)} configured inputs following at last owner read. Owner snapshot observed ${inputTimestamp(data.observed_at)}.${ownerQualification}`;
@@ -945,7 +945,7 @@ async function refresh() {
     const response = await fetch(`/api/v1/snapshot?${query()}`, { signal: controller.signal, cache: "no-store" });
     if (!response.ok) throw new Error(`Read failed (${response.status}). Check the filters and ledger limits.`);
     const value = await response.json();
-    if (value.schema !== "monitoring.snapshot.v1") throw new Error("The monitoring owner returned an incompatible schema.");
+    if (value.schema !== "monitoring.snapshot.v1") throw new Error("The Monitoring service returned an unsupported data format.");
     data = value; lastSuccess = Date.now(); snapshotReadUnavailable = false;
     $("#notice").hidden = data.source_status.state !== "unavailable";
     $("#notice").textContent = data.source_status.error || "";
@@ -961,7 +961,7 @@ async function refresh() {
     if (data) {
       // A failed browser read must not leave a running badge looking current
       for (const row of data.entities) if (!["completed", "failed", "cancelled"].includes(row.state)) { row.state = "unknown"; row.stale = true; }
-      retainInsights("Monitoring owner unavailable; showing retained dated quota observations.");
+      retainInsights("The Monitoring service is unavailable. Showing previously recorded quota observations.");
       data.summary.active = 0; data.summary.attention = 0; render();
     }
   } finally { clearTimeout(timer); busy = false; }
@@ -995,7 +995,7 @@ $("#pause").addEventListener("click", () => {
       for (const row of data.entities) if (!["completed", "failed", "cancelled"].includes(row.state)) { row.state = "unknown"; row.stale = true; }
       data.summary.active = 0; data.summary.attention = 0;
     }
-    retainInsights("Dashboard refresh paused; showing retained dated quota observations.");
+    retainInsights("Dashboard refresh is paused. Showing previously recorded quota observations.");
     if (view === "report") {
       const last = reportData ? ` Last successful report observed at ${reportData.observed_at || "unknown time"} remains visible and may not match current filters.` : " No report observations have loaded yet.";
       $("#report-status").textContent = `Report refresh is paused.${last}`;
@@ -1034,7 +1034,7 @@ refresh();
 setInterval(() => {
   if (data) updateLifecycleEvidenceAges();
   if (paused && data) {
-    retainInsights("Dashboard refresh paused; showing retained dated quota observations.");
+    retainInsights("Dashboard refresh is paused. Showing previously recorded quota observations.");
     renderInsights();
     renderSourceCoverage();
     renderInputHealth();

@@ -34,7 +34,7 @@ test("older snapshots without input inventory stay usable", async ({ page }) => 
   delete snapshot.inputs;
   await page.route("**/api/v1/snapshot?**", (route) => route.fulfill({ json: snapshot }));
   await page.goto("/");
-  await expect(page.locator("#input-health-status")).toContainText("Input inventory is unavailable in this snapshot");
+  await expect(page.locator("#input-health-status")).toContainText("The input list is unavailable in this snapshot");
   await expect(page.locator("#input-health")).toContainText("Connect an explicitly selected input");
   await expect(page.locator("#metrics .metric")).toHaveCount(4);
 });

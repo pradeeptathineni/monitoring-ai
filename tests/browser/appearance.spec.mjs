@@ -86,7 +86,7 @@ test("blocked storage keeps local changes active and explains the limit", async 
   await openAppearance(page);
   await page.selectOption("#appearance-preset", "slate-dark");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "slate-dark");
-  await expect(page.locator("#appearance-status")).toContainText("active only for this page");
+  await expect(page.locator("#appearance-status")).toContainText("applies only to this page");
 });
 
 test("a throwing localStorage getter falls back to a visible page-only choice", async ({ page }) => {
@@ -99,14 +99,14 @@ test("a throwing localStorage getter falls back to a visible page-only choice", 
   await expect(page.locator("#appearance-status")).toContainText("Browser storage is unavailable");
   await page.selectOption("#appearance-preset", "forest-light");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "forest-light");
-  await expect(page.locator("#appearance-status")).toContainText("active only for this page");
+  await expect(page.locator("#appearance-status")).toContainText("applies only to this page");
 });
 
 test("appearance syncs across tabs, reset restores system mode, and mobile content stays usable", async ({ page, context }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ colorScheme: "light" });
   await page.goto("/");
-  await expect(page.locator("#confidence")).toBeVisible();
+  await expect(page.locator("#confidence")).toContainText("Estimated records");
   const confidenceBefore = await page.locator("#confidence").evaluate((element) => element.textContent);
   const healthBefore = await page.locator("#input-health-status").evaluate((element) => element.textContent);
   await openAppearance(page);

@@ -1,5 +1,19 @@
 import { test, expect } from "@playwright/test";
 
+test("lifecycle evidence ages stay inside chronology columns", async ({ page }) => {
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto("/");
+    await expect(page.locator("#timeline .state-evidence-age").first()).toBeAttached();
+    const contained = await page.locator("#timeline .timeline-row").evaluateAll((rows) => rows.every((row) => {
+      const bounds = row.getBoundingClientRect();
+      const age = row.querySelector(".state-evidence-age").getBoundingClientRect();
+      return age.left >= bounds.left && age.right <= bounds.right + 1;
+    }));
+    expect(contained).toBe(true);
+  }
+});
+
 async function prepare(page, mutate = () => {}) {
   const response = await page.request.get("/api/v1/snapshot");
   const snapshot = await response.json();

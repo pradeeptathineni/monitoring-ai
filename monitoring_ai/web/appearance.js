@@ -7,7 +7,7 @@ import {
 } from "./theme/index.js";
 
 const STORAGE_KEY = "monitoring-ai.appearance.v1";
-const STORAGE_BLOCKED = "Browser storage is unavailable; this appearance is active only for this page.";
+const STORAGE_BLOCKED = "Browser storage is unavailable. This appearance applies only to this page.";
 const root = document.documentElement;
 const host = document.getElementById("appearance-controls");
 const darkQuery = window.matchMedia?.("(prefers-color-scheme: dark)") || { matches: false };
@@ -37,7 +37,7 @@ function readPreference() {
   catch (error) {
     return {
       preference: defaultPreference,
-      note: `Saved appearance is invalid (${error.message}). Using the default; the saved value remains unchanged until you choose or reset an appearance.`,
+      note: `Saved appearance is invalid (${error.message}). Using the default. The saved value remains unchanged until you choose or reset an appearance.`,
     };
   }
 }
@@ -64,7 +64,7 @@ function initializeControls() {
   wrapper.append(row);
 
   const fieldset = el("fieldset", undefined, "appearance-overrides");
-  fieldset.append(el("legend", "Color and density overrides"));
+  fieldset.append(el("legend", "Custom colors and spacing"));
   const colors = el("div", undefined, "appearance-color-grid");
   const colorInputs = {};
   const dirtyOverrides = new Set();
@@ -90,7 +90,7 @@ function initializeControls() {
   fieldset.append(optionRow);
 
   const actions = el("div", undefined, "appearance-actions");
-  const apply = el("button", "Apply overrides", "appearance-apply"); apply.id = "appearance-apply-overrides"; apply.type = "button";
+  const apply = el("button", "Apply changes", "appearance-apply"); apply.id = "appearance-apply-overrides"; apply.type = "button";
   const reset = el("button", "Reset appearance"); reset.id = "appearance-reset"; reset.type = "button";
   actions.append(apply, reset); fieldset.append(actions); wrapper.append(fieldset);
 
@@ -122,7 +122,7 @@ function initializeControls() {
     const storage = safeStorage();
     if (!storage) { setStatus(STORAGE_BLOCKED); return; }
     try { storage.setItem(STORAGE_KEY, JSON.stringify(current)); setStatus(""); }
-    catch { setStatus("Could not save appearance; this choice is active only for this page."); }
+    catch { setStatus("Could not save appearance. This choice applies only to this page."); }
   }
   function reject(error) {
     setStatus(`That appearance cannot be applied: ${error.message}. The current theme remains active.`);
@@ -139,7 +139,7 @@ function initializeControls() {
   });
   apply.addEventListener("click", () => {
     const overrides = { ...current.overrides };
-    if (dirtyOverrides.size === 0) { setStatus("No appearance overrides have changed."); return; }
+    if (dirtyOverrides.size === 0) { setStatus("No appearance changes to apply."); return; }
     for (const key of dirtyOverrides) overrides[key] = key === "radius" ? Number(radius.value) : key === "density" ? density.value : colorInputs[key].value;
     try { current = parsePreference({ ...current, overrides }); }
     catch (error) { reject(error); return; }
@@ -158,7 +158,7 @@ function initializeControls() {
     if (current.mode !== "system") return;
     const hasDraft = dirtyOverrides.size > 0;
     applyTheme(!hasDraft);
-    if (hasDraft) setStatus("System colors changed; un-applied override edits remain in the controls and will be checked against both system palettes when applied.");
+    if (hasDraft) setStatus("System colors changed. Your unsaved edits remain in the controls. Applying them checks both system palettes.");
   };
   if (darkQuery.addEventListener) darkQuery.addEventListener("change", onSystemChange);
   else darkQuery.addListener?.(onSystemChange);
@@ -169,7 +169,7 @@ function initializeControls() {
       current = defaultPreference; dirtyOverrides.clear(); applyTheme(); setStatus("Another tab reset the appearance."); return;
     }
     try { current = parsePreference(event.newValue); dirtyOverrides.clear(); applyTheme(); setStatus(""); }
-    catch (error) { setStatus(`Another tab saved an invalid appearance (${error.message}); the current theme remains active.`); }
+    catch (error) { setStatus(`Another tab saved an invalid appearance (${error.message}). The current theme stays active.`); }
   });
 
   applyTheme();
