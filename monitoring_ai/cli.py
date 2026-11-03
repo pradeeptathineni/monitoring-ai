@@ -208,6 +208,28 @@ def terminal(value):
     return "\n".join(lines)
 
 
+def watch_changes(previous, current):
+    """Describe only ledger rows newly visible in this terminal's bounded view."""
+    if previous is None or current["revision"] < previous["revision"]:
+        return [], f"Watching ledger from revision {current['revision']}; earlier records are retained history."
+    if current["revision"] == previous["revision"]:
+        return [], "No new ledger revision observed."
+    earlier = {(row["source"], row["id"]): row for row in previous["events"]}
+    visible = []
+    for row in current["events"]:
+        prior = earlier.get((row["source"], row["id"]))
+        if prior == row:
+            continue
+        detail = (f"{sum(row['tokens'].values()):,} recorded tokens" if row["kind"] == "usage"
+                  else f"state {row['state']}" if row["kind"] == "status"
+                  else f"tool {row['tool']} · {row['outcome']}")
+        visible.append(f"  {'Revised' if prior else 'Added'} {row['kind']} · {row['source']} / {row['session']} · {detail}\n"
+                       f"    Source {row['timestamp']} · observed {current['observed_at']}")
+    if not visible:
+        return [], "Ledger revision advanced, but no changed row is visible in the latest 100 matching records."
+    return visible, f"{len(visible)} changed record{'s' if len(visible) != 1 else ''} visible in the latest snapshot."
+
+
 def quota_loader(args):
     if args.quota_file:
         return lambda: quota_file(args.quota_file)
@@ -474,6 +496,8 @@ def run(args):
         quota_read = quota_loader(args)
         book, last_quota_read = None, float("-inf")
         quota_error = False
+        prior_watch = None
+        recent_changes = []
         while True:
             if source_observer is not None:
                 inputs = source_observer.refresh(store)
@@ -504,8 +528,16 @@ def run(args):
                     pricing=pricing, fx=fx, now=value["observed_at"])
             value["insights"]["quotas"]["read_status"] = dict(state="unavailable" if quota_error else "following" if quota_read else "unconfigured")
             if args.watch:
+                changes, change_note = watch_changes(prior_watch, value)
+                recent_changes = (changes + recent_changes)[:5]
+                prior_watch = {"revision": value["revision"], "events": value["events"]}
                 print("\033[2J\033[H", end="")
             print(json.dumps(value, indent=2) if args.json else terminal(value), flush=True)
+            if args.watch:
+                print("\nLedger changes in this terminal · latest five visible observations")
+                print(change_note)
+                print("\n".join(recent_changes) if recent_changes else "No changes observed after this terminal started watching.")
+                print("Source times can predate observation. The latest-100 comparison can miss intermediate rows; a new record does not prove a running worker.", flush=True)
             if quota_error and not args.json:
                 print("Quota read unavailable; retained dated observations may be stale.", flush=True)
             if not args.watch:

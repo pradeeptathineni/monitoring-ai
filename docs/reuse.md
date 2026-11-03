@@ -115,4 +115,4 @@ The local v0.8.39 report CSV is original browser code over Monitoring's existing
 
 The local v0.8.40 guided preview reuses Monitoring's own disposable source-readiness engine and terminal presentation. It imports no upstream code or runtime package.
 
-The local v0.8.41 browser change list is original code over Monitoring's existing read-only snapshot and normalized event schema. It imports no upstream code or runtime package.
+The local v0.8.41 browser and terminal change lists are original code over Monitoring's existing read-only snapshot and normalized event schema. It imports no upstream code or runtime package.

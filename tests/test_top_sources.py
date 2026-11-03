@@ -7,7 +7,7 @@ import sys
 import tempfile
 import unittest
 
-from monitoring_ai.cli import terminal
+from monitoring_ai.cli import terminal, watch_changes
 from monitoring_ai.metrics import snapshot
 
 
@@ -20,6 +20,24 @@ def event(ident):
 
 
 class TopSourcesTests(unittest.TestCase):
+    def test_watch_change_summary_keeps_source_and_observation_times_distinct(self):
+        first, second = event("first"), event("second")
+        baseline = snapshot(1, [first], now="2026-11-03T09:00:01Z")
+        self.assertEqual(watch_changes(None, baseline)[0], [])
+        added = snapshot(2, [first, second], now="2026-11-03T09:00:03Z")
+        rows, note = watch_changes(baseline, added)
+        self.assertEqual(len(rows), 1)
+        self.assertIn("Added usage", rows[0])
+        self.assertIn("Source 2026-11-03T09:00:00Z · observed 2026-11-03T09:00:03Z", rows[0])
+        self.assertIn("1 changed record", note)
+        self.assertEqual(watch_changes(added, added)[0], [])
+        revised = snapshot(3, [first, {**second, "tokens": {"input": 9}}], now="2026-11-03T09:00:05Z")
+        rows, _ = watch_changes(added, revised)
+        self.assertEqual(len(rows), 1)
+        self.assertIn("Revised usage", rows[0])
+        self.assertIn("9 recorded tokens", rows[0])
+        self.assertEqual(watch_changes(added, {**added, "revision": 3})[0], [])
+
     def test_selected_input_recovery_and_replay_in_one_command(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
