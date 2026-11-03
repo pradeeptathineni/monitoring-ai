@@ -22,7 +22,7 @@ function reportFor(url) {
       models: { rows: [{ key: "demo-model", metrics: { calls: 2, total_tokens: 50, costs: { estimated: { amount: "0.01", events: 1 }, billed: { amount: "0.02", events: 1 } } }, observed_sessions: 1, estimated_session_count: 1, known_estimate_per_priced_session: "0.01", cache_read_share_percent: "25", timing: { records: 1, p50_ms: 800, p95_ms: 800, output_tokens_per_second: "12.5", output_rate_records: 1 } }], truncated: false },
       daily: { rows: [{ key: "2026-11-02", metrics: { calls: 2, total_tokens: 50, costs: { estimated: { amount: "0.01", events: 1 }, billed: { amount: "0.02", events: 1 } } }, observed_sessions: 1, estimated_session_count: 1, known_estimate_per_priced_session: "0.01", cache_read_share_percent: "25", timing: { records: 1, p50_ms: 800, p95_ms: 800, output_tokens_per_second: "12.5", output_rate_records: 1 } }], truncated: false },
     },
-    tools: { records: 1, errors: 0, unknown_outcomes: 1, unclassified_records: 0, categories: [{ key: "core", category: "core", records: 1, errors: 0, unknown_outcomes: 1, duration_records: 1, total_duration_ms: 20, p50_ms: 20, p95_ms: 20 }], names: [], mcp_servers: [], shell_commands: [], skills: [], agents: [], truncated: { categories: false } },
+    tools: { records: 1, errors: 0, unknown_outcomes: 1, unclassified_records: 0, categories: [{ key: "core", category: "core", records: 1, errors: 0, unknown_outcomes: 1, duration_records: 1, total_duration_ms: 20, p50_ms: 20, p95_ms: 20 }], names: [], mcp_servers: [], shell_commands: [], skills: [], agents: [], daily: { rows: [{ date: "2026-11-02", records: 1, errors: 0, unknown_outcomes: 1, categories: [{ key: "core", records: 1 }] }], truncated: false }, truncated: { categories: false, daily: false } },
     comparisons: {
       records: { current: 2, previous: 1, change: 1, percent_change: "100" },
       tokens: { current: 50, previous: 25, change: 25, percent_change: "100" },
@@ -66,6 +66,8 @@ test("report loads only in its view, applies UTC presets and ignores stale respo
   await expect(page.locator("#report-daily")).toContainText("2026-11-02");
   await expect(page.locator("#report-tool-groups")).toContainText("core");
   await expect(page.locator("#report-tools-summary")).toContainText("Outcome unknown");
+  await expect(page.locator("#report-tool-timeline")).toContainText("2026-11-02");
+  await expect(page.locator("#report-tool-timeline [role=img]")).toHaveAttribute("aria-label", /1 core/);
   await expect(page.locator("#report-comparisons")).toContainText("incomplete cost coverage");
   await expect(page.locator("#report-coverage")).toContainText("missing usage duration records");
   await expect(page.locator("#report-coverage")).toContainText("Unavailable measures");
@@ -93,6 +95,20 @@ test("report errors distinguish an empty state from a retained last observation"
   await expect(page.locator("#report-status")).toContainText("Failed to fetch");
   await expect(page.locator("#report-status")).toContainText("No report observations have loaded yet.");
   await expect(page.locator("#report-content")).toBeHidden();
+});
+
+test("older reports keep tool totals while the daily chart is unavailable on mobile", async ({ page }) => {
+  await page.route("**/api/v1/report?**", (route) => {
+    const value = reportFor(route.request().url());
+    delete value.tools.daily;
+    return route.fulfill({ json: value });
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await page.locator('.mobile-nav button[data-view="report"]').click();
+  await expect(page.locator("#report-tool-timeline")).toContainText("unavailable from this owner");
+  await expect(page.locator("#report-tools-summary")).toContainText("Tool records");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
 });
 
 test("a failed filtered read retains the last report with a qualification", async ({ page }) => {

@@ -30,7 +30,7 @@
       <button class="nav nav-item" data-view="report" title="Report" aria-label="Report"><span class="nav-icon" aria-hidden="true">▤</span><span class="navigation-label">Report <kbd>5</kbd></span></button>
       <button class="nav nav-item" data-view="settings" title="Settings" aria-label="Settings"><span class="nav-icon" aria-hidden="true">⚙</span><span class="navigation-label">Settings <kbd>6</kbd></span></button>
     </nav>
-    <div class="rail-bottom sidebar-foot"><span class="small-dot" aria-hidden="true"></span><div class="navigation-label">Read-only dashboard<a href="https://github.com/pradeeptathineni/monitoring-ai" target="_blank" rel="noreferrer">Source & documentation ↗</a><small>EXPERIMENTAL · v0.8.21</small></div></div>
+    <div class="rail-bottom sidebar-foot"><span class="small-dot" aria-hidden="true"></span><div class="navigation-label">Read-only dashboard<a href="https://github.com/pradeeptathineni/monitoring-ai" target="_blank" rel="noreferrer">Source & documentation ↗</a><small>EXPERIMENTAL · v0.8.22</small></div></div>
   </aside>
   <aside id="section-navigation" class="section-navigation" aria-label="Settings sections" hidden>
     <h2>Settings</h2>
@@ -96,6 +96,7 @@
           <article class="panel"><div class="panel-head"><div><h2>By project</h2><p>Usage and known cost coverage by project alias.</p></div></div><div id="report-projects" class="table-wrap"></div><p id="report-projects-note" class="report-breakdown-note"></p></article>
           <article class="panel"><div class="panel-head"><div><h2>By model</h2><p>Recorded cache share and reported timing by model.</p></div></div><div id="report-models" class="table-wrap"></div><p id="report-models-note" class="report-breakdown-note"></p></article>
           <article class="panel"><div class="panel-head"><div><h2>Daily usage</h2><p>UTC calendar days in the selected range.</p></div></div><div id="report-daily" class="table-wrap"></div><p id="report-daily-note" class="report-breakdown-note"></p></article>
+          <article class="panel"><div class="panel-head"><div><h2>Daily tool activity</h2><p>Recorded UTC dates and categories within the selected filters. A gap is not evidence that no agents ran.</p></div></div><div id="report-tool-timeline" class="tool-timeline"></div></article>
           <div class="report-panels"><article class="panel"><div class="panel-head"><div><h2>Tool activity</h2><p>Recorded tool outcomes and categorized metadata.</p></div></div><div id="report-tools-summary"></div><div id="report-tool-groups"></div></article><article class="panel"><div class="panel-head"><div><h2>Coverage & unavailable measures</h2><p>Observations describe only connected, explicitly supplied sources.</p></div></div><div id="report-coverage"></div><div class="prose"><p>Context overhead, one-shot rate, corrections, rework, and time to first edit are unavailable from these records. Costs, usage records, and sessions may be incomplete across unconnected sources.</p><p>Timing values are reported duration and output-token rate. They do not infer streaming speed, time to first token, or continuous agent work.</p></div></article></div>
         </div>
       </section>

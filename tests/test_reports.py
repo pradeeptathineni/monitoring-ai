@@ -1,4 +1,5 @@
 import json
+from datetime import date, timedelta
 from pathlib import Path
 import tempfile
 import unittest
@@ -156,6 +157,33 @@ class ReportTests(unittest.TestCase):
         self.assertEqual([row["key"] for row in tools["agents"]], ["worker-start"])
         guessed_name = next(row for row in tools["names"] if row["key"] == "mcp__guessed__search")
         self.assertEqual(guessed_name["category"], "unclassified")
+
+    def test_tool_days_keep_source_dates_categories_and_unknown_outcomes(self):
+        rows = [
+            {**tool("a", "exec", "shell", outcome="error"), "timestamp": "2026-11-01T23:59:59Z"},
+            {**tool("b", "read", "mcp", outcome="unknown"), "timestamp": "2026-11-02T00:00:00Z"},
+            {**tool("c", "write", "core", outcome="unknown"), "timestamp": "2026-11-02T11:00:00Z"},
+        ]
+        daily = self.report(rows)["tools"]["daily"]
+        self.assertFalse(daily["truncated"])
+        self.assertEqual(daily["rows"], [
+            {"date": "2026-11-01", "records": 1, "errors": 1, "unknown_outcomes": 0,
+             "categories": [{"key": "shell", "records": 1}]},
+            {"date": "2026-11-02", "records": 2, "errors": 0, "unknown_outcomes": 2,
+             "categories": [{"key": "core", "records": 1}, {"key": "mcp", "records": 1}]},
+        ])
+
+    def test_tool_day_bound_keeps_latest_dates_without_changing_totals(self):
+        first = date(2026, 1, 1)
+        rows = [{**tool(f"t{index}", "exec", "shell"),
+                 "timestamp": f"{first + timedelta(days=index)}T12:00:00Z"}
+                for index in range(101)]
+        report = self.report(rows)
+        self.assertEqual(report["tools"]["records"], 101)
+        self.assertTrue(report["tools"]["daily"]["truncated"])
+        self.assertEqual(len(report["tools"]["daily"]["rows"]), 100)
+        self.assertEqual(report["tools"]["daily"]["rows"][0]["date"], "2026-01-02")
+        self.assertTrue(report["coverage"]["truncated"]["tools_daily"])
 
     def test_group_rows_are_bounded_without_losing_aggregate_totals(self):
         rows = [usage(f"e{i}", project=f"project-{i:03}", model=f"model-{i:03}", tokens={"output": 1})

@@ -177,6 +177,56 @@ function reportRows(target, headers, rows, emptyMessage = "No matching records i
   grid.append(body); root.append(grid);
 }
 
+function renderToolTimeline(daily) {
+  const root = $("#report-tool-timeline"); root.replaceChildren();
+  if (!daily || !Array.isArray(daily.rows)) {
+    root.append(node("p", "Daily tool activity is unavailable from this owner.", "empty"));
+    return;
+  }
+  const kinds = ["shell", "mcp", "core", "skill", "agent", "other", "unclassified"];
+  const validCount = (value) => Number.isSafeInteger(value) && value >= 0;
+  const rows = daily.rows.filter((row) => row && /^\d{4}-\d{2}-\d{2}$/.test(row.date)
+    && validCount(row.records) && row.records > 0 && validCount(row.errors)
+    && validCount(row.unknown_outcomes) && row.errors + row.unknown_outcomes <= row.records
+    && Array.isArray(row.categories) && row.categories.every((part) => part && kinds.includes(part.key)
+      && validCount(part.records) && part.records > 0)
+    && row.categories.reduce((sum, part) => sum + part.records, 0) === row.records).slice(-100);
+  if (!rows.length) {
+    root.append(node("p", "No recorded tool items match this period and filter.", "empty"));
+    return;
+  }
+  const present = kinds.filter((kind) => rows.some((row) => row.categories.some((part) => part.key === kind)));
+  const legend = node("div", null, "tool-timeline-legend");
+  for (const kind of present) {
+    const label = node("span", kind, "tool-timeline-legend-item");
+    label.prepend(node("span", null, `tool-timeline-swatch tool-kind-${kind}`));
+    legend.append(label);
+  }
+  root.append(legend);
+  const maximum = Math.max(...rows.map((row) => row.records));
+  const chart = node("div", null, "tool-timeline-chart");
+  for (const row of rows) {
+    const line = node("div", null, "tool-timeline-row");
+    line.append(node("time", row.date));
+    const track = node("div", null, "tool-timeline-track");
+    const bar = node("div", null, "tool-timeline-bar");
+    bar.style.width = `${(row.records / maximum) * 100}%`;
+    bar.setAttribute("role", "img");
+    bar.setAttribute("aria-label", `${row.date}: ${row.records} tool records; ${row.errors} errors; ${row.unknown_outcomes} outcomes unknown; ${row.categories.map((part) => `${part.records} ${part.key}`).join(", ")}`);
+    for (const part of row.categories) {
+      const segment = node("span", null, `tool-timeline-segment tool-kind-${part.key}`);
+      segment.style.width = `${(part.records / row.records) * 100}%`;
+      segment.setAttribute("aria-hidden", "true");
+      bar.append(segment);
+    }
+    track.append(bar); line.append(track);
+    line.append(node("span", `${number.format(row.records)} · ${number.format(row.errors)} errors · ${number.format(row.unknown_outcomes)} unknown`, "tool-timeline-count"));
+    chart.append(line);
+  }
+  root.append(chart);
+  if (daily.truncated) root.append(node("p", "Showing the latest 100 recorded UTC dates; earlier tool dates are omitted from this chart. Report totals retain them.", "confidence-note"));
+}
+
 function reportCost(metrics, basis, currency) {
   return reportCurrency(metrics?.costs?.[basis]?.amount ?? null, currency);
 }
@@ -254,6 +304,7 @@ function renderReport() {
   setBreakdownNote("#report-daily-note", "Days", daily);
 
   const tools = report.tools || {}, toolSummary = $("#report-tools-summary"); toolSummary.replaceChildren();
+  renderToolTimeline(tools.daily);
   for (const [label, key] of [["Tool records", "records"], ["Errors", "errors"], ["Outcome unknown", "unknown_outcomes"], ["Unclassified", "unclassified_records"]]) toolSummary.append(confidenceRow(label, reportNumber(tools[key])));
   const groups = $("#report-tool-groups"); groups.replaceChildren();
   const toolLabels = { categories: "Categories", names: "Tool names", mcp_servers: "MCP server aliases", shell_commands: "Shell tool / command aliases", skills: "Skill invocation aliases", agents: "Agent invocation aliases" };

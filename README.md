@@ -4,7 +4,7 @@ Local monitoring for AI sessions, agents, workers, tokens and costs. Use it in y
 
 **Experimental alpha.** It observes explicitly supplied sources. Personal source compatibility, additional collectors and full-vision acceptance remain incomplete. [Version policy and v1.0.0 requirements](docs/release-readiness.md) keep maturity separate from version numbers.
 
-Current checked version: **v0.8.21**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
+Current checked version: **v0.8.22**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
 
 ![Monitoring AI dashboard with fictional sessions and costs](docs/observatory.png)
 
@@ -43,7 +43,7 @@ The producer appends usage and lifecycle evidence. The server imports complete l
 - Source-age views, trailing-window token pace and cautious linear forecasts with observed span, sample count and explicit cost coverage.
 - Independent quota observations from an explicit file or an opt-in installed Codex allowance read. Stale values and passed reset times retain their last supplied values.
 - An optional current UTC-day token threshold over accepted usage, independent of dashboard filters. It is an on-screen observation, not provider quota, complete account use or a spending control.
-- A detailed Report view with UTC period presets, adjacent equal-length comparisons, project/model/day breakdowns and categorized tool activity. Unknown timing and unsupported workflow measures stay explicit.
+- A detailed Report view with UTC period presets, adjacent equal-length comparisons, project/model/day breakdowns, and a daily tool-category chart over the selected records. Unknown timing and unsupported workflow measures stay explicit.
 - An explicit multi-file manifest with independent input health, replay counts and retained history when one source fails. Input aliases and event-source filters remain distinct.
 - [Entity history](docs/session-history.md) with chronological pages scoped to its source and session. Pages retain one ledger revision, with an explicit restart when history changes.
 - Opt-in [macOS process samples](docs/os-processes.md) with executable name, PID/parent PID, CPU, resident memory and start time. These remain separate from session and worker status.

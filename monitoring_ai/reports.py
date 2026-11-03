@@ -147,6 +147,21 @@ def _tool_groups(events):
             skills[name].append(event)
         elif category == "agent":
             agents[name].append(event)
+    by_day = defaultdict(list)
+    for event, category in normalized:
+        by_day[event["timestamp"][:10]].append((event, category))
+    days = []
+    for date, observations in sorted(by_day.items()):
+        per_category = defaultdict(int)
+        for _, category in observations:
+            per_category[category] += 1
+        days.append({
+            "date": date,
+            "records": len(observations),
+            "errors": sum(event.get("outcome") == "error" for event, _ in observations),
+            "unknown_outcomes": sum(event.get("outcome") == "unknown" for event, _ in observations),
+            "categories": [{"key": key, "records": per_category[key]} for key in sorted(per_category)],
+        })
     error_count = sum(event.get("outcome") == "error" for event in tools)
     unknown_count = sum(event.get("outcome") == "unknown" for event in tools)
 
@@ -164,12 +179,14 @@ def _tool_groups(events):
     for rows in grouped.values():
         rows.sort(key=lambda row: (-row["records"], row["key"]))
     truncated = {name: len(rows) > GROUP_LIMIT for name, rows in grouped.items()}
+    truncated["daily"] = len(days) > GROUP_LIMIT
     return {
         "records": len(tools),
         "errors": error_count,
         "unknown_outcomes": unknown_count,
         "unclassified_records": len(categories.get("unclassified", [])),
         **{name: rows[:GROUP_LIMIT] for name, rows in grouped.items()},
+        "daily": {"rows": days[-GROUP_LIMIT:], "truncated": truncated["daily"]},
         "truncated": truncated,
     }
 
