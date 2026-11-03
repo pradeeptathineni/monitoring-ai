@@ -15,6 +15,7 @@ const titles = { overview: ["Overview", "Status evidence and usage from the sour
 let data, paused = false, busy = false, view = "overview", entity = null;
 let settingsCategory = "all";
 let appTaskPage = 0, appTaskOwner = null;
+let appObservations = { capture: null, rows: new Map(), continuous: false, changes: [], note: "" };
 let processView = { owner: null, lastSample: null, continuous: false, histories: new Map(), selected: null };
 let entityHistory = null;
 let collapsedHierarchyKeys = new Set();
@@ -1555,18 +1556,72 @@ function renderProcessSourceCoverage(root, sample, current) {
   }
 }
 
+function retainAppObservations(book, recent) {
+  if (!recent) { appObservations.continuous = false; return; }
+  const captured = Date.parse(book.captured_at);
+  const previous = Date.parse(appObservations.capture);
+  const rows = new Map((book.threads || []).map(row => [row.alias, row]));
+  const gap = !appObservations.continuous || !Number.isFinite(previous) || captured < previous || captured - previous > 30000;
+  if (gap) {
+    appObservations.note = appObservations.capture
+      ? "A fresh baseline was established after a gap. Changes during the gap are unknown."
+      : "First capture is the baseline. Waiting for a different fresh capture.";
+  } else if (captured === previous) return;
+  else {
+    const changes = [], observed = new Date().toISOString();
+    for (const [alias, row] of rows) {
+      const before = appObservations.rows.get(alias);
+      let change;
+      if (!before) change = `First seen in captured page · reported ${row.status}`;
+      else if (before.status !== row.status) change = `Reported ${before.status} → ${row.status}`;
+      else if (before.updated_at !== row.updated_at || before.host !== row.host)
+        change = `Source metadata changed · reported ${row.status}`;
+      if (change) changes.push({ alias, kind: row.kind, change, captured: book.captured_at, observed });
+    }
+    for (const [alias, row] of appObservations.rows) {
+      if (!rows.has(alias)) changes.push({ alias, kind: row.kind,
+        change: "Absent from latest captured page · current status unknown", captured: book.captured_at, observed });
+    }
+    appObservations.changes = [...changes, ...appObservations.changes].slice(0, 24);
+    appObservations.note = changes.length
+      ? `${changes.length} changed rows in the latest pair of captures.`
+      : "No metadata changes between the latest pair of captures.";
+  }
+  appObservations.capture = book.captured_at;
+  appObservations.rows = rows;
+  appObservations.continuous = true;
+}
+
+function renderAppObservations(recent) {
+  $("#app-change-status").textContent = `${recent ? appObservations.note : "Current app visibility is unknown. Prior observations are retained."} Up to 24 changes are retained in this tab. Captures can omit tasks and changes between reads.`;
+  const rows = appObservations.changes;
+  $("#clear-app-changes").disabled = rows.length === 0;
+  if (!rows.length) $("#app-change-table").replaceChildren(node("p", "No app changes observed in this tab.", "empty"));
+  else table("#app-change-table", ["Task alias", "Source kind", "Observed change", "Capture · UTC", "Browser observed · UTC"],
+    rows.map(row => [row.alias, row.kind, row.change, row.captured, row.observed]));
+}
+
 function renderAppThreads() {
   const book = data?.app_threads, panel = $("#app-threads-panel");
   panel.hidden = !book;
-  if (!book) return;
+  if (!book) {
+    appTaskOwner = null;
+    appObservations = { capture: null, rows: new Map(), continuous: false, changes: [], note: "" };
+    return;
+  }
   const runtime = book.source === "codex-local-app-server", history = book.source === "codex-app-task-history";
   const owner = JSON.stringify([data.identity, book.source, book.scope]);
-  if (owner !== appTaskOwner) { appTaskOwner = owner; appTaskPage = 0; }
+  if (owner !== appTaskOwner) {
+    appTaskOwner = owner; appTaskPage = 0;
+    appObservations = { capture: null, rows: new Map(), continuous: false, changes: [], note: "" };
+  }
   $("#app-thread-title").textContent = runtime ? "Codex runtime observations" : history ? "Codex app tasks" : "App task observations";
   $("#app-thread-description").textContent = runtime ? "One database-only page from the selected local Codex host and project. Separate from ledger sessions." : history ? "One supported non-archived Codex history page. App status is separate from ledger sessions." : "Codex and ChatGPT statuses reported by the app inventory, separate from ledger sessions.";
   $("#app-thread-limit").textContent = `${runtime ? "Selected project page only. Other hosts and ChatGPT conversations are unobserved." : history ? "Up to 50 Codex tasks from one host history page. Older pages, other hosts and ChatGPT history are unobserved." : "Recent app page only."} Titles, summaries, paths and raw thread IDs are omitted. Reported active/idle does not establish model inference, worker lifecycle, tokens or billing. Ledger filters do not apply. Capture older than 30 seconds has unknown current status.`;
   const age = (Date.now() - Date.parse(book.captured_at)) / 1000;
   const recent = Number.isFinite(age) && age >= -5 && age <= 30 && !paused && !snapshotReadUnavailable && book.read_state === "following";
+  retainAppObservations(book, recent);
+  renderAppObservations(recent);
   const status = row => recent ? row.status : "unknown";
   const kind = $("#app-kind-filter").value, state = $("#app-status-filter").value, query = $("#app-alias-filter").value.trim().toLowerCase();
   const supplied = book.threads || [];
@@ -2105,3 +2160,8 @@ for (const id of ["app-kind-filter", "app-status-filter", "app-alias-filter"]) {
 }
 $("#app-page-prev").addEventListener("click", () => { appTaskPage = Math.max(0, appTaskPage - 1); renderAppThreads(); });
 $("#app-page-next").addEventListener("click", () => { appTaskPage++; renderAppThreads(); });
+$("#clear-app-changes").addEventListener("click", () => {
+  appObservations.changes = [];
+  appObservations.note = "Observations cleared. The latest capture remains the baseline.";
+  renderAppThreads();
+});

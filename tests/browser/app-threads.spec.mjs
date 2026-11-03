@@ -66,3 +66,57 @@ test("Codex history browsing pages bounded rows and stops treating stale active 
   await page.setViewportSize({width:390,height:844});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false);
 });
+
+test("app changes compare capture metadata without turning a missing row into completion", async ({ page }) => {
+  const base = await (await page.request.get("/api/v1/snapshot")).json();
+  const time = () => new Date().toISOString();
+  const row = (alias, status) => ({ alias, kind: "codex", status, host: "local", updated_at: time() });
+  let book = { schema: "monitoring.app-threads.v1", source: "codex-app-task-history", scope: "codex-history-page",
+    captured_at: time(), read_state: "following", threads: [row("task-a", "active"), row("task-b", "idle")] };
+  await page.route("**/api/v1/snapshot?**", route => route.fulfill({ json: { ...base, app_threads: book } }));
+  await page.goto("/");
+  await page.locator("#app-change-panel summary").click();
+  await expect(page.locator("#app-change-status")).toContainText("First capture is the baseline");
+  book = { ...book, captured_at: time(), threads: [row("task-a", "idle"), row("task-c", "active")] };
+  await expect(page.locator("#app-change-table tbody tr")).toHaveCount(3);
+  await expect(page.locator("#app-change-table")).toContainText("Reported active → idle");
+  await expect(page.locator("#app-change-table")).toContainText("First seen in captured page");
+  await expect(page.locator("#app-change-table")).toContainText("Absent from latest captured page · current status unknown");
+  await page.locator("#app-status-filter").selectOption("active");
+  await expect(page.locator("#app-change-table tbody tr")).toHaveCount(3);
+  await page.locator("#pause").click();
+  await expect(page.locator("#app-change-status")).toContainText("Current app visibility is unknown");
+  book = { ...book, captured_at: time(), threads: [row("task-a", "active")] };
+  await page.locator("#pause").click();
+  await expect(page.locator("#app-change-status")).toContainText("fresh baseline was established after a gap");
+  await expect(page.locator("#app-change-table tbody tr")).toHaveCount(3);
+  await page.getByRole("button", { name: "Clear app observations", exact: true }).click();
+  await expect(page.locator("#app-change-table")).toContainText("No app changes observed");
+  await expect(page.getByRole("button", { name: "Clear app observations", exact: true })).toBeDisabled();
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+});
+
+test("app observation history does not bridge failed reads or a different owner", async ({ page }) => {
+  const base = await (await page.request.get("/api/v1/snapshot")).json();
+  let fail = false, owner = base.identity;
+  let book = { schema: "monitoring.app-threads.v1", source: "codex-app-task-history", scope: "codex-history-page",
+    captured_at: new Date().toISOString(), read_state: "following",
+    threads: [{ alias: "task-a", kind: "codex", status: "active", host: "local", updated_at: new Date().toISOString() }] };
+  await page.route("**/api/v1/snapshot?**", route => route.fulfill(fail
+    ? { status: 503, body: "Unavailable" } : { json: { ...base, identity: owner, app_threads: book } }));
+  await page.goto("/");
+  await page.locator("#app-change-panel summary").click();
+  await expect(page.locator("#app-change-status")).toContainText("First capture is the baseline");
+  fail = true;
+  await expect(page.locator("#app-change-status")).toContainText("Current app visibility is unknown");
+  book = { ...book, captured_at: new Date().toISOString(), threads: [{ ...book.threads[0], status: "idle" }] };
+  fail = false;
+  await expect(page.locator("#app-change-status")).toContainText("fresh baseline was established after a gap");
+  await expect(page.locator("#app-change-table tbody tr")).toHaveCount(0);
+  book = { ...book, captured_at: new Date().toISOString(), threads: [{ ...book.threads[0], status: "active" }] };
+  await expect(page.locator("#app-change-table")).toContainText("Reported idle → active");
+  owner = "different-owner-fixture";
+  await expect(page.locator("#app-change-table tbody tr")).toHaveCount(0);
+  await expect(page.locator("#app-change-status")).toContainText("First capture is the baseline");
+});

@@ -132,3 +132,5 @@ Process drill-down reuses Monitoring's existing standard-library OS observer, br
 The on-screen reserve watch is original browser code over Monitoring's existing normalized quota view and native storage/DOM APIs. It reuses shared semantic theme tokens and adds no provider SDK, account client, notifier or runtime dependency. CodeBurn's supported quota command was independently used for a live allowance observation, not copied into the watch or required at runtime.
 
 Bounded app-history browsing extends the existing owned supported-tool bridge, private metadata projection and paged DOM table. No provider SDK, source directory parser or upstream product code is added. It uses the existing shared theme controls; model/worker/account authority is not inferred from task metadata.
+
+The bounded app-change list is original browser code over that same sanitized source contract. It reuses the owned table helper and freshness rules. It imports no upstream code, account client or runtime dependency and retains no history outside the tab. Existing licensed theme bytes remain unchanged.
