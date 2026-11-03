@@ -158,6 +158,8 @@ Response fields include `identity`, `revision`, `observed_at`, `filters`, curren
 
 `currency` identifies displayed cost units. `fx` returns the supplied dated conversion book or null, preserving its rate date and provenance. A converted report never claims that those are current market or invoice rates. The CLI's JSON export includes the same qualifications.
 
+The browser's **Download displayed report JSON** saves the last successfully displayed `monitoring.report.v1` response without adding a new endpoint or recomputing values. It is disabled until a report loads or when current filters differ from the displayed report's request. A retained response may be downloaded after a read failure or during paused refresh under its original filters; `observed_at`, revision, normalized filters and coverage remain in the file. It is a local, user-initiated download of private aggregates and aliases, not a live provider export or raw event/transcript dump.
+
 An explicit `since` anchors a comparison. The previous inclusive millisecond interval ends immediately before the current interval and has the same elapsed length. Its exact bounds are returned. This is not an implicit day-over-day or month-over-month claim. All recorded history has no fabricated earlier observation period. Source coverage can differ between intervals. Zero prior baselines produce no infinite percentage.
 
 The legacy `calls` field counts normalized usage records. It does not establish all provider requests or calls across unconnected tools. Observed sessions are distinct source/session pairs among matching events, including tool/status-only sessions. They are not a live worker count or proof of complete coverage.

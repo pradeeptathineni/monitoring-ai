@@ -283,7 +283,8 @@
         "qualified per-priced-session estimates",
         "recorded cache-read share",
         "reported-duration statistics",
-        "explicit tool categories"
+        "explicit tool categories",
+        "download displayed aggregate report with filters and coverage"
       ],
       "dependencies": [
         "local-usage-ledger",
@@ -297,7 +298,7 @@
         "langfuse/langfuse",
         "Helicone/helicone"
       ],
-      "decision": "Implemented detailed UTC period reports and qualified comparisons, project/model/day breakdowns, timed-record statistics and categorized tool activity. Unsupported workflow quality remains unavailable. Richer charts and configurable views remain planned. An explicitly selected CodeBurn v74 daily cache supplies separate replaceable local-calendar aggregates, with source-reported USD of unknown billing basis and independent read/file ages. No sessions or ledger events are invented. Separate daily provider/model views preserve absent attribution and legacy unknown counters without cross-filtering marginals or summing across days.",
+      "decision": "Implemented detailed UTC period reports and qualified comparisons, project/model/day breakdowns, timed-record statistics and categorized tool activity. The browser downloads the exact displayed aggregate report with observation time, filters, revision and coverage, while the existing CLI emits the same JSON schema; neither includes raw event rows. Unsupported workflow quality remains unavailable. Richer charts and configurable views remain planned. An explicitly selected CodeBurn v74 daily cache supplies separate replaceable local-calendar aggregates, with source-reported USD of unknown billing basis and independent read/file ages. No sessions or ledger events are invented. Separate daily provider/model views preserve absent attribution and legacy unknown counters without cross-filtering marginals or summing across days.",
       "evidence": [
         "monitoring_ai/metrics.py",
         "tests/test_monitoring.py",

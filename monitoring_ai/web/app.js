@@ -18,7 +18,7 @@ let entityHistory = null;
 let collapsedHierarchyKeys = new Set();
 let lastSuccess = 0;
 let snapshotReadUnavailable = false;
-let reportController = null, reportRequestId = 0, reportData = null;
+let reportController = null, reportRequestId = 0, reportData = null, reportDataQuery = null;
 let cachedRange = "all", cachedExactDate = "", cachedView = "daily";
 let cachedDimensionFilters = { providers: "", models: "" };
 let cachedUsageReceivedAt = 0, cachedFileAgeAtReceipt = null;
@@ -117,6 +117,25 @@ function cancelReport() {
   reportRequestId += 1;
   if (reportController) reportController.abort();
   reportController = null;
+}
+
+function updateReportDownload() {
+  // A retained report can be saved only under the filters that produced it.
+  $("#download-report").disabled = !reportData || reportDataQuery !== query().toString();
+}
+
+function downloadDisplayedReport() {
+  updateReportDownload();
+  if ($("#download-report").disabled) return;
+  const stamp = String(reportData.observed_at || "").replace(/[^0-9TZ.-]/g, "").slice(0, 32) || "unknown-time";
+  const url = URL.createObjectURL(new Blob([`${JSON.stringify(reportData, null, 2)}\n`], { type: "application/json" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `monitoring-report-${stamp}.json`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function reportCurrency(value, currency = reportData?.currency || data?.currency || "USD") {
@@ -285,6 +304,7 @@ function renderReport() {
 
 async function loadReport(force = true) {
   if (view !== "report") return;
+  updateReportDownload();
   if (paused) {
     const last = reportData ? ` Last successful report observed at ${reportData.observed_at || "unknown time"} remains visible and may not match current filters.` : " No report observations have loaded yet.";
     $("#report-status").textContent = `Report refresh is paused.${last}`;
@@ -295,17 +315,20 @@ async function loadReport(force = true) {
   if (!force && reportController) return;
   cancelReport();
   const requestId = reportRequestId, controller = new AbortController();
+  const requestedQuery = query().toString();
   reportController = controller;
   const retained = reportData ? ` Last successful report from ${reportData.observed_at || "an unknown time"} remains visible and may not match the current filters.` : " No report observations have loaded yet.";
   $("#report-status").textContent = `Loading report for the selected UTC range and filters.${retained}`;
   $("#report-status").classList.remove("error");
   try {
-    const response = await fetch(`/api/v1/report?${query()}`, { signal: controller.signal, cache: "no-store" });
+    const response = await fetch(`/api/v1/report?${requestedQuery}`, { signal: controller.signal, cache: "no-store" });
     if (!response.ok) throw new Error(`Report read failed (${response.status}).`);
     const value = await response.json();
     if (requestId !== reportRequestId || view !== "report") return;
     if (value.schema !== "monitoring.report.v1") throw new Error("The report endpoint returned an incompatible schema.");
     reportData = value;
+    reportDataQuery = requestedQuery;
+    updateReportDownload();
     $("#report-content").hidden = false;
     const hasTruncation = Object.values(value.coverage?.truncated || {}).some(Boolean) || Object.values(value.tools?.truncated || {}).some(Boolean) || Object.values(value.breakdowns || {}).some((group) => Boolean(group?.truncated));
     $("#report-status").textContent = `Report observed at ${value.observed_at || "unknown time"} UTC.${hasTruncation ? " One or more report sections are truncated by configured bounds." : ""}`;
@@ -1400,6 +1423,7 @@ $("#filters").addEventListener("change", (event) => {
 $("#filters").addEventListener("submit", (event) => event.preventDefault());
 $("#filters").addEventListener("reset", () => { markEntityHistoryFiltersChanged(true); $("#state-filter").value = ""; setTimeout(() => { $("#report-period").value = "custom"; refresh(); if (view === "report") loadReport(); }, 0); });
 $("#report-period").addEventListener("change", () => applyReportPeriod($("#report-period").value));
+$("#download-report").addEventListener("click", downloadDisplayedReport);
 $("#state-filter").addEventListener("change", () => { refresh(); if (view === "report") loadReport(); });
 $("#group").addEventListener("change", () => { if (data) renderUsage(); });
 $("#codeburn-cache-range").addEventListener("change", () => {

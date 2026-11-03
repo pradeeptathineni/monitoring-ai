@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 
 function reportFor(url) {
   const params = new URL(url).searchParams;
@@ -105,6 +106,27 @@ test("a failed filtered read retains the last report with a qualification", asyn
   await page.selectOption('[name="provider"]', "anthropic");
   await expect(page.locator("#report-status")).toContainText("last successful report observed at 2026-11-02T12:00:00Z remains visible");
   await expect(page.locator("#report-projects")).toContainText("demo-app");
+  await expect(page.locator("#download-report")).toBeDisabled();
+});
+
+test("download saves the displayed bounded report with its filters and coverage", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('.nav[data-view="report"]').click();
+  await expect(page.locator("#download-report")).toBeEnabled();
+  await page.selectOption("#report-period", "today");
+  await expect(page.locator("#report-range")).toContainText(new Date().toISOString().slice(0, 10));
+  const downloadPromise = page.waitForEvent("download");
+  await page.locator("#download-report").click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/^monitoring-report-.*\.json$/);
+  const saved = JSON.parse(await readFile(await download.path(), "utf8"));
+  expect(saved.schema).toBe("monitoring.report.v1");
+  expect(saved.revision).toBeGreaterThan(0);
+  expect(saved.filters.since).toBe(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
+  expect(saved.coverage).toBeTruthy();
+  expect(saved.summary).toBeTruthy();
+  expect(saved.events).toBeUndefined();
+  expect(saved.observed_at).toBeTruthy();
 });
 
 test("six-month period clamps to the same UTC day in the target month", async ({ page }) => {
