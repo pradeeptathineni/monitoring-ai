@@ -6,13 +6,14 @@ from .ledger_preview import snapshot_ledger
 from .metrics import now_iso
 from .source_coverage import source_summary
 from .sources import load_sources
+from .source_overlap import NativeOverlapError, NATIVE_FORMATS, MESSAGE
 
 SCHEMA = "monitoring.source-readiness.v1"
 MAX_PREVIEW_EVENTS = 100_000
 
 _NOTE = (
     "All inputs are tested against the same private copy of the selected ledger, but files are read sequentially "
-    "and can change before a later preview or import. Overlapping activity under different source aliases is not reconciled."
+    "and can change before a later preview or import. Repeated native identities within selected Claude or Codex files refuse; other collector overlap under different source aliases remains unresolved."
 )
 
 
@@ -52,6 +53,7 @@ def preview_selection(manifest, db=None):
     leaves that copy unchanged for the next source.
     """
     sources = _manifest(manifest)
+    native_families = {source.id: source.format for source in sources if source.format in NATIVE_FORMATS}
     observed_at = now_iso()
     try:
         with snapshot_ledger(db) as preview:
@@ -93,7 +95,11 @@ def preview_selection(manifest, db=None):
                     continue
 
                 try:
-                    proposed = store.ingest(rows)
+                    proposed = store.ingest(rows, overlap_sources=[alias for alias, family in native_families.items()
+                                                                  if alias != source.id and family == native_families.get(source.id)])
+                except NativeOverlapError:
+                    inputs.append(_result(source, "rejected", summary, error=MESSAGE))
+                    continue
                 except Exception:
                     inputs.append(_result(
                         source,

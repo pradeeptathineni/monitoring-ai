@@ -38,3 +38,22 @@ test("older snapshots without input inventory stay usable", async ({ page }) => 
   await expect(page.locator("#input-health")).toContainText("Connect an explicitly selected input");
   await expect(page.locator("#metrics .metric")).toHaveCount(4);
 });
+
+test("selected native overlap explains the refused input without exposing raw diagnostics", async ({ page }) => {
+  const snapshot = await (await page.request.get("/api/v1/snapshot")).json();
+  snapshot.inputs = { schema: "monitoring.inputs.v1", configured: true, healthy_inputs: 1,
+    unavailable_inputs: 1, unread_inputs: 0, inputs: [
+      { id: "first", format: "claude", project: "fictional", state: "following", records_seen: 1, added: 1, replayed: 0 },
+      { id: "copy", format: "claude", project: "fictional", state: "unavailable", records_seen: 1, added: 0, replayed: 0,
+        error: "Overlapping native records in another selected source. Accepted history is retained." },
+    ] };
+  snapshot.source_coverage = { schema: "monitoring.source-coverage.v1", observed_at: snapshot.observed_at,
+    inputs: [{ id: "copy", format: "claude", read_state: "unavailable", event_freshness: "unread",
+      capabilities: { usage: "native-reconstruction", lifecycle: "unsupported", tools: "completed-pairs" },
+      records: null, retained: false, sampled_at: null, latest_event_at: null }] };
+  await page.route("**/api/v1/snapshot?**", (route) => route.fulfill({ json: snapshot }));
+  await page.goto("/");
+  await expect(page.locator("#source-coverage")).toContainText("Repeated native records in another selected input");
+  await expect(page.locator("#source-coverage")).toContainText("accepted history is retained");
+  await expect(page.locator("#source-coverage")).not.toContainText("/private/");
+});

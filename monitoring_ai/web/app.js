@@ -559,6 +559,9 @@ function renderSourceCoverage() {
     if (health) {
       row.append(node("p", `Last read attempt: ${inputTimestamp(health.last_attempt_at)} · last successful read: ${inputTimestamp(health.last_success_at)}`, "source-coverage-sample"));
       row.append(node("p", `Latest attempt: ${inputCount(health.records_seen)} records seen · ${inputCount(health.added)} added · ${inputCount(health.replayed)} replayed. These are read-attempt counts, not lifetime totals.`, "source-coverage-sample"));
+      if (health.error === "Overlapping native records in another selected source. Accepted history is retained.") {
+        row.append(node("p", "Repeated native records in another selected input. This input was refused; accepted history is retained. Review the source selection before restarting it.", "source-coverage-sample"));
+      }
     }
     if (item.format === "claude-results") {
       row.append(node("p", "Completed Claude CLI result summaries include subagent aggregate usage, but not individual calls, turn times, or worker states. The capture timestamp is the declared receipt time, not provider event time. USD costs are client-side estimates, not billed spend or subscription balance. This route is not reconciled with a Claude JSONL input.", "source-coverage-sample"));
@@ -628,6 +631,9 @@ function renderInputHealth() {
     head.append(label, node("span", stateName, "input-state")); row.append(head);
     const dates = node("p", `Last attempt: ${inputTimestamp(input.last_attempt_at)} · Last success: ${inputTimestamp(input.last_success_at)}`, "input-health-dates"); row.append(dates);
     const counts = node("p", `${inputCount(input.records_seen)} records seen · ${inputCount(input.added)} added · ${inputCount(input.replayed)} replayed`, "input-health-counts"); row.append(counts);
+    if (input.error === "Overlapping native records in another selected source. Accepted history is retained.") {
+      row.append(node("p", "Repeated native records in another selected input. This input was refused; accepted history is retained.", "confidence-note"));
+    }
     root.append(row);
   }
 }

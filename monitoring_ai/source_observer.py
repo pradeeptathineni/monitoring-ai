@@ -7,6 +7,7 @@ from .codex_follow import CodexFollower
 from .metrics import now_iso
 from .source_coverage import source_coverage, source_summary
 from .sources import Source as SelectedSource
+from .source_overlap import NativeOverlapError, NATIVE_FORMATS, MESSAGE
 
 
 class SourceObserver:
@@ -18,6 +19,10 @@ class SourceObserver:
         if len(identifiers) != len(set(identifiers)):
             raise ValueError("Input source IDs must be unique")
         self._sources = configured
+        self._native_families = {
+            source_id: format_name for source, source_id, format_name, _ in configured
+            if isinstance(source, SelectedSource) and format_name in NATIVE_FORMATS
+        }
         self._lock = threading.Lock()
         self._status = {
             source_id: {
@@ -48,6 +53,8 @@ class SourceObserver:
         # Expose only stable generic classes of failure, never exception text.
         if isinstance(error, OSError):
             return "Input unavailable."
+        if isinstance(error, NativeOverlapError):
+            return MESSAGE
         if isinstance(error, ValueError):
             return "Input data was rejected."
         return "Input processing failed."
@@ -68,7 +75,9 @@ class SourceObserver:
                 if not follower:
                     summary = source_summary(source, rows, sampled_at=now_iso())
                 result = store.ingest(rows, claude_corrections=getattr(follower, "correct_usage", False),
-                                      accepted_rows=bool(follower))
+                                      accepted_rows=bool(follower),
+                                      overlap_sources=[alias for alias, family in self._native_families.items()
+                                                       if alias != source_id and family == self._native_families.get(source_id)])
                 if follower:
                     # Versions of one message resolve to one current ledger row.
                     # Coverage uses its original event time and corrected tokens.

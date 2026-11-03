@@ -8,6 +8,7 @@ import tempfile
 from .metrics import now_iso
 from .sources import load_sources
 from .source_coverage import source_summary
+from .source_overlap import NATIVE_FORMATS, MESSAGE, identities
 
 
 def create_selection(output, *, file, id, format="normalized", project=None):
@@ -53,10 +54,19 @@ def _write_selection(output, entries):
 def check_selection(path):
     """Read only selected files; do not create or mutate an event ledger."""
     checks = []
+    seen = {family: set() for family in NATIVE_FORMATS}
     for source in load_sources(path):
         try:
             rows = source.load(live=True)
             summary = source_summary(source, rows, sampled_at=now_iso())
+            if source.format in NATIVE_FORMATS:
+                keys = identities(rows)
+                if seen[source.format] & keys:
+                    check = dict(id=source.id, format=source.format, state="invalid", summary=summary,
+                                 error=MESSAGE)
+                    checks.append(check)
+                    continue
+                seen[source.format].update(keys)
             check = dict(id=source.id, format=source.format, state="readable", summary=summary, error=None)
         except OSError:
             check = dict(id=source.id, format=source.format, state="unavailable", summary=None,
@@ -70,4 +80,4 @@ def check_selection(path):
         checks.append(check)
     return dict(schema="monitoring.source-check.v1", observed_at=now_iso(), read_only=True,
                 scope="explicit-input-files", all_readable=all(check["state"] == "readable" for check in checks),
-                checks=checks, note="Checks parsing and supplied evidence only. Does not import history, reconcile overlapping inputs or establish live workers.")
+                checks=checks, note="Checks parsing, supplied evidence and repeated native identities within this selection. Does not import history, detect all collector overlap or establish live workers.")

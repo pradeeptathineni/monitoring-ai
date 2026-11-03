@@ -9,6 +9,7 @@ import sqlite3
 
 from .events import validate
 from .metrics import now_iso
+from .source_overlap import NativeOverlapError, MESSAGE
 
 
 class Store:
@@ -33,6 +34,7 @@ class Store:
                     UNIQUE(source, event_id)
                 );
                 CREATE INDEX IF NOT EXISTS events_time ON events(timestamp);
+                CREATE INDEX IF NOT EXISTS events_identity ON events(event_id);
                 CREATE TABLE IF NOT EXISTS native_usage_versions (
                     source TEXT NOT NULL,
                     event_id TEXT NOT NULL,
@@ -131,15 +133,30 @@ class Store:
                    (source, event_id, record_at, now_iso(), prior_payload, next_payload, revision))
         return "corrected", corrected
 
-    def ingest(self, rows, *, claude_timestamp_replay=False, claude_corrections=False, accepted_rows=False):
+    def ingest(self, rows, *, claude_timestamp_replay=False, claude_corrections=False,
+               accepted_rows=False, overlap_sources=()):
         events = [validate(row) for row in rows]
         if len(events) > 50000:
             raise ValueError("Import exceeds 50,000 events")
         added = 0
         corrected = 0
         accepted = {} if accepted_rows else None
+        overlap_sources = tuple(sorted(set(overlap_sources)))
         with self.connect() as db:
             for event in events:
+                if overlap_sources:
+                    # Compare only other explicitly selected sources of the same
+                    # native format. A source-scoped ID alone is not enough;
+                    # session and kind must agree as well. The whole batch rolls
+                    # back if one event overlaps, including earlier additions.
+                    placeholders = ",".join("?" for _ in overlap_sources)
+                    for (other_payload,) in db.execute(
+                        f"SELECT payload FROM events WHERE event_id=? AND source IN ({placeholders})",
+                        (event["id"], *overlap_sources),
+                    ):
+                        other = json.loads(other_payload)
+                        if other["session"] == event["session"] and other["kind"] == event["kind"]:
+                            raise NativeOverlapError(MESSAGE)
                 payload = json.dumps(event, sort_keys=True, separators=(",", ":"))
                 existing = db.execute(
                     "SELECT payload FROM events WHERE source=? AND event_id=?",
