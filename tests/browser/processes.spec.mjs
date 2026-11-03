@@ -30,7 +30,7 @@ test("optional OS samples remain separate from session state and stale reads", a
   await page.route("**/api/v1/snapshot?**", (route) => route.fulfill({ json: base }));
   await page.goto("/");
   await expect(page.locator("#os-process-overview-panel")).toBeVisible();
-  await expect(page.locator("#overview > article").first()).toHaveId("os-process-overview-panel");
+  await expect(page.locator("#overview > article:visible").first()).toHaveId("os-process-overview-panel");
   await expect(page.locator("#os-process-overview")).toContainText("5s interval");
   await expect(page.locator("#os-process-overview")).toContainText("No process is linked");
   await expect(page.locator("#os-process-overview")).toContainText("3 successful reads");
@@ -66,4 +66,45 @@ test("optional OS samples remain separate from session state and stale reads", a
   await expect(page.locator("#os-process-table")).not.toContainText("401 / 10");
   await expect(page.locator("#os-process-overview")).toContainText("Current process presence is unknown");
   await expect(page.locator("#os-process-overview .process-trend-row")).toHaveCount(3);
+});
+
+
+test("process drill-down keeps PID/start identity and browser sample history", async ({ page }) => {
+  const base = await (await page.request.get("/api/v1/snapshot")).json();
+  const started = new Date(Date.now() - 60000).toISOString();
+  const first = { pid: 401, parent_pid: 10, executable: "codex", cpu_percent: 9, rss_bytes: 4194304, started_at: started, session: null, worker: null };
+  const second = { ...first, pid: 402, executable: "Claude", cpu_percent: 1, rss_bytes: 8388608 };
+  base.os_processes = { schema: "monitoring.os-processes.v1", state: "following", sampled_at: new Date().toISOString(),
+    interval_seconds: 5, processes: [first, second], no_longer_observed: [], changed_count: 0, truncated: false,
+    history: [], history_truncated: false, coverage: "matching-executable-names-only" };
+  await page.route("**/api/v1/snapshot?**", route => route.fulfill({ json: base }));
+  await page.goto("/#sessions");
+  await expect(page.locator("#os-process-table tbody tr").first()).toContainText("401 / 10");
+  await page.locator("#os-process-sort").selectOption("memory");
+  await expect(page.locator("#os-process-table tbody tr").first()).toContainText("402 / 10");
+  await page.getByLabel("Executable or PID", { exact: true }).fill("401");
+  await expect(page.locator("#os-process-table tbody tr")).toHaveCount(1);
+  await page.getByRole("button", { name: "Inspect codex PID 401", exact: true }).click();
+  await expect(page.locator("#os-process-detail")).toContainText("Waiting for another distinct OS sample");
+  base.os_processes.sampled_at = new Date().toISOString();
+  base.os_processes.processes = [{ ...first, cpu_percent: 2, rss_bytes: 6291456 }, second];
+  await expect(page.locator("#os-process-detail")).toContainText("2 successful reads");
+  await expect(page.locator("#os-process-detail .process-trend-row")).toHaveCount(2);
+  await expect(page.locator("#os-process-detail")).toContainText("OS CPU · latest 2.0%");
+  await page.locator("#pause").click();
+  await expect(page.locator("#os-process-detail")).toContainText("Current presence is unknown");
+  base.os_processes.sampled_at = new Date().toISOString();
+  base.os_processes.processes = [{ ...first, cpu_percent: 3 }, second];
+  await page.locator("#pause").click();
+  await expect(page.locator("#os-process-detail")).toContainText("3 successful reads");
+  await expect(page.locator("#os-process-detail circle")).toHaveCount(2);
+  base.os_processes.sampled_at = new Date().toISOString();
+  base.os_processes.processes = [{ ...first, started_at: new Date().toISOString(), cpu_percent: 45 }, second];
+  await expect(page.locator("#os-process-detail")).toContainText("No longer observed");
+  await expect(page.locator("#os-process-detail")).toContainText(started);
+  await expect(page.locator("#os-process-detail")).not.toContainText("45.0%");
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+  base.identity = "other-process-owner";
+  await expect(page.locator("#os-process-detail")).toBeEmpty();
 });

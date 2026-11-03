@@ -18,3 +18,15 @@ From v0.8.27 Overview also compares a **recent** Claude or Codex executable-name
 The initial qualification used the actual macOS `/bin/ps` interface and a task-owned short process. Two samples observed its appearance and later absence, without inspecting its arguments. This does not prove all AI executables are discoverable: many CLIs use generic names such as `node`, which are deliberately excluded because their purpose cannot be inferred safely from executable name alone. This observer does not monitor remote/cloud processes. CPU is OS-reported recent utilization, not tokens or time spent by an agent.
 
 At the measured five-sample median of 88.642 ms per read on one Mac, a two-second cadence occupies about 4.4% of elapsed time and a five-second cadence about 1.8%. These are wall-time duty ratios, not measured CPU utilization or a general performance guarantee. The default was changed to five seconds; the browser continues to poll snapshots every two seconds and labels old or paused process samples as unknown current presence. Set `--process-interval` to a whole number from 2 to 60 only with `--processes`; longer intervals deliberately create wider periods of unknown current presence.
+
+## Inspect one process
+
+In Sessions, filter the current process table by executable text or PID and order it by CPU, resident memory or executable name. These controls affect only the process table. Ledger filters and the Overview aggregate remain separate.
+
+Choose **Inspect** to see CPU and resident-memory samples for that exact PID and OS start time. The browser retains up to 60 distinct successful samples per visible process identity, plus the selected identity if it disappears. At most 201 identities are retained. Repeated reads of the same source sample add no point. Failed, stale, missed or paused observations leave chart gaps. A reused PID with another start time is a different identity and does not extend the old chart.
+
+A process absent from a later successful sample is labeled no longer observed. Stale, paused or unavailable reads leave current presence unknown. Neither state implies session completion. Resource values are OS observations, not token usage or model inference. The view keeps the existing unknown session/worker relationship explicit.
+
+History stays in this browser page only. Reloading or changing owner identity clears selection and samples. This adds no durable process history, source access, server polling, read endpoint or API field. It uses the owner's existing sampling interval.
+
+One actual permitted macOS trial qualified the selected-process view across two distinct OS samples, memory ordering and the private identifier-redacted image. Ledger calls and active entities stayed zero. No provider request or process/session relationship was introduced. This checks one short local workflow, not long-duration retention, general resource overhead or model activity.

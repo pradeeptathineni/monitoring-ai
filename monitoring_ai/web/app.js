@@ -14,6 +14,7 @@ const titles = { overview: ["Overview", "Status evidence and usage from the sour
   settings: ["Settings", "Appearance preferences and setup guidance for explicitly selected sources."] };
 let data, paused = false, busy = false, view = "overview", entity = null;
 let settingsCategory = "all";
+let processView = { owner: null, lastSample: null, continuous: false, histories: new Map(), selected: null };
 let entityHistory = null;
 let collapsedHierarchyKeys = new Set();
 let lastSuccess = 0;
@@ -1475,25 +1476,25 @@ function renderSelectedCache() {
   ]));
 }
 
-function renderProcessHistory(root, sample) {
+function renderProcessHistory(root, sample, individual = false) {
   const history = Array.isArray(sample.history) ? sample.history.slice(-60).filter((row) =>
     row && Number.isFinite(Date.parse(row.sampled_at)) && Number.isSafeInteger(row.segment) && row.segment >= 0 &&
     Number.isSafeInteger(row.count) && row.count >= 0 && Number.isFinite(row.cpu_percent) && row.cpu_percent >= 0 &&
     Number.isSafeInteger(row.rss_bytes) && row.rss_bytes >= 0) : [];
   if (history.length < 2) return;
   const box = node("div", null, "process-history");
-  box.append(node("p", `Recent OS samples · ${number.format(history.length)} successful reads${sample.history_truncated ? " · latest 60 retained" : ""}. Gaps separate unavailable or missed reads.`, "confidence-note"));
+  box.append(node("p", `${individual ? "Process samples retained in this page" : "Recent OS samples"} · ${number.format(history.length)} successful reads${sample.history_truncated ? " · latest 60 retained" : ""}. Gaps separate unavailable or missed reads.`, "confidence-note"));
   const svgElement = (name) => document.createElementNS("http://www.w3.org/2000/svg", name);
   for (const [key, label, unit, style] of [
     ["count", "Matching processes", "", "count"],
     ["cpu_percent", "Combined OS CPU", "%", "cpu"],
     ["rss_bytes", "Combined resident memory", " MiB", "memory"],
-  ]) {
+  ].filter(([key]) => !individual || key !== "count")) {
     const values = history.map((row) => key === "rss_bytes" ? row[key] / 1048576 : row[key]);
     const peak = Math.max(...values);
     const format = (value) => key === "cpu_percent" ? value.toFixed(1) : number.format(Math.round(value));
     const row = node("div", null, `process-trend-row process-trend-${style}`);
-    row.append(node("p", `${label} · latest ${format(values.at(-1))}${unit} · observed peak ${format(peak)}${unit}`, "process-trend-label"));
+    row.append(node("p", `${individual ? label.replace("Combined OS ", "OS ").replace("Combined resident", "Resident") : label} · latest ${format(values.at(-1))}${unit} · observed peak ${format(peak)}${unit}`, "process-trend-label"));
     const svg = svgElement("svg");
     svg.setAttribute("viewBox", "0 0 320 58");
     svg.setAttribute("preserveAspectRatio", "none");
@@ -1567,6 +1568,52 @@ function renderAppThreads() {
     (book.threads || []).map((row) => [row.alias, row.kind, recent ? row.status : `Previously ${row.status} · current unknown`, row.updated_at, row.host]));
 }
 
+function processKey(row) { return JSON.stringify([row.pid, row.started_at]); }
+
+function retainProcessSamples(sample, current) {
+  if (typeof data.identity !== "string" || !data.identity) {
+    processView = { owner: null, lastSample: null, continuous: false, histories: new Map(), selected: null };
+    return;
+  }
+  if (processView.owner !== data.identity) {
+    processView = { owner: data.identity, lastSample: null, continuous: false, histories: new Map(), selected: null };
+  }
+  if (!current) { processView.continuous = false; return; }
+  if (sample.sampled_at === processView.lastSample) return;
+  const previous = processView.lastSample;
+  const gap = !processView.continuous || (previous && Date.parse(sample.sampled_at) - Date.parse(previous) > Math.max(10000, sample.interval_seconds * 2500));
+  const keys = new Set();
+  for (const row of sample.processes.slice(0, 200)) {
+    const key = processKey(row); keys.add(key);
+    const entry = processView.histories.get(key) || { row, points: [], segment: 0 };
+    if (entry.points.length && (gap || entry.points.at(-1).sampled_at !== previous)) entry.segment++;
+    entry.row = row;
+    entry.points.push({ sampled_at: sample.sampled_at, segment: entry.segment, count: 1,
+      cpu_percent: row.cpu_percent, rss_bytes: row.rss_bytes });
+    if (entry.points.length > 60) entry.points.shift();
+    processView.histories.set(key, entry);
+  }
+  for (const key of processView.histories.keys()) {
+    if (!keys.has(key) && key !== processView.selected) processView.histories.delete(key);
+  }
+  processView.lastSample = sample.sampled_at;
+  processView.continuous = true;
+}
+
+function renderProcessDetail(sample, current) {
+  const root = $("#os-process-detail"); root.replaceChildren();
+  const entry = processView.histories.get(processView.selected);
+  if (!entry) return;
+  const row = entry.row, present = sample.processes.some(item => processKey(item) === processView.selected);
+  const close = node("button", "Close process details", "text-button");
+  close.addEventListener("click", () => { processView.selected = null; renderOsProcesses(); });
+  root.append(node("h3", `${row.executable} · PID ${row.pid}`), close,
+    node("p", `Started ${row.started_at} · last observed parent PID ${row.parent_pid}. Identity uses PID and start time; no session or worker link is known.`, "confidence-note"));
+  root.append(node("p", !current ? "Current presence is unknown because sampling is stale, unavailable or paused." : present ? "Observed in the latest successful OS sample." : "No longer observed in the latest successful OS sample. This is not a session completion.", "confidence-note"));
+  if (entry.points.length < 2) root.append(node("p", "Waiting for another distinct OS sample. Samples are retained only in this page and reset when the owner changes.", "empty"));
+  else renderProcessHistory(root, { history: entry.points }, true);
+}
+
 function renderOsProcesses() {
   const panel = $("#os-process-panel"), status = $("#os-process-status"), target = $("#os-process-table");
   const sample = data?.os_processes?.schema === "monitoring.os-processes.v1" ? data.os_processes : null;
@@ -1578,6 +1625,8 @@ function renderOsProcesses() {
   status.replaceChildren(); target.replaceChildren();
   const age = sample.sampled_at ? (Date.now() - Date.parse(sample.sampled_at)) / 1000 : null;
   const current = sample.state === "following" && Number.isFinite(age) && age >= 0 && age <= 10 && !paused && !snapshotReadUnavailable;
+  retainProcessSamples(sample, current);
+  renderProcessDetail(sample, current);
   const interval = Number.isSafeInteger(sample.interval_seconds) ? `${sample.interval_seconds}s interval` : "interval unknown";
   if (sample.state === "following") {
     const counts = new Map();
@@ -1598,10 +1647,20 @@ function renderOsProcesses() {
     status.append(node("p", `${number.format(sample.processes.length)} matching executables in OS sample ${sample.sampled_at} · ${interval}. Session and worker mappings are unknown.`, "confidence-note"));
   }
   if (sample.state !== "following") return;
-  if (!sample.processes.length) status.append(node("p", "No matching executable names were visible in this OS sample. Other AI activity may exist.", "empty"));
-  else table("#os-process-table", ["Executable", "PID / parent", "CPU", "RSS", "Started · UTC", "Session / worker"],
-    sample.processes.map((row) => [row.executable, `${row.pid} / ${row.parent_pid}`, `${row.cpu_percent}%`,
-      `${number.format(Math.round(row.rss_bytes / 1048576))} MiB`, row.started_at, "Unknown"]));
+  const query = $("#os-process-filter").value.trim().toLowerCase();
+  const order = $("#os-process-sort").value;
+  const rows = sample.processes.filter(row => !query || row.executable.toLowerCase().includes(query) || String(row.pid).includes(query));
+  rows.sort((a, b) => (order === "memory" ? b.rss_bytes - a.rss_bytes : order === "cpu" ? b.cpu_percent - a.cpu_percent : a.executable.localeCompare(b.executable)) || a.pid - b.pid);
+  status.append(node("p", `Showing ${rows.length} of ${sample.processes.length} current process rows. These controls affect this table; ledger filters do not apply.`, "confidence-note"));
+  if (!rows.length) target.append(node("p", sample.processes.length ? "No process matches this executable or PID filter." : "No matching executable names were visible in this OS sample. Other AI activity may exist.", "empty"));
+  else table("#os-process-table", ["Executable", "PID / parent", "CPU", "RSS", "Started · UTC", "Session / worker", "Details"],
+    rows.map((row) => {
+      const inspect = node("button", "Inspect", "text-button");
+      inspect.setAttribute("aria-label", `Inspect ${row.executable} PID ${row.pid}`);
+      inspect.addEventListener("click", () => { processView.selected = processKey(row); renderOsProcesses(); });
+      return [row.executable, `${row.pid} / ${row.parent_pid}`, `${row.cpu_percent}%`,
+        `${number.format(Math.round(row.rss_bytes / 1048576))} MiB`, row.started_at, "Unknown", inspect];
+    }));
   if (sample.no_longer_observed?.length) status.append(node("p", `${number.format(sample.no_longer_observed.length)} previously sampled process${sample.no_longer_observed.length === 1 ? " is" : "es are"} absent from this OS sample. This is not a session completion event.`, "confidence-note"));
   if (sample.changed_count) status.append(node("p", `${number.format(sample.changed_count)} continuing process${sample.changed_count === 1 ? " has" : "es have"} changed CPU or RSS since the previous sample.`, "confidence-note"));
   if (sample.truncated) status.append(node("p", "Process rows are limited to 200; the matching set is incomplete.", "confidence-note"));
@@ -2020,3 +2079,6 @@ setInterval(() => {
     renderCodeburnActivity();
   } else { refresh(); if (view === "report") loadReport(false); }
 }, 2000);
+
+$("#os-process-filter").addEventListener("input", renderOsProcesses);
+$("#os-process-sort").addEventListener("change", renderOsProcesses);
