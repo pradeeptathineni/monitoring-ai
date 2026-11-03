@@ -1,6 +1,6 @@
 # Versions and release readiness
 
-Public versions use `vX.Y.Z`. Python package metadata and the read API use `X.Y.Z`, without the display prefix. The current checked version is `v0.8.4`. Its maturity is **Experimental alpha**. The number is not a fraction of the work completed.
+Public versions use `vX.Y.Z`. Python package metadata and the read API use `X.Y.Z`, without the display prefix. The current checked version is `v0.8.5`. Its maturity is **Experimental alpha**. The number is not a fraction of the work completed.
 
 Earlier source declarations such as `0.8.0a1` remain in published history. They have not been renamed or retagged. No Git tags existed when this policy was reconciled on 2026-11-03. Minor numbers will not advance for each development checkpoint. Version selection follows the scope of an accepted change, with compatibility and maturity stated separately.
 
@@ -9,7 +9,7 @@ Earlier source declarations such as `0.8.0a1` remain in published history. They 
 | Feature set or boundary | Required for v1.0.0 | Current gap |
 | --- | --- | --- |
 | Local usage reconstruction | Supported producer versions, actual authorized source checks, replay/stream/resume/counter-reset behavior and cost provenance demonstrated end to end | Native Claude/Codex transcript imports remain fixture-qualified. Completed CLI results, CodeBurn daily aggregates and account quota are narrower sources. Corrections and source overlap need a supported workflow. |
-| Sessions, workers and chronology | Useful terminal/web inspection of real producer lifecycle, hierarchy, history and stale/unavailable evidence, with explicit coverage | One explicitly integrated owner process has live lifecycle qualification. Native usage files and CLI result summaries supply no worker lifecycle. Broad local process and connected runtime coverage is incomplete. |
+| Sessions, workers and chronology | Useful terminal/web inspection of real producer lifecycle, hierarchy, history and stale/unavailable evidence, with explicit coverage | One explicitly integrated owner process has live lifecycle qualification. Optional CodeBurn status output reports recent transcript writes, not process liveness. A fresh represented source and broad local/connected runtime coverage remain incomplete. |
 | Usage analysis | Practical provider/model/surface/project/date filters, graphs and reports, disjoint tokens, estimated/billed/unknown costs and dated currency conversion | The current reports cover a bounded ledger. Larger-history analysis, richer visual comparison and complete source coverage remain unqualified. |
 | Quota, pace and budgets | Supported account windows, retained values, qualified forecasts and useful explicit budget thresholds without spending or reset authority | Codex quota and linear usage scenarios exist. Other provider collectors, budget thresholds and notifications remain incomplete. |
 | Connected tracing | An authorized configured SDK/OpenTelemetry or remote export workflow with causal hierarchy, failures and overlap rules | General receivers, cloud collectors and distributed tracing remain planned. A normalized file contract alone is not that workflow. |

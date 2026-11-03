@@ -76,10 +76,12 @@
           "src/session-cache.ts",
           "src/parser.ts",
           "src/export.ts",
-          "src/mcp/server.ts"
+          "src/mcp/server.ts",
+          "src/menubar-json.ts",
+          "src/live-sessions.ts"
         ],
         "copy_scope": "Original interoperability reader. No CodeBurn application code copied.",
-        "source_limitations": "Daily aggregates are mutable local-calendar snapshots without complete billing basis. Native per-call caches need reconciliation before immutable-ledger import."
+        "source_limitations": "Daily aggregates are mutable local-calendar snapshots without complete billing basis. Existing menubar status output is versionless and reports recent transcript writes at generation, not process liveness. Native per-call caches need reconciliation before immutable-ledger import."
       }
     },
     {
@@ -219,7 +221,7 @@
         "openlit/openlit",
         "langfuse/langfuse"
       ],
-      "decision": "Implemented metadata hierarchy, evidence aging, explicit multi-file health/coverage, private setup checks and read-only ingestion readiness against a disposable ledger copy. Scoped chronological entity-history pages preserve process identity and one ledger revision. Shared contextual navigation is adopted without runtime authority. Native usage still supplies no live worker lifecycle; process discovery and full native lifecycle adapters remain deferred. Optional runtime-owned normalized emission is qualified against one actual task-owned Claude review process, including running observations, heartbeats, terminal outcome and conversation-usage joining. Sessions now offers scoped parent-first hierarchy and local collapse. Broad native discovery remains unqualified.",
+      "decision": "Implemented metadata hierarchy, evidence aging, explicit multi-file health/coverage, private setup checks and read-only ingestion readiness against a disposable ledger copy. Scoped chronological entity-history pages preserve process identity and one ledger revision. Shared contextual navigation is adopted without runtime authority. Native usage still supplies no live worker lifecycle; process discovery and full native lifecycle adapters remain deferred. Optional runtime-owned normalized emission is qualified against one actual task-owned Claude review process, including running observations, heartbeats, terminal outcome and conversation-usage joining. Sessions offers scoped parent-first hierarchy and local collapse. An optional original adapter reads one selected existing CodeBurn menubar status output as replaceable recent-transcript-write evidence with source age and anonymous aliases. Its actual old, empty source proves unknown-visibility handling, not live-worker coverage. Core native provider collectors and broad discovery remain unqualified.",
       "evidence": [
         "tests/browser/dashboard.spec.mjs",
         "tests/test_monitoring.py",
@@ -240,7 +242,11 @@
         "tests/test_producer.py",
         "tests/browser/hierarchy.spec.mjs",
         "tests/test_source_health_consistency.py",
-        "docs/runtime-producers.md"
+        "docs/runtime-producers.md",
+        "monitoring_ai/codeburn_status.py",
+        "docs/codeburn-status.md",
+        "tests/test_codeburn_status.py",
+        "tests/browser/codeburn-activity.spec.mjs"
       ]
     },
     {

@@ -3,6 +3,7 @@
 import argparse
 import json
 from pathlib import Path
+import secrets
 import sqlite3
 import sys
 import time
@@ -45,6 +46,8 @@ def parser():
             command.add_argument("--sources", type=Path, help="Explicit private source manifest, loaded once at startup")
             command.add_argument("--codeburn-cache", type=Path,
                                  help="Explicit CodeBurn v74 daily cache. Separate totals with unknown billing basis")
+            command.add_argument("--codeburn-status", type=Path,
+                                 help="Explicit existing CodeBurn menubar status output. Recent writes, not process liveness")
         if name == "top":
             command.add_argument("--json", action="store_true")
             command.add_argument("--watch", action="store_true", help="Refresh every two seconds in this terminal")
@@ -259,9 +262,15 @@ def run(args):
         if args.codeburn_cache:
             from .codeburn_cache import read_codeburn_cache
             cache_loader = lambda: read_codeburn_cache(args.codeburn_cache)
+        activity_loader = None
+        if args.codeburn_status:
+            from .codeburn_status import read_codeburn_status
+            alias_salt = secrets.token_bytes(32)
+            activity_loader = lambda: read_codeburn_status(args.codeburn_status, alias_salt=alias_salt)
         serve(Observatory(store, pricing, fx, loader, quota_loader=quota_loader(args),
                           source_observer=observer,
                           cached_usage_loader=cache_loader,
+                          codeburn_activity_loader=activity_loader,
                           quota_book=demo_quotas() if args.demo and not args.quota_file and not args.codex_quota else None), args.port)
     else:
         if args.watch and (args.json or not sys.stdout.isatty()):

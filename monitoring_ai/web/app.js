@@ -23,6 +23,7 @@ let cachedRange = "all", cachedExactDate = "", cachedView = "daily";
 let cachedDimensionFilters = { providers: "", models: "" };
 let cachedUsageReceivedAt = 0, cachedFileAgeAtReceipt = null;
 let cachedUsageIdentity = null, cachedUsageSampledAt = null, cachedUsageFileModifiedAt = null;
+let activityReceivedAt = 0, activitySourceAgeAtReceipt = null;
 
 function node(tag, text, className) {
   const result = document.createElement(tag);
@@ -1028,6 +1029,43 @@ function renderUsage() {
   renderCodeburnCache();
 }
 
+function recordCodeburnActivityReceipt(snapshot) {
+  const book = snapshot?.codeburn_activity?.schema === "monitoring.codeburn-activity.v1" ? snapshot.codeburn_activity : null;
+  if (!book) { activityReceivedAt = 0; activitySourceAgeAtReceipt = null; return; }
+  if (book.sampled_at === data?.codeburn_activity?.sampled_at && snapshot.identity === data?.identity) return;
+  activityReceivedAt = Date.now();
+  activitySourceAgeAtReceipt = Number.isFinite(book.source_age_seconds) ? book.source_age_seconds : null;
+}
+
+function renderCodeburnActivity() {
+  const panel = $("#codeburn-activity-panel"), status = $("#codeburn-activity-status"), target = $("#codeburn-activity-table");
+  const book = data?.codeburn_activity?.schema === "monitoring.codeburn-activity.v1" ? data.codeburn_activity : null;
+  const readStatus = data?.codeburn_activity_status;
+  panel.hidden = !book && !readStatus;
+  if (panel.hidden) return;
+  status.replaceChildren(); target.replaceChildren();
+  if (!book) {
+    status.append(node("p", readStatus?.state === "unavailable" ? "Selected CodeBurn status is unavailable. Current activity is unknown." : "Selected CodeBurn status has not been read. Current activity is unknown.", "confidence-note"));
+    return;
+  }
+  const age = Number.isFinite(activitySourceAgeAtReceipt) ? activitySourceAgeAtReceipt + Math.max(0, Date.now() - activityReceivedAt) / 1000 : null;
+  const ageText = age === null ? "unknown generation age" : age < 0 ? "generation time is ahead of this clock" : age < 60 ? `${number.format(Math.floor(age))}s since generation` : age < 3600 ? `${number.format(Math.floor(age / 60))}m since generation` : `${number.format(Math.floor(age / 3600))}h since generation`;
+  const stale = age === null || age < 0 || age > 30 || readStatus?.state !== "following" || paused || snapshotReadUnavailable;
+  status.append(node("p", `Source generated ${book.generated_at || "at an unknown time"} · ${ageText} · selected file last modified ${book.file_modified_at || "at an unknown time"}. ${stale ? "Current activity is unknown." : "Source observation is recent; transcript writes still do not prove process liveness."}`, "confidence-note"));
+  if (readStatus?.state === "unavailable") status.append(node("p", "The selected file is unavailable. Showing the last accepted observation.", "confidence-note"));
+  if (!Array.isArray(book.sessions)) {
+    status.append(node("p", "This source output did not include a live-session block. Coverage is unknown.", "confidence-note"));
+    return;
+  }
+  const window = Number.isSafeInteger(book.window_seconds) && book.window_seconds > 0 ? `${number.format(book.window_seconds)}s` : "unknown window";
+  status.append(node("p", `${number.format(book.sessions.length)} session${book.sessions.length === 1 ? "" : "s"} reported with transcript writes in the ${window} source window at generation. This does not establish the number running now.`, "confidence-note"));
+  if (!book.sessions.length) return;
+  table("#codeburn-activity-table", ["Anonymous session", "Provider / model", "Last transcript write · UTC", "Context · source reported"], book.sessions.map((row) => {
+    const context = Number.isSafeInteger(row?.context_tokens) && Number.isSafeInteger(row?.context_window) ? `${number.format(row.context_tokens)} / ${number.format(row.context_window)}` : "Unknown";
+    return [row?.alias || "Unknown", `${row?.provider || "Unknown"} / ${row?.model || "Unknown"}`, row?.last_activity_at || "Unknown", context];
+  }));
+}
+
 function cachedUsage() {
   const value = data?.cached_usage;
   return value?.schema === "monitoring.cached-usage.v1" ? value : null;
@@ -1227,6 +1265,7 @@ function render() {
   renderSourceCoverage();
   renderInputHealth();
   renderEntityTable();
+  renderCodeburnActivity();
   renderUsage(); renderEvents();
   const info = $("#currency-info"); info.replaceChildren();
   info.append(node("p", `Display currency: ${data.currency}. ${data.fx ? `USD-based conversion as of ${data.fx.as_of}, provenance ${data.fx.provenance}. This is a display conversion, not an invoice exchange rate.` : "No conversion rates supplied. Amounts in other currencies stay unconverted."}`));
@@ -1246,6 +1285,7 @@ async function refresh() {
     if (value.schema !== "monitoring.snapshot.v1") throw new Error("The Monitoring service returned an unsupported data format.");
     if (data && value.identity !== data.identity) collapsedHierarchyKeys.clear();
     recordCachedUsageReceipt(value);
+    recordCodeburnActivityReceipt(value);
     data = value; lastSuccess = Date.now(); snapshotReadUnavailable = false;
     $("#notice").hidden = data.source_status.state !== "unavailable";
     $("#notice").textContent = data.source_status.error || "";
@@ -1359,5 +1399,6 @@ setInterval(() => {
     renderSourceCoverage();
     renderInputHealth();
     renderCodeburnCache();
+    renderCodeburnActivity();
   } else { refresh(); if (view === "report") loadReport(false); }
 }, 2000);

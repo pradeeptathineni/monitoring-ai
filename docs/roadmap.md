@@ -19,3 +19,5 @@ The [v1.0.0 acceptance requirements](release-readiness.md) govern release readin
 Runtime-owned normalized emission and the parent-first Sessions view are qualified against one actual owned CLI review process. Source health responses now derive their aggregate status from the included inventory. General session discovery, continuous large-source retention and provider-internal lifecycle remain unqualified.
 
 An explicitly selected CodeBurn v74 daily cache now supplies a separate replaceable daily view. It cannot establish session lifecycle, call chronology or a complete billing basis. Native per-call cache reconciliation and broader provider compatibility remain separate work.
+
+An explicitly selected existing CodeBurn menubar status output can provide recent transcript-write observations with independent source-generation age. This optional compatibility adapter does not identify running processes or replace native provider collectors. A fresh source with represented sessions still needs actual qualification.

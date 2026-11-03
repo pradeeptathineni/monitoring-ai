@@ -20,7 +20,7 @@ WEB = Path(__file__).with_name("web")
 
 class Observatory:
     def __init__(self, store, pricing, fx, loader=None, quota_loader=None, quota_book=None, source_observer=None,
-                 cached_usage_loader=None):
+                 cached_usage_loader=None, codeburn_activity_loader=None):
         if loader is not None and source_observer is not None:
             raise ValueError("Choose one input configuration")
         self.store, self.pricing, self.fx, self.loader = store, pricing, fx, loader
@@ -34,6 +34,32 @@ class Observatory:
         self.cached_usage_loader = cached_usage_loader
         self.cached_usage = None
         self.cached_usage_status = dict(state="unread", last_success_at=None, error=None)
+        self.codeburn_activity_loader = codeburn_activity_loader
+        self.codeburn_activity = None
+        self.codeburn_activity_status = dict(state="unread", last_success_at=None, error=None)
+
+    def refresh_codeburn_activity(self):
+        if self.codeburn_activity_loader is None:
+            return
+        try:
+            value = self.codeburn_activity_loader()
+            with self.lock:
+                self.codeburn_activity = value
+                self.codeburn_activity_status = dict(state="following", last_success_at=now_iso(), error=None)
+        except (ValueError, OSError):
+            with self.lock:
+                self.codeburn_activity_status = dict(
+                    state="unavailable", last_success_at=self.codeburn_activity_status["last_success_at"],
+                    error="Selected CodeBurn status is unavailable. The last accepted observation is retained.",
+                )
+
+    def _include_codeburn_activity(self, value):
+        if self.codeburn_activity_loader is not None:
+            status = dict(self.codeburn_activity_status)
+            value["codeburn_activity_status"] = status
+            value["codeburn_activity"] = None if self.codeburn_activity is None else dict(
+                self.codeburn_activity, read_status=status, retained=status["state"] != "following",
+            )
 
     def refresh_cached_usage(self):
         if self.cached_usage_loader is None:
@@ -122,6 +148,7 @@ class Observatory:
             value["insights"]["quotas"]["read_status"] = dict(self.quota_status)
             value.update(identity=self.identity, source_status=dict(self.source_status))
             self._include_cached_usage(value)
+            self._include_codeburn_activity(value)
             if inputs is not None:
                 value["source_status"] = self._source_status_for_inputs(inputs, self.source_status)
                 self.source_status = dict(value["source_status"])
@@ -136,6 +163,7 @@ class Observatory:
             value = detailed_report(revision, events, query, self.pricing, self.fx)
             value.update(identity=self.identity, source_status=dict(self.source_status))
             self._include_cached_usage(value)
+            self._include_codeburn_activity(value)
             if inputs is not None:
                 value["source_status"] = self._source_status_for_inputs(inputs, self.source_status)
                 self.source_status = dict(value["source_status"])
@@ -188,6 +216,7 @@ def handler(observatory):
                         input_observations="monitoring.inputs.v1",
                         source_coverage="monitoring.source-coverage.v1",
                         cached_usage="monitoring.cached-usage.v1",
+                        codeburn_activity="monitoring.codeburn-activity.v1",
                         insights="monitoring.insights.v1", quota_observations="monitoring.quotas.v1",
                         filters=["provider", "model", "surface", "project", "source", "session", "since", "until", "state"],
                         event_filters=["provider", "model", "surface", "project", "source", "session", "since", "until", "entity"],
@@ -232,6 +261,8 @@ def handler(observatory):
                                      quota_status=dict(observatory.quota_status))
                         if observatory.cached_usage_loader is not None:
                             value["cached_usage_status"] = dict(observatory.cached_usage_status)
+                        if observatory.codeburn_activity_loader is not None:
+                            value["codeburn_activity_status"] = dict(observatory.codeburn_activity_status)
                     if inputs is not None:
                         value["inputs"] = inputs
                     self.send(200, value)
@@ -284,6 +315,12 @@ def serve(observatory, port):
             if stop.wait(5):
                 break
 
+    def codeburn_activity():
+        while not stop.is_set():
+            observatory.refresh_codeburn_activity()
+            if stop.wait(5):
+                break
+
     observatory.refresh()
     worker = threading.Thread(target=follow, daemon=True)
     if observatory.loader or observatory.source_observer is not None:
@@ -296,6 +333,10 @@ def serve(observatory, port):
     if observatory.cached_usage_loader is not None:
         cache_worker = threading.Thread(target=cached_usage, daemon=True)
         cache_worker.start()
+    activity_worker = None
+    if observatory.codeburn_activity_loader is not None:
+        activity_worker = threading.Thread(target=codeburn_activity, daemon=True)
+        activity_worker.start()
     print(f"Monitoring AI → http://127.0.0.1:{server.server_port}", flush=True)
     try:
         server.serve_forever(poll_interval=0.25)
@@ -308,5 +349,7 @@ def serve(observatory, port):
             quota_worker.join(timeout=15)
         if cache_worker:
             cache_worker.join(timeout=5)
+        if activity_worker:
+            activity_worker.join(timeout=5)
         if previous_term is not None:
             signal.signal(signal.SIGTERM, previous_term)
