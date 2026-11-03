@@ -7,10 +7,12 @@ from pathlib import Path
 
 from .adapters import reject_constant, safe_label, unique_keys
 from .claude_results import capture_result
+from .claude_rate_limits import claude_rate_limit_book
 from .events import label
+from .insights import validate_quota_book
 from .metrics import now_iso
 from .producer import EventWriter, session_alias, status_event
-from .result_capture import ResultPublicationUncertain, write_result_frame
+from .result_capture import ResultPublicationUncertain, publish_private_json, write_result_frame
 from .store import stable_id
 
 MAX_LINE = 4 * 1024 * 1024
@@ -30,32 +32,41 @@ def _after(previous, current):
     return value.astimezone(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
+def _new_output_target(path, name):
+    try:
+        selected = Path(path).absolute()
+        return selected.parent.resolve(strict=True) / selected.name
+    except (OSError, RuntimeError):
+        raise ValueError(f"{name} needs an existing directory") from None
+
+
 def capture_stream(stream, output, *, source, project, clock=now_iso, forward=None,
-                   result_output=None):
+                   result_output=None, quota_output=None, quota_account="local"):
     """Read one native JSONL invocation and save only observed start/end states.
 
     The CLI stream's init/result frames describe this invocation, not a native
     conversation close, process PID, accepted task or provider worker roster.
     """
     source, project = label(source, "source"), label(project, "project")
+    outputs = [("Status output", output)]
     if result_output is not None:
-        try:
-            status_target = Path(output).absolute()
-            status_target = status_target.parent.resolve(strict=True) / status_target.name
-        except (OSError, RuntimeError):
-            raise ValueError("Status output needs an existing directory") from None
-        try:
-            result_target = Path(result_output).absolute()
-            result_target = result_target.parent.resolve(strict=True) / result_target.name
-        except (OSError, RuntimeError):
-            raise ValueError("Result summary needs an existing directory") from None
-        if (result_target == status_target or
-                (result_target.parent == status_target.parent and
-                 result_target.name.casefold() == status_target.name.casefold()) or
-                os.path.lexists(result_target)):
-            raise ValueError("Result summary needs a separate new file")
+        outputs.append(("Result summary", result_output))
+    if quota_output is not None:
+        label(quota_account, "account")
+        outputs.append(("Quota observation", quota_output))
+    if len(outputs) > 1:
+        targets = [(name, _new_output_target(path, name)) for name, path in outputs]
+        for index, (name, target) in enumerate(targets[1:], 1):
+            if os.path.lexists(target) or any(
+                target.parent == previous.parent and target.name.casefold() == previous.name.casefold()
+                for _, previous in targets[:index]
+            ):
+                raise ValueError(f"{name} needs a separate new file")
     started = ended = None
     result_summary = "unavailable" if result_output is not None else "not-requested"
+    quota_summary = "unavailable" if quota_output is not None else "not-requested"
+    quota_windows = {}
+    quota_rejected = 0
     with EventWriter(output) as writer:
         try:
             for line in _lines(stream):
@@ -110,8 +121,23 @@ def capture_stream(stream, output, *, source, project, clock=now_iso, forward=No
                             result_summary = "captured"
                         except ResultPublicationUncertain:
                             result_summary = "uncertain"
-                        except (ValueError, OSError, RecursionError):
+                        except (ValueError, OSError, TypeError, RecursionError):
                             result_summary = "failed"
+                elif row.get("type") == "rate_limit_event" and quota_output is not None:
+                    try:
+                        if started is None or row.get("session_id") != started["native"]:
+                            raise ValueError("Claude rate-limit event does not match this invocation")
+                        book = claude_rate_limit_book(
+                            row, captured_at=clock(), source=source, account=quota_account)
+                        observed = book["snapshots"][0]
+                        for window in observed["windows"]:
+                            quota_windows[window["id"]] = dict(observed, windows=[window])
+                        quota_summary = "observed"
+                    except Exception:
+                        # An optional, possibly newer CLI payload must not break
+                        # the already observed invocation status or valid windows.
+                        quota_rejected += 1
+                        quota_summary = "partial" if quota_windows else "failed"
         except (ValueError, OSError):
             if started is not None and ended is None:
                 _unknown(writer, source, project, started, clock())
@@ -119,10 +145,25 @@ def capture_stream(stream, output, *, source, project, clock=now_iso, forward=No
         if started is not None and ended is None:
             _unknown(writer, source, project, started, clock())
             ended = "unknown"
+        if quota_windows:
+            try:
+                quota_book = validate_quota_book({
+                    "schema": "monitoring.quotas.v1",
+                    "snapshots": [quota_windows[key] for key in sorted(quota_windows)],
+                })
+                publish_private_json(quota_output, quota_book)
+                quota_summary = "partial" if quota_rejected else "captured"
+            except ResultPublicationUncertain:
+                quota_summary = "uncertain"
+            except (ValueError, OSError, TypeError, RecursionError):
+                quota_summary = "failed"
     receipt = {"observed_invocations": int(started is not None),
                "terminal_state": ended or "unobserved"}
     if result_output is not None:
         receipt["result_summary"] = result_summary
+    if quota_output is not None:
+        receipt["quota_observation"] = quota_summary
+        receipt["quota_rejected_events"] = quota_rejected
     return receipt
 
 

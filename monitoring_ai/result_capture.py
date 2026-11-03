@@ -34,12 +34,19 @@ def write_result_frame(output, frame):
     if not isinstance(frame, dict) or frame.get("schema") != FRAME_SCHEMA:
         raise ValueError("Invalid sanitized result frame")
     frame = capture_result(frame, frame.get("captured_at"))
+    publish_private_json(output, frame)
+
+
+def publish_private_json(output, value):
+    """Atomically publish one caller-validated JSON object to a new 0600 file."""
+    if not isinstance(value, dict):
+        raise ValueError("Private JSON output needs an object")
     selected = Path(output).absolute()
     target = selected.parent.resolve(strict=True) / selected.name
-    descriptor, temporary = tempfile.mkstemp(prefix=".monitoring-result-", suffix=".tmp", dir=target.parent)
+    descriptor, temporary = tempfile.mkstemp(prefix=".monitoring-private-", suffix=".tmp", dir=target.parent)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
-            stream.write(json.dumps(frame, separators=(",", ":")) + "\n")
+            stream.write(json.dumps(value, separators=(",", ":"), allow_nan=False) + "\n")
             stream.flush()
             os.fsync(stream.fileno())
         os.link(temporary, target, follow_symlinks=False)

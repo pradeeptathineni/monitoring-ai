@@ -90,7 +90,7 @@ def _quota_view(book, now_epoch):
                 "freshness": freshness, "age_seconds": age,
             })
     return {"state": "ready" if book["snapshots"] else "unconfigured", "windows": windows,
-            "note": "Account-wide quota snapshots are independent of selected usage filters, token costs and worker lifecycle."}
+            "note": "Source-reported quota windows are independent of usage filters, token costs and worker lifecycle. Coverage depends on the source."}
 
 
 def build_insights(events, *, now, pricing, fx, quota_book=None, window_minutes=60):

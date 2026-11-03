@@ -91,8 +91,8 @@ class InsightsTests(unittest.TestCase):
         self.assertIsInstance(windows[0]["used_percent"], (int, float))
         self.assertEqual(windows[1]["freshness"], "reset-passed")
         self.assertIsNone(windows[1]["remaining_percent"])
-        self.assertIn("account-wide", result["quotas"]["note"].lower())
-        self.assertIn("selected usage filters", result["quotas"]["note"])
+        self.assertIn("source-reported", result["quotas"]["note"].lower())
+        self.assertIn("usage filters", result["quotas"]["note"])
         aged_book = {"schema": "monitoring.quotas.v1", "snapshots": [
             dict(book["snapshots"][0], captured_at="2026-11-02T19:54:59Z"),
             dict(book["snapshots"][0], source="future", captured_at="2026-11-02T20:00:00.500Z"),

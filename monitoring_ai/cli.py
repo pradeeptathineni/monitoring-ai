@@ -123,6 +123,9 @@ def parser():
     live.add_argument("--project", required=True, help="Safe project alias")
     live.add_argument("--result-output", type=Path,
                       help="New private sanitized cumulative result frame at completion; separate accounting source")
+    live.add_argument("--quota-output", type=Path,
+                      help="New private CLI-reported rate-limit window snapshot; separate from usage and cost")
+    live.add_argument("--quota-account", default="local", help="Local alias for the CLI-reported quota observation")
     live.add_argument("--forward", action="store_true", help="Pass raw native stream to stdout for an explicit downstream consumer")
     check = actions.add_parser("check", help="Check selected file parsing and coverage without changing a ledger")
     check.add_argument("--sources", type=Path, required=True)
@@ -253,10 +256,12 @@ def run(args):
                 result = capture_stream(sys.stdin.buffer, args.output,
                                         source=args.source_id, project=args.project,
                                         forward=sys.stdout.buffer if args.forward else None,
-                                        result_output=args.result_output)
+                                        result_output=args.result_output,
+                                        quota_output=args.quota_output, quota_account=args.quota_account)
                 print(json.dumps(result), file=sys.stderr if args.forward else sys.stdout)
-                if result.get("result_summary") in {"failed", "uncertain"}:
-                    raise ValueError("Result summary publication could not be confirmed")
+                if (result.get("result_summary") in {"failed", "uncertain"} or
+                        result.get("quota_observation") in {"failed", "partial", "uncertain"}):
+                    raise ValueError("Optional observation publication could not be confirmed")
                 return
             if args.source_action == "create":
                 create_selection(args.output, file=args.file, id=args.id, format=args.format, project=args.project)

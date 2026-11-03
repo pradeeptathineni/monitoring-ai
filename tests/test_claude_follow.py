@@ -202,7 +202,10 @@ class ClaudeFollowTest(unittest.TestCase):
             self.assertNotIn(str(self.root), json.dumps(moved))
             with self.path.open("a") as stream:
                 stream.write(assistant("one", "2026-11-02T20:00:10Z", 11))
-            corrected = until(lambda value: value["revision"] == 3)
+            # The ledger commit can become visible just before its input status
+            # is published. Wait for both observations from the same refresh.
+            corrected = until(lambda value: value["revision"] == 3 and
+                              value["source_status"].get("corrected") == 1)
             self.assertEqual((corrected["summary"]["calls"], corrected["source_status"]["state"]),
                              (2, "following"))
             self.assertEqual(corrected["summary"]["total_tokens"], 33)

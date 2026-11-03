@@ -9,7 +9,7 @@ import tempfile
 import unittest
 
 from monitoring_ai.adapters import load
-from monitoring_ai.result_capture import capture_cli_result
+from monitoring_ai.result_capture import capture_cli_result, publish_private_json
 from monitoring_ai.source_readiness import preview_selection
 from monitoring_ai.source_setup import check_selection, create_selection
 from monitoring_ai.store import Store
@@ -76,7 +76,16 @@ class ResultCaptureTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             capture_cli_result(self.raw, self.root / "new.jsonl", captured_at=AT)
         self.assertFalse((self.root / "new.jsonl").exists())
-        self.assertEqual(list(self.root.glob(".monitoring-result-*")), [])
+        self.assertEqual(list(self.root.glob(".monitoring-private-*")), [])
+
+    def test_private_json_publication_refuses_nonfinite_or_nonobject_values(self):
+        target = self.root / "quota.json"
+        with self.assertRaises(ValueError):
+            publish_private_json(target, {"used": float("nan")})
+        with self.assertRaises(ValueError):
+            publish_private_json(target, ["not-an-object"])
+        self.assertFalse(target.exists())
+        self.assertEqual(list(self.root.glob(".monitoring-private-*")), [])
 
     def test_cli_creates_no_ledger_and_rejects_missing_receipt_time_without_reading(self):
         output = self.root / "capture.jsonl"
