@@ -37,3 +37,32 @@ test("selected Codex host metadata stays distinct from app inventory and worker 
   await expect(page.locator("#app-thread-status")).toContainText("current Codex runtime status unknown");
   await expect(page.locator("#app-thread-table")).toContainText("Previously active · current unknown");
 });
+
+
+test("Codex history browsing pages bounded rows and stops treating stale active rows as current", async ({ page }) => {
+  const base = await (await page.request.get("/api/v1/snapshot")).json();
+  const captured = new Date().toISOString();
+  base.app_threads = { schema: "monitoring.app-threads.v1", source: "codex-app-task-history", scope: "codex-history-page",
+    captured_at: captured, read_state: "following", complete_coverage: false,
+    threads: Array.from({length:50},(_,i)=>({alias:`task-fixture-${String(i).padStart(2,"0")}`,kind:"codex",status:i<3?"active":"idle",host:"local",updated_at:captured})) };
+  await page.route("**/api/v1/snapshot?**",route=>route.fulfill({json:base}));
+  await page.goto("/");
+  await expect(page.getByRole("heading",{name:"Codex app tasks",exact:true})).toBeVisible();
+  await expect(page.locator("#app-thread-limit")).toContainText("ChatGPT history are unobserved");
+  await expect(page.locator("#app-thread-table tbody tr")).toHaveCount(20);
+  await expect(page.locator("#app-page-status")).toContainText("Page 1 of 3");
+  await page.getByRole("button",{name:"Next app tasks",exact:true}).click();
+  await expect(page.locator("#app-page-status")).toContainText("Page 2 of 3");
+  await page.locator("#app-status-filter").selectOption("active");
+  await expect(page.locator("#app-thread-table tbody tr")).toHaveCount(3);
+  await page.locator("#pause").click();
+  await expect(page.locator("#app-thread-table tbody tr")).toHaveCount(0);
+  await expect(page.locator("#app-thread-status")).toContainText("50 unknown");
+  await page.locator("#app-status-filter").selectOption("unknown");
+  await expect(page.locator("#app-thread-table tbody tr")).toHaveCount(20);
+  await expect(page.locator("#app-thread-table")).toContainText("Previously active · current unknown");
+  await page.locator("#app-alias-filter").fill("fixture-49");
+  await expect(page.locator("#app-thread-table tbody tr")).toHaveCount(1);
+  await page.setViewportSize({width:390,height:844});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false);
+});

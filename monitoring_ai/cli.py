@@ -139,6 +139,7 @@ def parser():
     host_capture.add_argument("--output", type=Path, required=True)
     host_capture.add_argument("--replace", action="store_true", help="Refresh an existing private export of this same source")
     app_capture = actions.add_parser("capture-app-threads", help="Capture only selected app inventory metadata from stdin")
+    app_capture.add_argument("--codex-history", action="store_true", help="Metadata from one supported non-archived Codex history page; no ChatGPT coverage")
     app_capture.add_argument("--output", type=Path, required=True)
     app_capture.add_argument("--captured-at", required=True, help="Original supported inventory observation time")
     app_capture.add_argument("--replace", action="store_true", help="Refresh an existing owned 0600 inventory export")
@@ -428,7 +429,8 @@ def run(args):
             return
         if args.source_action == "capture-app-threads":
             from .app_threads import capture_app_threads
-            print(json.dumps(capture_app_threads(sys.stdin.buffer, args.output, args.captured_at, replace=args.replace)))
+            print(json.dumps(capture_app_threads(sys.stdin.buffer, args.output, args.captured_at, replace=args.replace,
+                                                source="codex-app-task-history" if args.codex_history else "codex-app-task-inventory")))
             return
         from .source_setup import add_selection, create_selection, check_selection, select_claude_stream
         from .sources import SourceManifestError

@@ -8,7 +8,7 @@ import stat
 from .events import label, timestamp
 from .metrics import now_iso, seconds
 
-SCOPES = {"codex-app-task-inventory": "recent-app-page", "codex-local-app-server": "selected-cwd-page"}
+SCOPES = {"codex-app-task-inventory": "recent-app-page", "codex-local-app-server": "selected-cwd-page", "codex-app-task-history": "codex-history-page"}
 
 
 def _object(pairs):
@@ -31,6 +31,8 @@ def capture_app_threads(stream, output, captured_at, *, replace=False, source="c
     raw = json.loads(payload, object_pairs_hook=_object)
     if not isinstance(raw, list) or len(raw) > 100:
         raise ValueError("Supply at most 100 metadata-only task rows")
+    if source == "codex-app-task-history" and len(raw) > 50:
+        raise ValueError("Codex history page exceeds 50 rows")
     rows, seen = [], set()
     for row in raw:
         if not isinstance(row, dict) or set(row) != {"id", "kind", "status", "host", "updated_at"} or \
@@ -41,7 +43,9 @@ def capture_app_threads(stream, output, captured_at, *, replace=False, source="c
         if source == "codex-local-app-server" and (row["kind"] != "codex" or row["host"] != "local"):
             raise ValueError("Local Codex source cannot report another app or host")
         identity = row["kind"] + ":" + ident
-        if source != "codex-app-task-inventory":
+        if source == "codex-app-task-history" and row["kind"] != "codex":
+            raise ValueError("Codex history does not cover another app")
+        if source not in {"codex-app-task-inventory", "codex-app-task-history"}:
             identity = source + ":" + identity
         alias = "task-" + hashlib.sha256(identity.encode()).hexdigest()[:24]
         value = dict(alias=alias, kind=row["kind"], host=row["host"],
@@ -82,6 +86,8 @@ def read_app_threads(path):
         raw["scope"] != SCOPES[raw["source"]] or raw["complete_coverage"] is not False or \
         not isinstance(raw["threads"], list) or len(raw["threads"]) > 100:
         raise ValueError("Unsupported app inventory")
+    if raw["source"] == "codex-app-task-history" and len(raw["threads"]) > 50:
+        raise ValueError("Codex history page exceeds 50 rows")
     captured = timestamp(raw["captured_at"])
     rows, seen = [], set()
     for row in raw["threads"]:
@@ -92,6 +98,8 @@ def read_app_threads(path):
             raise ValueError("Unsupported app task row")
         if raw["source"] == "codex-local-app-server" and (row["kind"] != "codex" or row["host"] != "local"):
             raise ValueError("Unsupported local Codex row")
+        if raw["source"] == "codex-app-task-history" and row["kind"] != "codex":
+            raise ValueError("Unsupported Codex history row")
         alias = label(row["alias"], "alias")
         if alias in seen:
             raise ValueError("Duplicate app task alias")

@@ -13,3 +13,13 @@ test('finite supported bridge selects metadata and deduplicates without forwardi
 test('bridge rejects an unbounded sample request before any source access',async()=>{
  const run=new AsyncFunction('tools','text','setTimeout',source+';return refreshAppInventory({projectRoot:"/project",output:"/private/export.json",samples:100})');await assert.rejects(run({},()=>{},setTimeout),/finite samples/);
 });
+
+test('Codex history bridge bounds one page and can create the first private capture',async()=>{
+ const calls=[],commands=[];const row={id:'fixture-task',kind:'codex',status:'active',hostId:'local',updatedAt:1793730000,title:'private title'};
+ const tools={mcp__codex_app__list_threads:async args=>{calls.push(args);return{structuredContent:{threads:[row],nextCursor:'unused-private-cursor'}}},clock__curr_time:async()=>({current_time:'2026-11-03 19:00:00 UTC'}),exec_command:async args=>{commands.push(args.cmd);return{exit_code:0,output:JSON.stringify({captured_at:'2026-11-03T19:00:00.000Z',tasks:1})}}};
+ const run=new AsyncFunction('tools','text','setTimeout',source+';return refreshAppInventory({projectRoot:"/project",output:"/private/history.json",samples:2,view:"codex-history",replace:false})');
+ await run(tools,()=>{},callback=>callback());
+ assert.deepEqual(calls,[{mode:'history',source:'codex',limit:50,archived:false},{mode:'history',source:'codex',limit:50,archived:false}]);
+ assert.equal(commands[0].includes('--replace'),false);assert.equal(commands[1].includes('--replace'),true);
+ for(const command of commands){assert.equal(command.includes('--codex-history'),true);assert.equal(command.includes('private title'),false);assert.equal(command.includes('unused-private-cursor'),false)}
+});

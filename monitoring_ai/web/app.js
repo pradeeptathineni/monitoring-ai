@@ -14,6 +14,7 @@ const titles = { overview: ["Overview", "Status evidence and usage from the sour
   settings: ["Settings", "Appearance preferences and setup guidance for explicitly selected sources."] };
 let data, paused = false, busy = false, view = "overview", entity = null;
 let settingsCategory = "all";
+let appTaskPage = 0, appTaskOwner = null;
 let processView = { owner: null, lastSample: null, continuous: false, histories: new Map(), selected: null };
 let entityHistory = null;
 let collapsedHierarchyKeys = new Set();
@@ -1558,15 +1559,30 @@ function renderAppThreads() {
   const book = data?.app_threads, panel = $("#app-threads-panel");
   panel.hidden = !book;
   if (!book) return;
-  const runtime = book.source === "codex-local-app-server";
-  $("#app-thread-title").textContent = runtime ? "Codex runtime observations" : "App task observations";
-  $("#app-thread-description").textContent = runtime ? "One database-only page from the selected local Codex host and project. Separate from ledger sessions." : "Codex and ChatGPT statuses reported by the app inventory, separate from ledger sessions.";
-  $("#app-thread-limit").textContent = `${runtime ? "Selected project page only. Other hosts and ChatGPT conversations are unobserved." : "Recent app page only."} Titles, summaries, paths and raw thread IDs are omitted. Reported active/idle does not establish model inference, worker lifecycle, tokens or billing. Ledger filters do not apply. Capture older than 30 seconds has unknown current status.`;
+  const runtime = book.source === "codex-local-app-server", history = book.source === "codex-app-task-history";
+  const owner = JSON.stringify([data.identity, book.source, book.scope]);
+  if (owner !== appTaskOwner) { appTaskOwner = owner; appTaskPage = 0; }
+  $("#app-thread-title").textContent = runtime ? "Codex runtime observations" : history ? "Codex app tasks" : "App task observations";
+  $("#app-thread-description").textContent = runtime ? "One database-only page from the selected local Codex host and project. Separate from ledger sessions." : history ? "One supported non-archived Codex history page. App status is separate from ledger sessions." : "Codex and ChatGPT statuses reported by the app inventory, separate from ledger sessions.";
+  $("#app-thread-limit").textContent = `${runtime ? "Selected project page only. Other hosts and ChatGPT conversations are unobserved." : history ? "Up to 50 Codex tasks from one host history page. Older pages, other hosts and ChatGPT history are unobserved." : "Recent app page only."} Titles, summaries, paths and raw thread IDs are omitted. Reported active/idle does not establish model inference, worker lifecycle, tokens or billing. Ledger filters do not apply. Capture older than 30 seconds has unknown current status.`;
   const age = (Date.now() - Date.parse(book.captured_at)) / 1000;
   const recent = Number.isFinite(age) && age >= -5 && age <= 30 && !paused && !snapshotReadUnavailable && book.read_state === "following";
-  $("#app-thread-status").textContent = `Capture ${book.captured_at || "unavailable"} · ${recent ? (runtime ? "recent Codex runtime snapshot" : "recent app inventory") : `${runtime ? "current Codex runtime status unknown" : "current app status unknown"}; capture stale, unreadable or refresh paused`}. ${(book.threads || []).length} reported task rows; source coverage is incomplete.`;
-  table("#app-thread-table", ["Task alias", "Source kind", "Reported status", "Thread updated · UTC", "Host class"],
-    (book.threads || []).map((row) => [row.alias, row.kind, recent ? row.status : `Previously ${row.status} · current unknown`, row.updated_at, row.host]));
+  const status = row => recent ? row.status : "unknown";
+  const kind = $("#app-kind-filter").value, state = $("#app-status-filter").value, query = $("#app-alias-filter").value.trim().toLowerCase();
+  const supplied = book.threads || [];
+  const active = supplied.filter(row => status(row) === "active").length, idle = supplied.filter(row => status(row) === "idle").length;
+  $("#app-thread-status").textContent = `Capture ${book.captured_at || "unavailable"} · ${recent ? (runtime ? "recent Codex runtime snapshot" : "recent app inventory") : `${runtime ? "current Codex runtime status unknown" : "current app status unknown"}; capture stale, unreadable or refresh paused`}. ${supplied.length} supplied rows · ${active} active · ${idle} idle · ${supplied.length - active - idle} unknown. Source coverage is incomplete.`;
+  const rank = { active: 0, idle: 1, unknown: 2 };
+  const rows = supplied.filter(row => (!kind || row.kind === kind) && (!state || status(row) === state) && (!query || row.alias.toLowerCase().includes(query)))
+    .sort((a, b) => rank[status(a)] - rank[status(b)] || Date.parse(b.updated_at) - Date.parse(a.updated_at) || a.alias.localeCompare(b.alias));
+  const pages = Math.max(1, Math.ceil(rows.length / 20)); appTaskPage = Math.min(appTaskPage, pages - 1);
+  $("#app-page-prev").disabled = appTaskPage === 0; $("#app-page-next").disabled = appTaskPage + 1 === pages;
+  const pageLabel = `Page ${appTaskPage + 1} of ${pages} · ${rows.length} matching rows in this capture`;
+  if ($("#app-page-status").textContent !== pageLabel) $("#app-page-status").textContent = pageLabel;
+  if (!rows.length) $("#app-thread-table").replaceChildren(node("p", "No rows in this captured scope match the filters. This does not establish that no tasks exist.", "empty"));
+  else table("#app-thread-table", ["Task alias", "Source kind", "Reported status", "Thread updated · UTC", "Host class"],
+    rows.slice(appTaskPage * 20, (appTaskPage + 1) * 20).map(row => [row.alias, row.kind, recent ? row.status : `Previously ${row.status} · current unknown`, row.updated_at, row.host]));
+
 }
 
 function processKey(row) { return JSON.stringify([row.pid, row.started_at]); }
@@ -2083,3 +2099,9 @@ setInterval(() => {
 
 $("#os-process-filter").addEventListener("input", renderOsProcesses);
 $("#os-process-sort").addEventListener("change", renderOsProcesses);
+
+for (const id of ["app-kind-filter", "app-status-filter", "app-alias-filter"]) {
+  $("#" + id).addEventListener(id === "app-alias-filter" ? "input" : "change", () => { appTaskPage = 0; renderAppThreads(); });
+}
+$("#app-page-prev").addEventListener("click", () => { appTaskPage = Math.max(0, appTaskPage - 1); renderAppThreads(); });
+$("#app-page-next").addEventListener("click", () => { appTaskPage++; renderAppThreads(); });

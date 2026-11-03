@@ -65,3 +65,25 @@ class AppThreadTests(unittest.TestCase):
             retained = owner.read({})
             self.assertEqual(retained["app_threads"]["read_state"], "unavailable")
             self.assertEqual(len(retained["app_threads"]["threads"]), 1)
+
+
+class AppHistoryTests(unittest.TestCase):
+    def test_history_profile_keeps_alias_family_and_refuses_wrong_source_or_kind(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder); recent = root / "recent.json"; history = root / "history.json"
+            row = dict(id="fixture-native-task", kind="codex", status="active", host="local", updated_at="2026-11-03T19:00:00Z")
+            def stream(rows): return io.BytesIO(json.dumps(rows).encode())
+            capture_app_threads(stream([row]), recent, "2026-11-03T19:00:01Z")
+            capture_app_threads(stream([row]), history, "2026-11-03T19:00:01Z", source="codex-app-task-history")
+            a, b = read_app_threads(recent), read_app_threads(history)
+            self.assertEqual(a["threads"][0]["alias"], b["threads"][0]["alias"])
+            self.assertEqual(b["scope"], "codex-history-page")
+            self.assertFalse(b["complete_coverage"])
+            before = history.read_bytes()
+            with self.assertRaises(ValueError):
+                capture_app_threads(stream([row]), history, "2026-11-03T19:00:02Z", replace=True)
+            with self.assertRaises(ValueError):
+                capture_app_threads(stream([{**row,"kind":"chatgpt"}]), history, "2026-11-03T19:00:02Z", source="codex-app-task-history", replace=True)
+            with self.assertRaises(ValueError):
+                capture_app_threads(stream([{**row,"id":f"fixture-{i}"} for i in range(51)]), history, "2026-11-03T19:00:02Z", source="codex-app-task-history", replace=True)
+            self.assertEqual(history.read_bytes(), before)

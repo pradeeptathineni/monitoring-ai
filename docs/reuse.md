@@ -130,3 +130,5 @@ The one-shot Codex host collector is original standard-library client code again
 Process drill-down reuses Monitoring's existing standard-library OS observer, browser table helper and SVG trend renderer. The added filter/selection/sample-retention logic is original code. No upstream product implementation, process-management package, command-argument collector or new runtime dependency is introduced. Shared theme tokens remain unchanged.
 
 The on-screen reserve watch is original browser code over Monitoring's existing normalized quota view and native storage/DOM APIs. It reuses shared semantic theme tokens and adds no provider SDK, account client, notifier or runtime dependency. CodeBurn's supported quota command was independently used for a live allowance observation, not copied into the watch or required at runtime.
+
+Bounded app-history browsing extends the existing owned supported-tool bridge, private metadata projection and paged DOM table. No provider SDK, source directory parser or upstream product code is added. It uses the existing shared theme controls; model/worker/account authority is not inferred from task metadata.
