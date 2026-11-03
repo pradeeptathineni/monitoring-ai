@@ -1,6 +1,7 @@
 """Run the local monitoring server, import an explicit source or inspect usage in a terminal."""
 
 import argparse
+from contextlib import closing
 import json
 from pathlib import Path
 import secrets
@@ -11,7 +12,8 @@ import time
 from . import __version__
 from .adapters import load
 from .demo import demo_events, demo_quotas, stream_demo, write_demo
-from .metrics import DIMENSIONS, Exchange, Pricing, snapshot
+from .events import label, validate
+from .metrics import DIMENSIONS, Exchange, Pricing, filters, selected, snapshot
 from .server import Observatory, serve
 from .store import Store
 from .quota_sources import codex_book, quota_export, quota_file, read_codex_quota
@@ -92,6 +94,16 @@ def parser():
     report.add_argument("--json", action="store_true")
     for key in (*DIMENSIONS, "since", "until", "state"):
         report.add_argument("--" + key)
+    history = sub.add_parser("history", help="Read exact entity chronology from an existing ledger")
+    history.add_argument("--db", type=Path, default=Path(".monitoring-ai/events.sqlite"))
+    for key in ("source", "session", "entity"):
+        history.add_argument("--" + key, required=True, help="Exact recorded alias, not a path")
+    for key in ("provider", "model", "surface", "project", "since", "until"):
+        history.add_argument("--" + key)
+    history.add_argument("--limit", type=int, default=100, help="Records per page (1–500)")
+    history.add_argument("--after", type=int, default=0, help="Oldest-first record offset")
+    history.add_argument("--expected-revision", type=int, help="Pin later pages to the first ledger revision")
+    history.add_argument("--json", action="store_true", help="Local metadata-only history page")
     ledger = sub.add_parser("ledger", help="Back up or check an explicitly selected private ledger")
     ledger_actions = ledger.add_subparsers(dest="ledger_action", required=True)
     backup = ledger_actions.add_parser("backup", help="Save committed history to a new private SQLite file")
@@ -228,6 +240,63 @@ def watch_changes(previous, current):
     if not visible:
         return [], "Ledger revision advanced, but no changed row is visible in the latest 100 matching records."
     return visible, f"{len(visible)} changed record{'s' if len(visible) != 1 else ''} visible in the latest snapshot."
+
+
+def history_page(path, args):
+    """Page one exact entity from a consistent ledger read without a running owner."""
+    if not 1 <= args.limit <= 500 or args.after < 0 or (args.expected_revision is not None and args.expected_revision < 0):
+        raise ValueError("Use limit 1–500, nonnegative offset and revision")
+    if args.after and args.expected_revision is None:
+        raise ValueError("Later history pages require the first ledger revision")
+    query = filters({key: getattr(args, key) for key in
+                     ("source", "session", "provider", "model", "surface", "project", "since", "until")
+                     if getattr(args, key)})
+    entity = label(args.entity, "entity")
+    from .ledger_preview import _resolve_source, _same_file
+    target, before = _resolve_source(path)
+    try:
+        with closing(sqlite3.connect(target.as_uri() + "?mode=ro", uri=True, timeout=10)) as db:
+            db.execute("PRAGMA query_only=ON")
+            db.execute("BEGIN")
+            revision = db.execute("SELECT COALESCE(MAX(sequence),0) FROM events").fetchone()[0]
+            revision += db.execute("SELECT COUNT(*) FROM corrections").fetchone()[0]
+            rows = [validate(json.loads(payload)) for (payload,) in db.execute(
+                "SELECT payload FROM events ORDER BY timestamp, source, event_id LIMIT 100001")]
+    except (sqlite3.Error, ValueError, TypeError):
+        raise ValueError("Ledger is not a compatible Monitoring database") from None
+    if not _same_file(target, before):
+        raise ValueError("Selected ledger changed during history read")
+    if len(rows) > 100000:
+        raise ValueError("Ledger exceeds this alpha's 100,000-event read limit")
+    if args.expected_revision is not None and revision != args.expected_revision:
+        raise ValueError("Ledger revision changed. Restart history at offset zero")
+    matching = [row for row in rows if row["entity"] == entity and selected(row, query)]
+    page = matching[args.after:args.after + args.limit]
+    next_offset = args.after + args.limit if args.after + args.limit < len(matching) else None
+    return {"schema": "monitoring.history-cli.v1", "revision": revision,
+            "source": args.source, "session": args.session, "entity": entity,
+            "offset": args.after, "total": len(matching), "events": page, "next_offset": next_offset}
+
+
+def terminal_history(value):
+    lines = [f"MONITORING AI ENTITY HISTORY · ledger revision {value['revision']}",
+             f"{value['source']} / {value['session']} / {value['entity']}",
+             f"{len(value['events'])} of {value['total']} matching records · oldest first · offset {value['offset']}"]
+    for row in value["events"]:
+        if row["kind"] == "usage":
+            cost = row.get("cost")
+            detail = f"{sum(row['tokens'].values()):,} tokens · {row['provider']} / {row['model']} · "
+            detail += (f"{cost['amount']} {cost['currency']} · {cost['basis']} · {cost['provenance']}"
+                       if cost else "cost unreported")
+        elif row["kind"] == "status":
+            detail = f"state {row['state']}"
+        else:
+            detail = f"{row.get('tool_category', 'unclassified')} · {row['tool']} · outcome {row['outcome']}"
+        lines.append(f"{row['timestamp']}  {row['kind']}  {detail}")
+    if value["next_offset"] is not None:
+        lines.append(f"Next page: use the same selection with --after {value['next_offset']} --expected-revision {value['revision']}")
+    lines.append("Recorded source times are not proof of current activity. Costs are supplied evidence in original currency only.")
+    return "\n".join(lines)
 
 
 def quota_loader(args):
@@ -390,6 +459,10 @@ def run(args):
         if cost_limits:
             from .cost_thresholds import validate_limits
             cost_limits = validate_limits(cost_limits)
+    if args.command == "history":
+        value = history_page(args.db, args)
+        print(json.dumps(value, indent=2) if args.json else terminal_history(value))
+        return
     store = Store(args.db)
     if args.command == "import":
         result = store.ingest(load(args.file, args.format, args.source_id, args.project))

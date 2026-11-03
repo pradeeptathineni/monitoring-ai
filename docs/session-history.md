@@ -6,6 +6,8 @@
 
 Open **Sessions, agents and workers**, then select an entity. The Events view reads its history in chronological pages of 100. The source, session and entity together identify the selection. Two workers with the same name in different sessions remain separate.
 
+For the same exact selection from an existing ledger without a server, use the [terminal history command](terminal-history.md). It has its own local JSON page schema and cannot claim a running owner's identity.
+
 Current provider, model, surface, project and UTC date filters still apply. Current-state filtering selects entities in Sessions but does not hide earlier status events in their history. Clear the entity selection to return to the latest 100 matching snapshot events.
 
 Use **Load more events** for the next page. Loaded pages belong to one ledger revision. A new event can change chronological offsets, so a ledger change requires **Restart history** before reading another page. A restarted owner also requires a deliberate restart against its new snapshot identity. Previously loaded records remain historical observations. Refreshing a snapshot does not silently replace them.
