@@ -20,6 +20,8 @@ let lastSuccess = 0;
 let snapshotReadUnavailable = false;
 let lastSnapshotQuery = null, ledgerChanges = [], ledgerChangeNote = "Waiting for the first snapshot.";
 let reportController = null, reportRequestId = 0, reportData = null, reportDataQuery = null;
+let comparison = null, comparisonController = null, comparisonId = 0, comparisonScope = null, comparisonChoices = null;
+let comparisonMessage = "Choose two distinct sessions.";
 let cachedRange = "all", cachedExactDate = "", cachedView = "daily";
 let cachedDimensionFilters = { providers: "", models: "" };
 let cachedUsageReceivedAt = 0, cachedFileAgeAtReceipt = null;
@@ -49,7 +51,7 @@ function parseRoute(route) {
 function showView(route) {
   const target = parseRoute(route), next = target.next;
   if (view === next && settingsCategory === target.category && location.hash.slice(1) === target.hash) return;
-  if (view === "report" && next !== "report") cancelReport();
+  if (view === "report" && next !== "report") { cancelReport(); cancelComparison(); }
   if (view === "events" && next !== "events" && entityHistory?.pending) cancelEntityHistory("Entity history read canceled because you left the Event stream. Loaded pages are retained.");
   view = next;
   settingsCategory = target.category;
@@ -118,6 +120,107 @@ function cancelReport() {
   reportRequestId += 1;
   if (reportController) reportController.abort();
   reportController = null;
+}
+
+function comparisonQuery() {
+  const params = query();
+  for (const key of ["source", "session", "state"]) params.delete(key);
+  return params.toString();
+}
+
+function cancelComparison() {
+  comparisonId += 1;
+  if (comparisonController) {
+    comparisonController.abort();
+    comparisonMessage = "Comparison canceled. Choose Compare sessions to read again.";
+  }
+  comparisonController = null;
+}
+
+function renderSessionComparison() {
+  const scope = JSON.stringify([data?.identity, comparisonQuery()]);
+  if (comparisonScope !== scope) {
+    cancelComparison(); comparison = null; comparisonScope = scope;
+    comparisonMessage = "Choose two distinct sessions. Shared filters apply to both.";
+  }
+  const choices = [...new Set((data?.entities || []).map((row) => JSON.stringify([row.source, row.session])))].sort();
+  const signature = JSON.stringify(choices);
+  if (comparisonChoices !== signature) {
+    comparisonChoices = signature;
+    for (const selector of ["#compare-first", "#compare-second"]) {
+      const select = $(selector), prior = select.value;
+      select.replaceChildren(node("option", "Choose a session")); select.options[0].value = "";
+      for (const key of choices) {
+        const [source, session] = JSON.parse(key), option = node("option", `${source} / ${session}`);
+        option.value = key; select.append(option);
+      }
+      select.value = choices.includes(prior) ? prior : "";
+      if (prior && !select.value) {
+        cancelComparison(); comparison = null;
+        comparisonMessage = "A selected session is outside the current snapshot. Choose another pair.";
+      }
+    }
+  }
+  const first = $("#compare-first").value, second = $("#compare-second").value;
+  $("#compare-sessions").disabled = !first || !second || first === second || paused || snapshotReadUnavailable || !!comparisonController;
+  const status = $("#session-compare-status"), target = $("#session-compare-table");
+  status.textContent = comparisonMessage;
+  if (!comparison) { target.replaceChildren(); return; }
+  const { reports, selections } = comparison;
+  const [left, right] = reports, names = selections.map(([source, session]) => `${source} / ${session}`);
+  status.textContent += ` Revision ${left.revision}. Observed ${left.observed_at} and ${right.observed_at}.`;
+  if (data?.revision !== left.revision) status.textContent += " The current ledger revision differs; compare again for a current pair.";
+  if (paused || snapshotReadUnavailable) status.textContent += " Refresh is paused or unavailable; these are retained observations.";
+  const metrics = reports.map((report) => report.summary);
+  const rows = [];
+  const countRow = (label, values) => rows.push([label, ...values.map((value) => value == null ? "Unknown" : number.format(value)),
+    values.every((value) => Number.isSafeInteger(value)) ? number.format(values[1] - values[0]) : "Unavailable"]);
+  countRow("Usage records", metrics.map((value) => value.calls));
+  countRow("Recorded tokens", metrics.map((value) => value.total_tokens));
+  for (const bucket of ["input", "cache_read", "cache_write", "output"]) countRow(bucketNames[bucket], metrics.map((value) => value.tokens?.[bucket]));
+  for (const basis of ["estimated", "billed"]) rows.push([basis === "estimated" ? "Known estimated cost" : "Reported billed cost",
+    ...metrics.map((value) => `${reportCurrency(value.costs?.[basis]?.amount ?? null, left.currency)} · ${value.costs?.[basis]?.events ?? "unknown"} covered records`), "Coverage may differ"]);
+  countRow("Unknown cost records", metrics.map((value) => value.unknown_cost_events));
+  countRow("Unconverted cost records", metrics.map((value) => value.unconverted_cost_events));
+  countRow("Tool records", reports.map((value) => value.tools?.records));
+  countRow("Tool errors", reports.map((value) => value.tools?.errors));
+  countRow("Unknown tool outcomes", reports.map((value) => value.tools?.unknown_outcomes));
+  countRow("Receipt-time usage summaries", reports.map((value) => value.coverage?.receipt_time_summary_records));
+  table("#session-compare-table", ["Measure", names[0], names[1], "Second minus first"], rows);
+}
+
+async function compareSessions() {
+  const values = [$("#compare-first").value, $("#compare-second").value];
+  if (paused || snapshotReadUnavailable || values.some((value) => !value) || values[0] === values[1]) return;
+  cancelComparison(); comparison = null;
+  const requestId = comparisonId, controller = new AbortController();
+  comparisonController = controller;
+  const scope = comparisonScope, base = comparisonQuery(), identity = data?.identity;
+  const selections = values.map((value) => JSON.parse(value));
+  comparisonMessage = "Reading both recorded sessions."; renderSessionComparison();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    const reports = await Promise.all(selections.map(async ([source, session]) => {
+      const params = new URLSearchParams(base); params.set("source", source); params.set("session", session);
+      const response = await fetch(`/api/v1/report?${params}`, { signal: controller.signal, cache: "no-store" });
+      if (!response.ok) throw new Error(`Session report unavailable (${response.status}).`);
+      const report = await response.json();
+      if (report.schema !== "monitoring.report.v1" || report.identity !== identity ||
+        report.filters?.source !== source || report.filters?.session !== session || !Number.isSafeInteger(report.revision))
+        throw new Error("Session report did not match the selected owner or session.");
+      return report;
+    }));
+    if (requestId !== comparisonId || scope !== comparisonScope || base !== comparisonQuery()) return;
+    if (reports[0].revision !== reports[1].revision || reports[0].currency !== reports[1].currency)
+      throw new Error("The ledger changed between session reads. Compare again; no mixed revisions are displayed.");
+    comparison = { reports, selections };
+    comparisonMessage = "Recorded session comparison. Count differences describe supplied records only; cost coverage stays separate.";
+  } catch (error) {
+    if (requestId === comparisonId) comparisonMessage = error.name === "AbortError" ? "Session comparison timed out or was canceled. Compare again to retry." : error.message;
+  } finally {
+    clearTimeout(timer);
+    if (requestId === comparisonId) { comparisonController = null; renderSessionComparison(); }
+  }
 }
 
 function updateReportDownload() {
@@ -404,6 +507,7 @@ async function loadReport(force = true) {
   if (view !== "report") return;
   updateReportDownload();
   if (paused) {
+    cancelComparison();
     const last = reportData ? ` Last successful report observed at ${reportData.observed_at || "unknown time"} remains visible and may not match current filters.` : " No report observations have loaded yet.";
     $("#report-status").textContent = `Report refresh is paused.${last}`;
     $("#report-status").classList.remove("error");
@@ -1648,6 +1752,7 @@ function render() {
   renderOsProcesses();
   renderCodeburnActivity();
   renderUsage(); renderEvents();
+  renderSessionComparison();
   const info = $("#currency-info"); info.replaceChildren();
   info.append(node("p", `Display currency: ${data.currency}. ${data.fx ? `USD-based conversion as of ${data.fx.as_of}, provenance ${data.fx.provenance}. This is a display conversion, not an invoice exchange rate.` : "No conversion rates supplied. Amounts in other currencies stay unconverted."}`));
   for (const source of summary.cost_provenance) info.append(node("p", `${source.basis} · ${source.currency} · ${source.provenance}`));
@@ -1745,11 +1850,12 @@ async function refresh() {
 $$("[data-view]").forEach((button) => button.addEventListener("click", () => showView(button.dataset.view)));
 $("#filters").addEventListener("change", (event) => {
   markEntityHistoryFiltersChanged();
+  renderSessionComparison();
   if (event.target?.name === "since" || event.target?.name === "until") $("#report-period").value = "custom";
   refresh(); if (view === "report") loadReport();
 });
 $("#filters").addEventListener("submit", (event) => event.preventDefault());
-$("#filters").addEventListener("reset", () => { markEntityHistoryFiltersChanged(true); $("#state-filter").value = ""; setTimeout(() => { $("#report-period").value = "custom"; refresh(); if (view === "report") loadReport(); }, 0); });
+$("#filters").addEventListener("reset", () => { markEntityHistoryFiltersChanged(true); $("#state-filter").value = ""; setTimeout(() => { $("#report-period").value = "custom"; renderSessionComparison(); refresh(); if (view === "report") loadReport(); }, 0); });
 $("#report-period").addEventListener("change", () => applyReportPeriod($("#report-period").value));
 $("#download-report").addEventListener("click", downloadDisplayedReport);
 $("#download-report-csv").addEventListener("click", downloadDisplayedReportCsv);
@@ -1778,6 +1884,7 @@ $("#codeburn-model-filter").addEventListener("change", () => {
 $("#pause").addEventListener("click", () => {
   paused = !paused; $("#pause").textContent = paused ? "Resume refresh" : "Pause refresh";
   if (paused) {
+    cancelComparison();
     $("#connection").textContent = "Refresh paused"; $("#connection").classList.add("offline");
     if (view === "report") cancelReport();
     if (entityHistory?.pending) cancelEntityHistory("Entity history read canceled because refresh was paused. Loaded pages are retained; resume and retry explicitly.");
@@ -1816,6 +1923,10 @@ $("#load-more-events").addEventListener("click", () => {
 $("#restart-entity-history").addEventListener("click", () => {
   if (!entityHistory || !entity || paused || entityHistory.pending) return;
   startEntityHistory();
+});
+$("#compare-sessions").addEventListener("click", compareSessions);
+for (const selector of ["#compare-first", "#compare-second"]) $(selector).addEventListener("change", () => {
+  cancelComparison(); comparison = null; comparisonMessage = "Selection changed. Choose Compare sessions to read this pair."; renderSessionComparison();
 });
 $("#clear-entity").addEventListener("click", () => {
   cancelEntityHistory(); entity = null; entityHistory = null;

@@ -300,6 +300,7 @@
         "unknown coverage",
         "dated FX",
         "adjacent period comparison",
+        "exact recorded session comparison at one ledger revision",
         "qualified per-priced-session estimates",
         "recorded cache-read share",
         "reported-duration statistics",
