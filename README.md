@@ -4,7 +4,7 @@ Local monitoring for AI sessions, agents, workers, tokens and costs. Use it in y
 
 **Experimental alpha.** It observes explicitly supplied sources. Personal source compatibility, additional collectors and full-vision acceptance remain incomplete. [Version policy and v1.0.0 requirements](docs/release-readiness.md) keep maturity separate from version numbers.
 
-Current checked version: **v0.8.2**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
+Current checked version: **v0.8.3**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
 
 ![Monitoring AI dashboard with fictional sessions and costs](docs/observatory.png)
 
@@ -47,6 +47,8 @@ The producer appends usage and lifecycle evidence. The server imports complete l
 - [Entity history](docs/session-history.md) with chronological pages scoped to its source and session. Pages retain one ledger revision, with an explicit restart when history changes.
 
 ## Connect your data
+
+For an existing CodeBurn v74 daily cache, use the [explicit cached-usage view](docs/codeburn-cache.md). Its replaceable daily totals and source-reported USD amounts stay separate from event accounting. The cache cannot establish live workers or billing evidence.
 
 For completed headless Claude results, use the [explicit capture and check workflow](docs/claude-results.md). It imports cumulative model-level summaries with declared receipt times and estimated costs. It does not infer live worker states or individual call chronology.
 

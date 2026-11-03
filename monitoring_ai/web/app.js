@@ -19,6 +19,9 @@ let collapsedHierarchyKeys = new Set();
 let lastSuccess = 0;
 let snapshotReadUnavailable = false;
 let reportController = null, reportRequestId = 0, reportData = null;
+let cachedRange = "all", cachedExactDate = "";
+let cachedUsageReceivedAt = 0, cachedFileAgeAtReceipt = null;
+let cachedUsageIdentity = null, cachedUsageSampledAt = null, cachedUsageFileModifiedAt = null;
 
 function node(tag, text, className) {
   const result = document.createElement(tag);
@@ -1021,6 +1024,101 @@ function renderUsage() {
     row.key, number.format(row.calls), ...Object.values(row.tokens).map((v) => number.format(v)),
     cash(row.costs.estimated.amount), cash(row.costs.billed.amount), `${row.unknown_cost_events} / ${row.unconverted_cost_events}`,
   ]));
+  renderCodeburnCache();
+}
+
+function cachedUsage() {
+  const value = data?.cached_usage;
+  return value?.schema === "monitoring.cached-usage.v1" ? value : null;
+}
+
+function cachedCount(value) {
+  return Number.isSafeInteger(value) && value >= 0 ? number.format(value) : "Unknown";
+}
+
+function cachedUsd(value) {
+  if (typeof value !== "string" || !/^-?\d+(?:\.\d+)?$/.test(value) || !Number.isFinite(Number(value))) return "Unknown";
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(Number(value));
+}
+
+function cachedFileAge() {
+  if (!Number.isFinite(cachedFileAgeAtReceipt)) return "Unknown age";
+  const age = cachedFileAgeAtReceipt + Math.max(0, Date.now() - cachedUsageReceivedAt) / 1000;
+  if (age < 0) return `modified time ${number.format(Math.round(Math.abs(age)))}s after last read`;
+  if (age < 60) return `${number.format(Math.round(age))}s since file modification`;
+  if (age < 3600) return `${number.format(Math.floor(age / 60))}m since file modification`;
+  if (age < 86400) return `${number.format(Math.floor(age / 3600))}h since file modification`;
+  return `${number.format(Math.floor(age / 86400))}d since file modification`;
+}
+
+function recordCachedUsageReceipt(snapshot) {
+  const book = snapshot?.cached_usage?.schema === "monitoring.cached-usage.v1" ? snapshot.cached_usage : null;
+  const sameBook = book && snapshot.identity === cachedUsageIdentity
+    && book.sampled_at === cachedUsageSampledAt
+    && book.file_modified_at === cachedUsageFileModifiedAt;
+  if (sameBook) return;
+  cachedUsageIdentity = book ? snapshot.identity : null;
+  cachedUsageSampledAt = book?.sampled_at ?? null;
+  cachedUsageFileModifiedAt = book?.file_modified_at ?? null;
+  cachedUsageReceivedAt = Date.now();
+  cachedFileAgeAtReceipt = Number.isFinite(book?.file_age_seconds) ? book.file_age_seconds : null;
+}
+
+function renderCodeburnCache() {
+  const panel = $("#codeburn-cache-panel"), target = $("#codeburn-cache-table"), status = $("#codeburn-cache-status");
+  const book = cachedUsage(), readStatus = data?.cached_usage_status || book?.read_status || null;
+  panel.hidden = !book && !readStatus;
+  if (panel.hidden) return;
+  status.replaceChildren(); target.replaceChildren();
+  const state = readStatus?.state || "unknown";
+  const labels = { following: "Selected CodeBurn cache read is following", unavailable: "Selected CodeBurn cache is unavailable", unread: "Selected CodeBurn cache has not been read yet" };
+  status.append(node("p", labels[state] || "CodeBurn cache read status is unknown.", state === "unavailable" ? "codeburn-cache-read unavailable" : "codeburn-cache-read"));
+  if (!book) {
+    status.append(node("p", state === "unavailable"
+      ? "No prior cached summary is available. The current read failure does not mean usage was zero or that the provider was idle."
+      : "No readable cached daily summary is available yet. This does not establish provider idleness.", "confidence-note"));
+    return;
+  }
+
+  const sampledAt = book.sampled_at ? `${book.sampled_at.replace("T", " ").replace("Z", " UTC")}` : "unknown time";
+  const modifiedAt = book.file_modified_at ? book.file_modified_at.replace("T", " ").replace("Z", " UTC") : "unknown time";
+  const meta = [
+    `Sampled ${sampledAt}`,
+    `file modified ${modifiedAt}`,
+    cachedFileAge(),
+    `format ${book.format_version ?? "unknown"}`,
+    `date basis ${book.date_basis === "codeburn-local-calendar" ? "CodeBurn local calendar" : "unknown"}`,
+  ];
+  status.append(node("p", meta.join(" · "), "codeburn-cache-meta"));
+  if (state === "unavailable") {
+    const successful = readStatus.last_success_at || (book.retained ? sampledAt : null);
+    status.append(node("p", `A prior cached snapshot${successful ? ` last read ${successful.replace("T", " ").replace("Z", " UTC")}` : ""} remains visible after the failed read.`, "confidence-note"));
+  }
+  if (book.complete === false) status.append(node("p", "This CodeBurn cache is marked incomplete.", "confidence-note"));
+  if (book.watermark_trusted === false) status.append(node("p", "The cache watermark is not trusted.", "confidence-note"));
+  else if (book.watermark_trusted === null || book.watermark_trusted === undefined) status.append(node("p", "Cache watermark trust is unknown.", "confidence-note"));
+  if (book.last_computed_date) status.append(node("p", `Last computed date ${book.last_computed_date} · source cache marker, not a live activity time.`, "confidence-note"));
+
+  const allDays = Array.isArray(book.days) ? [...book.days].filter((day) => /^\d{4}-\d{2}-\d{2}$/.test(day?.date || "")).sort((a, b) => b.date.localeCompare(a.date)) : [];
+  const range = $("#codeburn-cache-range"), dateWrap = $("#codeburn-cache-date-wrap"), date = $("#codeburn-cache-date");
+  range.value = cachedRange;
+  date.value = cachedExactDate;
+  dateWrap.hidden = cachedRange !== "date";
+  let days = allDays;
+  if (cachedRange === "7" || cachedRange === "30") days = allDays.slice(0, Number(cachedRange));
+  else if (cachedRange === "date") days = cachedExactDate ? allDays.filter((day) => day.date === cachedExactDate) : [];
+  if (!days.length) {
+    target.append(node("p", allDays.length ? "Choose a date with a cached daily row." : "No cached daily rows are available. An empty cache does not establish provider idleness.", "empty"));
+    return;
+  }
+  const buckets = ["input", "output", "cache_read", "cache_write"];
+  table("#codeburn-cache-table", ["Date · CodeBurn local calendar", ...buckets.map((key) => bucketNames[key]), "Calls", "Sessions", "Source-reported USD"], days.map((day) => {
+    const dateCell = node("span", day.date);
+    if (day.carried === true) dateCell.append(node("small", "Carried summary", "codeburn-carried"));
+    const tokens = day.tokens || {};
+    const bucketValues = buckets.map((key) => cachedCount(tokens[key]));
+    return [dateCell, ...bucketValues, cachedCount(day.calls), cachedCount(day.sessions), cachedUsd(day.source_cost_usd)];
+  }));
 }
 
 function retainInsights(reason) {
@@ -1093,6 +1191,7 @@ async function refresh() {
     const value = await response.json();
     if (value.schema !== "monitoring.snapshot.v1") throw new Error("The Monitoring service returned an unsupported data format.");
     if (data && value.identity !== data.identity) collapsedHierarchyKeys.clear();
+    recordCachedUsageReceipt(value);
     data = value; lastSuccess = Date.now(); snapshotReadUnavailable = false;
     $("#notice").hidden = data.source_status.state !== "unavailable";
     $("#notice").textContent = data.source_status.error || "";
@@ -1125,6 +1224,14 @@ $("#filters").addEventListener("reset", () => { markEntityHistoryFiltersChanged(
 $("#report-period").addEventListener("change", () => applyReportPeriod($("#report-period").value));
 $("#state-filter").addEventListener("change", () => { refresh(); if (view === "report") loadReport(); });
 $("#group").addEventListener("change", () => { if (data) renderUsage(); });
+$("#codeburn-cache-range").addEventListener("change", () => {
+  cachedRange = $("#codeburn-cache-range").value;
+  if (data) renderCodeburnCache();
+});
+$("#codeburn-cache-date").addEventListener("change", () => {
+  cachedExactDate = $("#codeburn-cache-date").value;
+  if (data) renderCodeburnCache();
+});
 $("#pause").addEventListener("click", () => {
   paused = !paused; $("#pause").textContent = paused ? "Resume refresh" : "Pause refresh";
   if (paused) {
@@ -1185,5 +1292,6 @@ setInterval(() => {
     renderInsights();
     renderSourceCoverage();
     renderInputHealth();
+    renderCodeburnCache();
   } else { refresh(); if (view === "report") loadReport(false); }
 }, 2000);

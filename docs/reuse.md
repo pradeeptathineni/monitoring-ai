@@ -58,3 +58,9 @@ The package owns palettes, preference validation, contrast rules and semantic CS
 The stylesheet at `src/components/workspace-navigation.css` from shared UI candidate `93f5754fb4c92775381c103c5ef212de3cf5ed96` is reused under its MIT license. Monitoring changes only its workspace selector prefix and adds attribution. [Exact source and adapted checksums](navigation-source.json) preserve that provenance. The local DOM/controller adapter supplies Monitoring routes, existing Settings categories and local preference storage. No React shell, private view, review screenshot or unrelated owner tool is copied.
 
 The shared owner supplies geometry, accessible rail behavior, contextual slots and reduced-motion treatment. Monitoring owns its actual category links and standalone acceptance. Deep integration of the shared candidate remains with its integrator. This is scoped reuse of the handed-off pattern rather than a replacement settings registry or an independent palette/navigation system.
+
+## Installed CodeBurn cache interoperability
+
+The bounded reader targets daily-cache v74 from installed CodeBurn 0.9.27. Its MIT license names AgentSeal, 2026. Installed source-map SHA-256 is `91c68f4ceffc1dd3523cfb937812808c2f828930217ce211777929ef249883a9`. Inspected mapped sources include `src/daily-cache.ts`, `src/session-cache.ts`, `src/parser.ts`, `src/export.ts` and `src/mcp/server.ts`. This installed package is a separate compatibility pin from the discovery revision above.
+
+The daily reader is original interoperability code. It does not bundle or copy CodeBurn application code, icons or assets. Existing CodeBurn collection supplies the selected cache. Monitoring does not rerun collectors or read native transcripts. Per-call cache records can be revised and exports omit their stable deduplication keys, so neither is imported into the immutable event ledger. The [separate aggregate contract](codeburn-cache.md) preserves that boundary.

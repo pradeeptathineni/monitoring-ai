@@ -43,6 +43,8 @@ def parser():
             command.add_argument("--port", type=int, default=5274)
             command.add_argument("--demo", action="store_true", help="Seed an empty ledger with fictional data")
             command.add_argument("--sources", type=Path, help="Explicit private source manifest, loaded once at startup")
+            command.add_argument("--codeburn-cache", type=Path,
+                                 help="Explicit CodeBurn v74 daily cache. Separate totals with unknown billing basis")
         if name == "top":
             command.add_argument("--json", action="store_true")
             command.add_argument("--watch", action="store_true", help="Refresh every two seconds in this terminal")
@@ -253,8 +255,13 @@ def run(args):
                 raise ValueError("Demo seeding requires an empty ledger")
             store.ingest(demo_events())
         loader = (lambda: load(args.file, args.format, args.source_id, args.project, live=True)) if args.file else None
+        cache_loader = None
+        if args.codeburn_cache:
+            from .codeburn_cache import read_codeburn_cache
+            cache_loader = lambda: read_codeburn_cache(args.codeburn_cache)
         serve(Observatory(store, pricing, fx, loader, quota_loader=quota_loader(args),
                           source_observer=observer,
+                          cached_usage_loader=cache_loader,
                           quota_book=demo_quotas() if args.demo and not args.quota_file and not args.codex_quota else None), args.port)
     else:
         if args.watch and (args.json or not sys.stdout.isatty()):

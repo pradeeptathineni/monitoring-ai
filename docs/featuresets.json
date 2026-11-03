@@ -66,7 +66,21 @@
         "src/live-sessions.ts"
       ],
       "copy_scope": "No application code or assets copied. Design and semantic reference only.",
-      "runtime_evidence": "Source review only. Upstream applications not exercised."
+      "runtime_evidence": "Source review only. Upstream applications not exercised.",
+      "installed_compatibility": {
+        "package_version": "0.9.27",
+        "daily_cache_version": 74,
+        "installed_source_map_sha256": "91c68f4ceffc1dd3523cfb937812808c2f828930217ce211777929ef249883a9",
+        "inspected_paths": [
+          "src/daily-cache.ts",
+          "src/session-cache.ts",
+          "src/parser.ts",
+          "src/export.ts",
+          "src/mcp/server.ts"
+        ],
+        "copy_scope": "Original interoperability reader. No CodeBurn application code copied.",
+        "source_limitations": "Daily aggregates are mutable local-calendar snapshots without complete billing basis. Native per-call caches need reconciliation before immutable-ledger import."
+      }
     },
     {
       "repo": "Maciek-roboblog/Claude-Code-Usage-Monitor",
@@ -268,7 +282,7 @@
         "langfuse/langfuse",
         "Helicone/helicone"
       ],
-      "decision": "Implemented detailed UTC period reports and qualified comparisons, project/model/day breakdowns, timed-record statistics and categorized tool activity. Unsupported workflow quality remains unavailable. Richer charts and configurable views remain planned.",
+      "decision": "Implemented detailed UTC period reports and qualified comparisons, project/model/day breakdowns, timed-record statistics and categorized tool activity. Unsupported workflow quality remains unavailable. Richer charts and configurable views remain planned. An explicitly selected CodeBurn v74 daily cache supplies separate replaceable local-calendar aggregates, with source-reported USD of unknown billing basis and independent read/file ages. No sessions or ledger events are invented.",
       "evidence": [
         "monitoring_ai/metrics.py",
         "tests/test_monitoring.py",
@@ -276,7 +290,11 @@
         "monitoring_ai/reports.py",
         "monitoring_ai/reporting.py",
         "tests/test_reports.py",
-        "tests/browser/reports.spec.mjs"
+        "tests/browser/reports.spec.mjs",
+        "monitoring_ai/codeburn_cache.py",
+        "docs/codeburn-cache.md",
+        "tests/test_cached_usage_observation.py",
+        "tests/browser/cached-usage.spec.mjs"
       ]
     },
     {

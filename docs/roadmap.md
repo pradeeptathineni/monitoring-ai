@@ -17,3 +17,5 @@ Public demos remain synthetic. A capability is implemented when its complete inp
 The [v1.0.0 acceptance requirements](release-readiness.md) govern release readiness separately from version numbers. Completed Claude CLI result capture adds a narrower authorized source with cumulative model-level accounting. It does not qualify interactive transcripts, general lifecycle discovery or cloud tracing.
 
 Runtime-owned normalized emission and the parent-first Sessions view are qualified against one actual owned CLI review process. Source health responses now derive their aggregate status from the included inventory. General session discovery, continuous large-source retention and provider-internal lifecycle remain unqualified.
+
+An explicitly selected CodeBurn v74 daily cache now supplies a separate replaceable daily view. It cannot establish session lifecycle, call chronology or a complete billing basis. Native per-call cache reconciliation and broader provider compatibility remain separate work.
