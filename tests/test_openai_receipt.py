@@ -4,7 +4,7 @@ import tempfile
 import unittest
 
 from monitoring_ai.adapters import load
-from monitoring_ai.openai_receipt import capture_response, response_event
+from monitoring_ai.openai_receipt import capture_response, record_response, response_event
 from monitoring_ai.source_setup import create_selection, check_selection
 from monitoring_ai.store import Store
 
@@ -18,6 +18,26 @@ def response():
 
 
 class OpenAiReceiptTests(unittest.TestCase):
+    def test_application_records_received_responses_without_raw_files(self):
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder) / "metadata.jsonl"
+            options = dict(source="api-fixture", project="project", session="application-group")
+            first = response()
+            self.assertEqual(record_response(first, output, **options)["events"], 1)
+            second = response(); second.update(id="another-response", completed_at=1793732405)
+            self.assertEqual(record_response(second, output, **options)["events"], 1)
+            before = output.read_bytes()
+            self.assertEqual(record_response(first, output, **options)["replayed"], 1)
+            self.assertEqual(output.read_bytes(), before)
+            self.assertEqual(len(load(output, "normalized")), 2)
+            self.assertEqual(list(Path(folder).iterdir()), [output])
+            self.assertEqual(output.stat().st_mode & 0o777, 0o600)
+            for private in ("private prompt", "private answer", "private metadata", "another-response"):
+                self.assertNotIn(private, output.read_text())
+            with self.assertRaises(ValueError):
+                record_response(first, output, **{**options, "session": "changed-group"})
+            self.assertEqual(output.read_bytes(), before)
+
     def test_disjoint_usage_drops_content_and_replays_as_one_request(self):
         raw = response()
         row = response_event(raw, source="api-fixture", project="project", session="application-group")

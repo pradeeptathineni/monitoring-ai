@@ -48,4 +48,26 @@ A failed write can leave an incomplete record or an uncertain completed append. 
 
 Actual authorized project-review receipts were qualified through initial capture, explicit append, replay, owner refresh and the accepted Deep reader/hook/component in an isolated preview. Their original completion times and unknown costs were preserved, and no new API call or active-worker claim was made. These are recorded completed request observations. Capture time is not their completion time. They do not establish a current session roster, complete API/account usage or sustained unattended capture. The managed Deep owner was not changed.
 
-For ordinary future calls, the owning application can call `response_event(response_dict, source=..., project=..., session=...)` after receiving a supported completed result and pass the validated event to its explicitly selected `EventWriter`. The capture command adds receipt replay/conflict checks around that writer for saved response objects. That hooks into the application's existing authorized response path without another API call or credential. This task does not modify that application's scripts, install global hooks or start a persistent collector. Deep can consume the resulting explicitly selected normalized file through its existing contract after deliberate owner/source adoption.
+## Record an ordinary application response directly
+
+An application that already receives a supported completed response dictionary can record its metadata immediately. No intermediate raw response file is required. With Monitoring available in that application's Python environment:
+
+```python
+import logging
+from pathlib import Path
+from monitoring_ai.openai_receipt import record_response
+
+# data is the response already returned by an authorized application request
+try:
+    record_response(data, Path("/private/api-metadata.jsonl"),
+                    source="api-receipts", project="example-project",
+                    session="application-group")
+except (OSError, ValueError):
+    logging.warning("Monitoring receipt unavailable or uncertain; inspect the private sink")
+```
+
+Invoke this once after each ordinary response arrives. It creates a new private sink or uses the same checked append/replay path for an existing one. The caller selects an existing private directory and stable aliases. The application can continue returning its already received response if observation fails. Do not repeat the API request because metadata capture failed, and do not log the raw response or exception body. An unknown write outcome needs private file inspection before any observation retry.
+
+This helper makes no provider request, reads no credentials, installs no callback or global hook and starts no thread or background process. Selecting its output in Monitoring lets the existing owner and Deep consumer refresh after later ordinary calls. Actual ongoing provider emission is unqualified until the owning application deliberately adopts the helper and observes a new authorized response. The in-memory application path has synthetic sequential-response, replay, privacy and conflict validation. The earlier actual receipts qualify saved-file capture and receiving only.
+
+`response_event` remains available for a runtime that owns its own event publication. Keep one accounting route per request scope. Deep source adoption and any persistent host installation remain separate owner/access decisions.

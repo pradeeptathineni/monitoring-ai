@@ -49,6 +49,24 @@ def response_event(raw, *, source, project, session):
 def capture_response(source_file, output, *, source, project, session, append=False):
     raw = json.loads(read_source(source_file), object_pairs_hook=unique_keys, parse_constant=reject_constant)
     event = response_event(raw, source=source, project=project, session=session)
+    return _write_event(event, output, append=append)
+
+
+def record_response(raw, output, *, source, project, session):
+    """Record an already received response without saving its content to disk.
+
+    The caller chooses the private sink and invokes this after an ordinary
+    authorized response. Capture failure never authorizes retrying the API call.
+    """
+    event = response_event(raw, source=source, project=project, session=session)
+    try:
+        return _write_event(event, output, append=False)
+    except FileExistsError:
+        # Exclusive publication lost to an existing sink; never replace it
+        return _write_event(event, output, append=True)
+
+
+def _write_event(event, output, *, append):
     replayed = False
     if append:
         # Match the response hash across aliases to catch accidental regrouping
