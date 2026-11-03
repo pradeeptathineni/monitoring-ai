@@ -12,7 +12,20 @@ from .store import stable_id
 MAX_BYTES = 32 * 1024 * 1024
 
 
-def read_jsonl(path, *, live=False):
+def unique_keys(pairs):
+    value = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError("Source repeats a JSON key")
+        value[key] = item
+    return value
+
+
+def reject_constant(_):
+    raise ValueError("Source contains a non-JSON number")
+
+
+def read_source(path):
     # Canonicalize directory aliases such as macOS /tmp; refuse symlink files
     selected = Path(path).absolute()
     if selected.is_symlink():
@@ -26,6 +39,11 @@ def read_jsonl(path, *, live=False):
         content = stream.read(MAX_BYTES + 1)
     if len(content) > MAX_BYTES:
         raise ValueError("Source exceeds 32 MiB")
+    return content
+
+
+def read_jsonl(path, *, live=False, strict=False):
+    content = read_source(path)
     lines = content.splitlines(keepends=True)
     if live and lines and not lines[-1].endswith(b"\n"):
         lines.pop()  # A producer may still be writing the final record
@@ -34,8 +52,9 @@ def read_jsonl(path, *, live=False):
         if not line.strip():
             continue
         try:
-            row = json.loads(line)
-        except (ValueError, UnicodeError):
+            options = {"object_pairs_hook": unique_keys, "parse_constant": reject_constant} if strict else {}
+            row = json.loads(line, **options)
+        except (ValueError, UnicodeError, RecursionError):
             raise ValueError(f"Invalid JSON at line {index}") from None
         if not isinstance(row, dict):
             raise ValueError(f"Expected an object at line {index}")
@@ -147,10 +166,13 @@ def codex(rows, source, project):
 
 
 def load(path, format="normalized", source=None, project=None, live=False):
-    rows = read_jsonl(path, live=live)
+    rows = read_jsonl(path, live=live, strict=format == "claude-results")
     if format == "normalized":
         return [validate(row) for row in rows]
     if not source or not project:
         raise ValueError("Native imports require --source-id and --project aliases")
+    if format == "claude-results":
+        from .claude_results import claude_results
+        return claude_results(rows, source, project)
     events = {"claude": claude, "codex": codex}[format](rows, source, project)
     return [validate(event) for event in events]

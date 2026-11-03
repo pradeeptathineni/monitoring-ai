@@ -45,5 +45,9 @@ def detailed_report(revision, events, query, pricing, fx, now=None):
                           previous_range=previous_range, pricing=pricing, fx=fx, now=now)
     report.update(revision=revision, filters=query)
     report["coverage"].update(ledger_events=len(events), future_events_excluded=future,
+                               receipt_time_summary_records=sum(
+                                   e.get("kind") == "usage" and e.get("surface") == "claude-code-result"
+                                   for e in current
+                               ),
                                comparison_basis=comparison_reason, until_clamped_to_observation=query.get("until", now) > now)
     return report

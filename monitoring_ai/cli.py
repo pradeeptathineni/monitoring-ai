@@ -36,7 +36,7 @@ def parser():
             command.add_argument("--codex-executable", type=Path, help="Optional absolute installed Codex executable")
         if name != "top":
             command.add_argument("--file", type=Path, required=name == "import")
-            command.add_argument("--format", choices=["normalized", "claude", "codex"], default="normalized")
+            command.add_argument("--format", choices=["normalized", "claude", "codex", "claude-results"], default="normalized")
             command.add_argument("--source-id", help="Stable alias for this native input, reused across replay")
             command.add_argument("--project", help="Public-safe project alias for native input")
         if name == "serve":
@@ -74,8 +74,12 @@ def parser():
     create.add_argument("--output", type=Path, required=True)
     create.add_argument("--file", type=Path, required=True)
     create.add_argument("--id", required=True, help="Safe alias, independent of a normalized event's source")
-    create.add_argument("--format", choices=["normalized", "claude", "codex"], default="normalized")
+    create.add_argument("--format", choices=["normalized", "claude", "codex", "claude-results"], default="normalized")
     create.add_argument("--project", help="Required project alias for native inputs")
+    capture = actions.add_parser("capture-claude", help="Extract metadata from one selected completed Claude CLI JSON result")
+    capture.add_argument("--file", type=Path, required=True)
+    capture.add_argument("--captured-at", required=True, help="Original receipt time, with timezone. Never inferred from a reread")
+    capture.add_argument("--output", type=Path, required=True, help="New private metadata JSONL file. Existing files refuse")
     check = actions.add_parser("check", help="Check selected file parsing and coverage without changing a ledger")
     check.add_argument("--sources", type=Path, required=True)
     check.add_argument("--json", action="store_true")
@@ -124,6 +128,11 @@ def run(args):
         from .source_setup import create_selection, check_selection
         from .sources import SourceManifestError
         try:
+            if args.source_action == "capture-claude":
+                from .result_capture import capture_cli_result
+                capture_cli_result(args.file, args.output, captured_at=args.captured_at)
+                print("Created a private metadata result frame. It records usage summaries, not live worker status. Select it with sources create --format claude-results.")
+                return
             if args.source_action == "create":
                 create_selection(args.output, file=args.file, id=args.id, format=args.format, project=args.project)
                 print("Created a private source selection. Run sources check, then serve --sources with the selected manifest.")

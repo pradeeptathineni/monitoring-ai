@@ -135,6 +135,35 @@ test("optional source coverage validates capabilities, states, counts and unknow
   assert.throws(() => decodeSnapshot(duplicate), /incompatible/);
 });
 
+test("claude-results is a distinct cumulative-result source format with closed capabilities", () => {
+  const value = structuredClone(snapshot);
+  value.inputs = managedInputs();
+  value.inputs.inputs[2].format = "claude-results";
+  value.source_coverage = sourceCoverage();
+  const coverage = structuredClone(value.source_coverage.inputs[1]);
+  coverage.id = "claude-results-input";
+  coverage.format = "claude-results";
+  coverage.capabilities = { usage: "cumulative-result-deltas", lifecycle: "unsupported", tools: "unsupported" };
+  value.source_coverage.inputs.push(coverage);
+  const accepted = decodeSnapshot(value);
+  assert.equal(accepted.inputs.inputs[2].format, "claude-results");
+  assert.equal(accepted.source_coverage.inputs[5].capabilities.usage, "cumulative-result-deltas");
+
+  const group = { rows: [], truncated: false };
+  const report = { schema: "monitoring.report.v1", identity: "owner-one", revision: 1,
+    observed_at: snapshot.observed_at, currency: "USD", range: { from: null, until: snapshot.observed_at },
+    previous_range: null, summary: metrics, breakdowns: { projects: group, models: group, daily: group },
+    tools: {}, comparisons: {}, coverage: {}, inputs: value.inputs, source_coverage: value.source_coverage };
+  assert.equal(decodeReport(report).source_coverage.inputs[5].format, "claude-results");
+
+  const malformed = structuredClone(value);
+  malformed.source_coverage.inputs[5].capabilities.usage = "native-reconstruction";
+  assert.throws(() => decodeSnapshot(malformed), /incompatible/);
+  const unknownFormat = structuredClone(value);
+  unknownFormat.inputs.inputs[2].format = "claude-result";
+  assert.throws(() => decodeSnapshot(unknownFormat), /incompatible/);
+});
+
 test("only an operator-supplied plain loopback origin is accepted", () => {
   for (const url of ["https://example.com", "http://localhost:5274", "http://127.0.0.1:5274/private", "http://secret@127.0.0.1:5274"]) {
     assert.throws(() => monitoringOwner(url), /loopback/);
@@ -168,6 +197,34 @@ test("optional insight data rejects impossible quota percentages and preserves u
   assert.equal(decodeSnapshot(value).insights.quotas.windows[0].remaining_percent, null);
   value.insights.quotas.windows[0].used_percent = 101;
   assert.throws(() => decodeSnapshot(value), /incompatible/);
+});
+
+test("receipt-time summary qualifiers are optional and validate as nonnegative counts", () => {
+  assert.equal(decodeSnapshot(snapshot).coverage.receipt_time_summary_records, undefined);
+  const value = structuredClone(snapshot);
+  value.coverage.receipt_time_summary_records = 2;
+  value.insights = { schema: "monitoring.insights.v1", window: { minutes: 60, from: snapshot.observed_at, until: snapshot.observed_at },
+    pace: { records: 4, tokens: 40, tokens_per_minute: "1", estimated_cost_per_hour: null,
+      estimated_priced_records: 1, unknown_cost_records: 1, unconverted_cost_records: 0,
+      billed_records: 0, excluded_summary_records: 2 },
+    forecast: { horizon_minutes: 60, state: "available", tokens: 60, estimated_cost: null,
+      assumption: "fixture", observed_span_seconds: 600, confidence: "limited" },
+    source_freshness: [], quotas: { windows: [] } };
+  assert.equal(decodeSnapshot(value).insights.pace.excluded_summary_records, 2);
+  const malformedCoverage = structuredClone(value);
+  malformedCoverage.coverage.receipt_time_summary_records = -1;
+  assert.throws(() => decodeSnapshot(malformedCoverage), /incompatible/);
+  const malformedPace = structuredClone(value);
+  malformedPace.insights.pace.excluded_summary_records = 1.5;
+  assert.throws(() => decodeSnapshot(malformedPace), /incompatible/);
+
+  const group = { rows: [], truncated: false };
+  const report = { schema: "monitoring.report.v1", identity: "owner-one", revision: 1,
+    observed_at: snapshot.observed_at, currency: "USD", range: { from: null, until: snapshot.observed_at },
+    previous_range: null, summary: metrics, breakdowns: { projects: group, models: group, daily: group },
+    tools: {}, comparisons: {}, coverage: { receipt_time_summary_records: 2 } };
+  assert.equal(decodeReport(report).coverage.receipt_time_summary_records, 2);
+  assert.throws(() => decodeReport({ ...report, coverage: { receipt_time_summary_records: "2" } }), /incompatible/);
 });
 
 test("report reads preserve unknown amounts and share the pinned owner identity", async (context) => {

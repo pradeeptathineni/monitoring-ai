@@ -39,7 +39,7 @@ export type Report = {
   }>; truncated: boolean }>;
   tools: Record<string, unknown>;
   comparisons: Record<string, unknown>;
-  coverage: Record<string, unknown>;
+  coverage: Record<string, unknown> & { receipt_time_summary_records?: number };
 };
 export type Snapshot = {
   schema: "monitoring.snapshot.v1";
@@ -47,7 +47,8 @@ export type Snapshot = {
   revision: number;
   observed_at: string;
   currency: string;
-  coverage: { scope: string; event_count: number; matched_events: number; entities_truncated: boolean };
+  coverage: { scope: string; event_count: number; matched_events: number; entities_truncated: boolean;
+    receipt_time_summary_records?: number };
   source_status: { state: "static" | "following" | "unavailable"; last_success_at: string | null; error: string | null; degraded?: boolean };
   inputs?: ManagedInputs;
   source_coverage?: SourceCoverage;
@@ -58,7 +59,8 @@ export type Snapshot = {
     window: { minutes: number; from: string; until: string };
     pace: { records: number; tokens: number; tokens_per_minute: string;
       estimated_cost_per_hour: string | null; estimated_priced_records: number;
-      unknown_cost_records: number; unconverted_cost_records: number; billed_records: number };
+      unknown_cost_records: number; unconverted_cost_records: number; billed_records: number;
+      excluded_summary_records?: number };
     forecast: { state: "insufficient-data" | "partial" | "available"; tokens: number | null;
       estimated_cost: string | null; horizon_minutes: number; assumption: string;
       observed_span_seconds: number; confidence: "insufficient" | "low" | "limited" };
@@ -74,7 +76,7 @@ export type Snapshot = {
 
 export type ManagedInput = {
   id: string;
-  format: "normalized" | "claude" | "codex";
+  format: "normalized" | "claude" | "claude-results" | "codex";
   project: string | null;
   state: "following" | "unavailable" | "unread";
   last_attempt_at: string | null;
@@ -104,7 +106,7 @@ export type SourceCoverage = {
 
 export type SourceCoverageInput = {
   id: string;
-  format: "normalized" | "claude" | "codex";
+  format: "normalized" | "claude" | "claude-results" | "codex";
   capabilities: { usage: string; lifecycle: string; tools: string };
   sampled_at: string | null;
   records: { total: number; usage: number; status: number; tool: number;
@@ -170,7 +172,7 @@ function managedInputs(value: unknown): value is ManagedInputs {
   let healthy = 0, unavailable = 0, unread = 0;
   for (const row of value.inputs) {
     if (!record(row) || Object.keys(row).sort().join(",") !== [...INPUT_KEYS].sort().join(",") ||
-        !alias(row.id) || seen.has(row.id) || !["normalized", "claude", "codex"].includes(String(row.format)) ||
+        !alias(row.id) || seen.has(row.id) || !["normalized", "claude", "claude-results", "codex"].includes(String(row.format)) ||
         !(row.project === null || alias(row.project)) ||
         !["following", "unavailable", "unread"].includes(String(row.state)) ||
         !nullableTimestamp(row.last_attempt_at) || !nullableTimestamp(row.last_success_at) ||
@@ -206,7 +208,7 @@ function sourceCoverage(value: unknown): value is SourceCoverage {
 function sourceCoverageInput(value: unknown, seen: Set<string>): value is SourceCoverageInput {
   if (!record(value) || Object.keys(value).sort().join(",") !== [...SOURCE_COVERAGE_INPUT_KEYS].sort().join(",") ||
       !alias(value.id) || seen.has(value.id) ||
-      !["normalized", "claude", "codex"].includes(String(value.format)) ||
+      !["normalized", "claude", "claude-results", "codex"].includes(String(value.format)) ||
       !record(value.capabilities) || Object.keys(value.capabilities).sort().join(",") !== "lifecycle,tools,usage" ||
       !nullableTimestamp(value.sampled_at) ||
       ![value.latest_event_at, value.latest_usage_at, value.latest_status_at, value.latest_tool_at].every(nullableTimestamp) ||
@@ -218,8 +220,9 @@ function sourceCoverageInput(value: unknown, seen: Set<string>): value is Source
   const expectedCapabilities = {
     normalized: { usage: "normalized-deltas", lifecycle: "producer-supplied", tools: "producer-supplied" },
     claude: { usage: "native-reconstruction", lifecycle: "unsupported", tools: "completed-pairs" },
+    "claude-results": { usage: "cumulative-result-deltas", lifecycle: "unsupported", tools: "unsupported" },
     codex: { usage: "native-reconstruction", lifecycle: "unsupported", tools: "unsupported" },
-  }[value.format as "normalized" | "claude" | "codex"];
+  }[value.format as "normalized" | "claude" | "claude-results" | "codex"];
   if (value.capabilities.usage !== expectedCapabilities.usage ||
       value.capabilities.lifecycle !== expectedCapabilities.lifecycle ||
       value.capabilities.tools !== expectedCapabilities.tools) return false;
@@ -261,6 +264,7 @@ function insights(value: unknown): boolean {
   if (![pace.records, pace.tokens, pace.estimated_priced_records, pace.unknown_cost_records,
     pace.unconverted_cost_records, pace.billed_records, forecast.horizon_minutes]
       .every((n) => Number.isSafeInteger(n) && (n as number) >= 0) ||
+      (pace.excluded_summary_records !== undefined && !nonnegativeInteger(pace.excluded_summary_records)) ||
       typeof pace.tokens_per_minute !== "string" || !decimal(pace.tokens_per_minute) ||
       !decimal(pace.estimated_cost_per_hour) || !decimal(forecast.estimated_cost) ||
       !["insufficient-data", "partial", "available"].includes(String(forecast.state)) ||
@@ -280,6 +284,7 @@ export function decodeSnapshot(value: unknown): Snapshot {
       typeof value.observed_at !== "string" || !Number.isFinite(Date.parse(value.observed_at)) ||
       typeof value.currency !== "string" || !/^[A-Z]{3}$/.test(value.currency) || !record(value.coverage) ||
       !Number.isSafeInteger(value.coverage.event_count) || !Number.isSafeInteger(value.coverage.matched_events) ||
+      (value.coverage.receipt_time_summary_records !== undefined && !nonnegativeInteger(value.coverage.receipt_time_summary_records)) ||
       typeof value.coverage.scope !== "string" || typeof value.coverage.entities_truncated !== "boolean" ||
       !record(value.source_status) || !["static", "following", "unavailable"].includes(String(value.source_status.state)) ||
       (value.source_status.degraded !== undefined && typeof value.source_status.degraded !== "boolean") ||
@@ -306,6 +311,8 @@ export function decodeReport(value: unknown): Report {
       !record(value.range) || !metrics(value.summary) || !record(value.breakdowns) ||
       (value.inputs !== undefined && !managedInputs(value.inputs)) ||
       (value.source_coverage !== undefined && !sourceCoverage(value.source_coverage)) ||
+      !record(value.coverage) ||
+      (value.coverage.receipt_time_summary_records !== undefined && !nonnegativeInteger(value.coverage.receipt_time_summary_records)) ||
       !["projects", "models", "daily"].every((name) => {
         const group = (value.breakdowns as Record<string, unknown>)[name];
         return record(group) && typeof group.truncated === "boolean" && Array.isArray(group.rows) &&

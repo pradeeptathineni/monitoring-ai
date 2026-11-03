@@ -99,7 +99,9 @@ def build_insights(events, *, now, pricing, fx, quota_book=None, window_minutes=
         raise ValueError("window_minutes must be a positive integer")
     now_at = seconds(timestamp(now))
     start = now_at - window_minutes * 60
-    recent = [e for e in events if e.get("kind") == "usage" and start <= seconds(e["timestamp"]) <= now_at]
+    recent_usage = [e for e in events if e.get("kind") == "usage" and start <= seconds(e["timestamp"]) <= now_at]
+    excluded_summaries = [e for e in recent_usage if e.get("surface") == "claude-code-result"]
+    recent = [e for e in recent_usage if e.get("surface") != "claude-code-result"]
     token_total = sum(sum(e["tokens"].get(bucket, 0) for bucket in BUCKETS) for e in recent)
     by_time = sorted({seconds(e["timestamp"]) for e in recent})
     observed_span = by_time[-1] - by_time[0] if len(by_time) >= 2 else 0
@@ -145,7 +147,8 @@ def build_insights(events, *, now, pricing, fx, quota_book=None, window_minutes=
     return {
         "schema": "monitoring.insights.v1",
         "window": {"minutes": window_minutes, "from": _iso(start), "until": _iso(now_at)},
-        "pace": {"records": len(recent), "tokens": token_total, "tokens_per_minute": format(token_rate, "f"),
+        "pace": {"records": len(recent), "excluded_summary_records": len(excluded_summaries),
+                 "tokens": token_total, "tokens_per_minute": format(token_rate, "f"),
                  "estimated_cost_per_hour": format(estimate * Decimal(60) / Decimal(window_minutes), "f") if priced else None,
                  "estimated_priced_records": priced, "unknown_cost_records": unknown,
                  "unconverted_cost_records": unconverted, "billed_records": billed},

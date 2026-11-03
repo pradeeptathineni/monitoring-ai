@@ -159,13 +159,18 @@
         "ccusage/ccusage",
         "Helicone/helicone"
       ],
-      "decision": "Implemented normalized and Claude/Codex usage imports plus metadata-only completed Claude tool pairs. Replay identities remain stable. Explicit multi-source configuration is implemented. More native tools and a correction protocol remain planned.",
+      "decision": "Implemented normalized and Claude/Codex usage imports plus metadata-only completed Claude tool pairs. Replay identities remain stable. Explicit multi-source configuration is implemented. More native tools and a correction protocol remain planned. Completed Claude CLI result snapshots now supply per-model cumulative deltas and client-side estimates without private transcript discovery. Actual qualification uses an authorized project review receipt. Interactive transcript compatibility remains fixture-only.",
       "evidence": [
         "tests/test_monitoring.py",
         "monitoring_ai/adapters.py",
         "docs/contract.md",
         "monitoring_ai/claude_tools.py",
-        "tests/test_claude_tools.py"
+        "tests/test_claude_tools.py",
+        "monitoring_ai/claude_results.py",
+        "monitoring_ai/result_capture.py",
+        "tests/test_claude_results.py",
+        "tests/test_result_capture.py",
+        "docs/claude-results.md"
       ]
     },
     {

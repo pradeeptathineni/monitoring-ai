@@ -6,6 +6,7 @@ from .metrics import now_iso, seconds
 _CAPABILITIES = {
     "normalized": {"usage": "normalized-deltas", "lifecycle": "producer-supplied", "tools": "producer-supplied"},
     "claude": {"usage": "native-reconstruction", "lifecycle": "unsupported", "tools": "completed-pairs"},
+    "claude-results": {"usage": "cumulative-result-deltas", "lifecycle": "unsupported", "tools": "unsupported"},
     "codex": {"usage": "native-reconstruction", "lifecycle": "unsupported", "tools": "unsupported"},
 }
 

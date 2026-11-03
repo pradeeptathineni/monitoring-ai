@@ -190,7 +190,10 @@ function setBreakdownNote(target, label, section) {
 function renderReport() {
   const report = reportData, currency = report.currency || "USD", summary = report.summary || {}, metrics = summary.metrics || summary;
   const range = report.range || {};
-  $("#report-range").textContent = `Current range: ${range.from || "start unknown"} through ${range.until || "end unknown"} UTC · target currency ${currency} · observed ${report.observed_at || "time unknown"}. ${report.previous_range ? `Prior range: ${report.previous_range.from} through ${report.previous_range.until} UTC.` : "No prior range is defined."}`;
+  const receiptSummaryRecords = report.coverage?.receipt_time_summary_records;
+  const receiptSummaryNote = Number.isSafeInteger(receiptSummaryRecords) && receiptSummaryRecords > 0
+    ? ` ${number.format(receiptSummaryRecords)} cumulative Claude CLI result summaries use their capture receipt date, not call time. Period groups can include earlier work. Summary totals retain these records.` : "";
+  $("#report-range").textContent = `Current range: ${range.from || "start unknown"} through ${range.until || "end unknown"} UTC · target currency ${currency} · observed ${report.observed_at || "time unknown"}. ${report.previous_range ? `Prior range: ${report.previous_range.from} through ${report.previous_range.until} UTC.` : "No prior range is defined."}${receiptSummaryNote}`;
   const estimated = metrics.costs?.estimated?.amount ?? metrics.estimated_cost ?? null;
   const estimatedRecords = metrics.costs?.estimated?.events ?? summary.estimated_records;
   $("#report-metrics").replaceChildren(
@@ -243,6 +246,9 @@ function renderReport() {
   if (Object.values(tools.truncated || {}).some(Boolean)) groups.append(node("p", "One or more tool breakdowns are truncated by the report bound.", "confidence-note"));
 
   const coverage = report.coverage || {}, coverageRoot = $("#report-coverage"); coverageRoot.replaceChildren();
+  if (Number.isSafeInteger(receiptSummaryRecords) && receiptSummaryRecords > 0) {
+    coverageRoot.append(confidenceRow("Receipt-time summary records", `${number.format(receiptSummaryRecords)} cumulative Claude CLI result summaries use the declared capture receipt date, not call time. Period groups can include earlier work. Report totals retain these records.`));
+  }
   const fx = report.fx;
   const fxSummary = fx
     ? `Target currency ${currency}; supplied ${fx.base || "USD"}-base conversion book dated ${fx.as_of || "date unknown"}, provenance ${fx.provenance || "unknown"}. Rates are from that date.`
@@ -252,7 +258,9 @@ function renderReport() {
   if (!entries.length) coverageRoot.append(node("p", "Coverage details are unavailable in this report.", "empty"));
   const unsupportedLabels = { "context-overhead": "Context overhead", "one-shot-rate": "One-shot rate", corrections: "Corrections", rework: "Rework", "time-to-first-edit": "Time to first edit" };
   for (const [key, value] of entries) {
-    if (key === "unsupported" && Array.isArray(value)) {
+    if (key === "receipt_time_summary_records") {
+      continue;
+    } else if (key === "unsupported" && Array.isArray(value)) {
       const labels = value.map((item) => unsupportedLabels[item] || item.replaceAll("-", " "));
       coverageRoot.append(confidenceRow("Unavailable measures", labels.length ? labels.join(" · ") : "None listed"));
     } else if (key === "truncated" && value && typeof value === "object") {
@@ -372,6 +380,9 @@ function renderInsights() {
   const confidence = ["insufficient", "low", "limited"].includes(f.confidence) ? `confidence ${f.confidence} (heuristic)` : "";
   pace.append(node("p", `${f.state === "available" ? "Linear selected-window projection" : f.state === "partial" ? "Linear selected-window projection · partial priced coverage" : "Linear selected-window projection unavailable"} for the next ${f.horizon_minutes ?? 60} minutes: ${forecastValue} tokens · estimated cost ${forecastCost}. ${[sampleCount, observedSpan, confidence].filter(Boolean).join(" · ")}. ${f.assumption || ""} This is not predicted provider exhaustion or billed spend.`, "confidence-note"));
   pace.append(node("p", `Rate from ${duration}. Estimate projection coverage: ${p.estimated_priced_records ?? 0} priced records; ${p.unknown_cost_records ?? 0} unknown cost and ${p.unconverted_cost_records ?? 0} unconverted cost records. ${p.billed_records ?? 0} billed records are excluded from the estimate projection.`, "confidence-note"));
+  if (Number.isSafeInteger(p.excluded_summary_records) && p.excluded_summary_records > 0) {
+    pace.append(node("p", `${number.format(p.excluded_summary_records)} cumulative Claude CLI result summaries are excluded from short-window pace and forecast because capture time is not call time. They remain in summary totals.`, "confidence-note"));
+  }
 
   const q = value.quotas || {}, windows = Array.isArray(q.windows) ? q.windows : [];
   const readStatus = q.read_status || {};
@@ -406,7 +417,7 @@ function inputCount(value) {
 
 function capabilityText(kind, value) {
   const labels = {
-    usage: { "normalized-deltas": "Normalized usage deltas", "native-reconstruction": "Native usage reconstruction" },
+    usage: { "normalized-deltas": "Normalized usage deltas", "native-reconstruction": "Native usage reconstruction", "cumulative-result-deltas": "Claude CLI cumulative-result deltas" },
     lifecycle: { "producer-supplied": "Producer-supplied lifecycle", unsupported: "Lifecycle unsupported" },
     tools: { "producer-supplied": "Producer-supplied tool events", "completed-pairs": "Completed tool pairs", unsupported: "Tool events unsupported" },
   };
@@ -467,7 +478,10 @@ function renderSourceCoverage() {
     const health = healthById.get(item.id);
     if (health) {
       row.append(node("p", `Last read attempt: ${inputTimestamp(health.last_attempt_at)} · last successful read: ${inputTimestamp(health.last_success_at)}`, "source-coverage-sample"));
-      row.append(node("p", `Latest attempt: ${inputCount(health.records_seen)} normalized rows seen · ${inputCount(health.added)} added · ${inputCount(health.replayed)} replayed. These are read-attempt counts, not lifetime totals.`, "source-coverage-sample"));
+      row.append(node("p", `Latest attempt: ${inputCount(health.records_seen)} records seen · ${inputCount(health.added)} added · ${inputCount(health.replayed)} replayed. These are read-attempt counts, not lifetime totals.`, "source-coverage-sample"));
+    }
+    if (item.format === "claude-results") {
+      row.append(node("p", "Completed Claude CLI result summaries include subagent aggregate usage, but not individual calls, turn times, or worker states. The capture timestamp is the declared receipt time, not provider event time. USD costs are client-side estimates, not billed spend or subscription balance. This route is not reconciled with a Claude JSONL input.", "source-coverage-sample"));
     }
 
     const capability = node("p", null, "source-coverage-capability");
@@ -902,7 +916,10 @@ function render() {
   fillFacets();
   const summary = data.summary, coverage = data.coverage;
   const synthetic = data.facets.source.includes("synthetic");
-  $("#scope").replaceChildren(node("span", `${number.format(coverage.matched_events)} of ${number.format(coverage.event_count)} events · explicitly supplied sources · refreshes every 2s${data.filters.state ? ` · state: ${data.filters.state}` : ""}`), node("strong", synthetic ? "SYNTHETIC DATA PRESENT · FICTIONAL COSTS" : "METADATA ONLY · COVERAGE IS LIMITED"));
+  const receiptSummaryCount = coverage.receipt_time_summary_records;
+  const receiptScopeNote = Number.isSafeInteger(receiptSummaryCount) && receiptSummaryCount > 0
+    ? ` ${number.format(receiptSummaryCount)} cumulative Claude CLI result summaries use capture receipt time, not call time. Date groups can include earlier work. Summary totals retain them.` : "";
+  $("#scope").replaceChildren(node("span", `${number.format(coverage.matched_events)} of ${number.format(coverage.event_count)} events · explicitly supplied sources · refreshes every 2s${data.filters.state ? ` · state: ${data.filters.state}` : ""}.${receiptScopeNote}`), node("strong", synthetic ? "SYNTHETIC DATA PRESENT · FICTIONAL COSTS" : "METADATA ONLY · COVERAGE IS LIMITED"));
   $("#metrics").replaceChildren(
     metric("Observed sessions", number.format(summary.sessions), `${summary.active} running entities · ${summary.attention} waiting or blocked`, "⌘"),
     metric("Token volume", compact.format(summary.total_tokens), `${summary.calls} usage records · cache included once`, "◷"),

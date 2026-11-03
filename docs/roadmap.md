@@ -13,3 +13,5 @@ The goal is one useful view of local and explicitly connected AI activity, indep
 | Deep integration | Reviewed same-origin bridge and unified monitoring view beside existing owner activity | Consumer adapter supplied. Deep source 95cbcdc mounts snapshot/reconnect views with synthetic checks. Detailed-report and managed-input additions await consumer adoption; live telemetry and UAT promotion remain unqualified. |
 
 Public demos remain synthetic. A capability is implemented when its complete input-to-consumer journey works and its meaningful failure behavior is checked. Live personal-source qualification, user acceptance and production readiness remain separate evidence.
+
+The [v1.0.0 acceptance requirements](release-readiness.md) govern release readiness separately from version numbers. Completed Claude CLI result capture adds a narrower authorized source with cumulative model-level accounting. It does not qualify interactive transcripts, general lifecycle discovery or cloud tracing.

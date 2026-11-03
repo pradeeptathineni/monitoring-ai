@@ -205,6 +205,9 @@ def snapshot(revision, events, query=None, pricing=None, fx=None, now=None, quot
         currency=fx.currency, fx=fx.raw, filters=query,
         coverage={"scope": "explicitly supplied files only", "event_count": len(events),
                   "matched_events": len(matched), "live_window_seconds": 60,
+                  "receipt_time_summary_records": sum(
+                      e.get("kind") == "usage" and e.get("surface") == "claude-code-result" for e in matched
+                  ),
                   "read_limit": 100000, "entity_limit": 500,
                   "entities_truncated": len(rows) > 500},
         summary=dict(totals(matched, pricing, fx), entities=len(rows),
