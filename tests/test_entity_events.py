@@ -24,6 +24,20 @@ def event(ident, *, source="source-a", session="session-a", entity="target", at=
 
 
 class EntityEventsTests(unittest.TestCase):
+    def test_session_catalog_pins_later_pages_and_advertises_separate_filters(self):
+        status, capabilities = self.get("/api/v1/capabilities")
+        self.assertEqual(capabilities["sessions"], "/api/v1/sessions")
+        self.assertNotIn("state", capabilities["session_filters"])
+        status, page = self.get("/api/v1/sessions?limit=1")
+        self.assertEqual(status, 200)
+        self.assertEqual(page["total"], 3)
+        self.assertEqual(page["identity"], capabilities["identity"])
+        self.assertEqual(self.get("/api/v1/sessions?after=1")[0], 400)
+        self.assertEqual(self.get(f"/api/v1/sessions?after=1&expected_revision={page['revision']}")[0], 200)
+        self.store.ingest([event("catalog-new", at=130)])
+        self.assertEqual(self.get(f"/api/v1/sessions?after=1&expected_revision={page['revision']}")[0], 409)
+        self.assertEqual(self.get("/api/v1/sessions?state=running")[0], 400)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

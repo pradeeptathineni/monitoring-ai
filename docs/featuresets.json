@@ -301,6 +301,7 @@
         "dated FX",
         "adjacent period comparison",
         "exact recorded session comparison at one ledger revision",
+        "searchable revision-pinned recorded session catalog",
         "qualified per-priced-session estimates",
         "recorded cache-read share",
         "reported-duration statistics",

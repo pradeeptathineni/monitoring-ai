@@ -1,6 +1,6 @@
 # Compare recorded sessions
 
-Open Usage report, choose two distinct source/session pairs under Compare recorded sessions, then choose Compare sessions. Choices come from entities visible in the current snapshot, which is limited to 500 entities. Clear restrictive filters if the session you need is outside that selection.
+Open Usage report, choose two distinct source/session pairs under Compare recorded sessions, then choose Compare sessions. Initial choices come from entities visible in the current snapshot, which is limited to 500 entities. Use Find recorded sessions to extend the choices from the ledger. Enter a source/session alias fragment to narrow the search, then load more pages as needed. The browser keeps up to 2,000 loaded choices. Narrow the search or filters if that limit is reached. Later pages require the same ledger revision; choose Find sessions again after a revision conflict. Older owners may not support this optional route.
 
 Provider, model, surface, project and UTC date filters apply to both reports. The two chosen pairs replace the shared source/session filters. Current state is omitted so historical records remain included. Each comparison reads the existing report endpoint twice and displays results only when both reports share an owner identity, ledger revision and currency. A ledger change between reads requires another explicit comparison.
 

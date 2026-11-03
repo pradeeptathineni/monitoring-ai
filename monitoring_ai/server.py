@@ -14,6 +14,7 @@ from .events import label as event_label
 from .metrics import filters, now_iso, selected, snapshot
 from .insights import validate_quota_book
 from .reporting import detailed_report
+from .sessions import session_page
 
 WEB = Path(__file__).with_name("web")
 
@@ -293,6 +294,7 @@ def handler(observatory):
                         schema="monitoring.capabilities.v1", version=__version__,
                         identity=observatory.identity, read_only=True,
                         snapshot="/api/v1/snapshot", events="/api/v1/events",
+                        sessions="/api/v1/sessions",
                         report="/api/v1/report", event_features=["tool-categories.v1"],
                         input_observations="monitoring.inputs.v1",
                         source_coverage="monitoring.source-coverage.v1",
@@ -301,6 +303,7 @@ def handler(observatory):
                         insights="monitoring.insights.v1", quota_observations="monitoring.quotas.v1",
                         filters=["provider", "model", "surface", "project", "source", "session", "since", "until", "state"],
                         event_filters=["provider", "model", "surface", "project", "source", "session", "since", "until", "entity"],
+                        session_filters=["provider", "model", "surface", "project", "source", "session", "since", "until"],
                         limits={"read_events": 100000, "snapshot_entities": 500, "event_page": 500},
                     )
                     if observatory.process_observer is not None:
@@ -324,6 +327,20 @@ def handler(observatory):
                     self.send(200, observatory.read(query))
                 elif parsed.path == "/api/v1/report":
                     self.send(200, observatory.report(query))
+                elif parsed.path == "/api/v1/sessions":
+                    limit = int(query.pop("limit", "100"))
+                    after = int(query.pop("after", "0"))
+                    expected = query.pop("expected_revision", None)
+                    search = query.pop("search", "")
+                    if after and expected is None:
+                        raise ValueError("Later session pages require the first revision")
+                    with observatory.lock:
+                        revision, events = observatory.store.read()
+                        if expected is not None and int(expected) != revision:
+                            self.send(409, {"error": "Ledger changed. Restart session list", "revision": revision})
+                            return
+                        page = session_page(revision, events, query, limit=limit, after=after, search=search)
+                        self.send(200, dict(page, identity=observatory.identity))
                 elif parsed.path == "/api/v1/events":
                     limit = int(query.pop("limit", "100"))
                     after = int(query.pop("after", "0"))

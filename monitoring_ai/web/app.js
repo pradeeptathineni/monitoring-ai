@@ -22,6 +22,7 @@ let lastSnapshotQuery = null, ledgerChanges = [], ledgerChangeNote = "Waiting fo
 let reportController = null, reportRequestId = 0, reportData = null, reportDataQuery = null;
 let comparison = null, comparisonController = null, comparisonId = 0, comparisonScope = null, comparisonChoices = null;
 let comparisonMessage = "Choose two distinct sessions.";
+let sessionList = null, sessionListController = null, sessionListId = 0;
 let cachedRange = "all", cachedExactDate = "", cachedView = "daily";
 let cachedDimensionFilters = { providers: "", models: "" };
 let cachedUsageReceivedAt = 0, cachedFileAgeAtReceipt = null;
@@ -51,7 +52,7 @@ function parseRoute(route) {
 function showView(route) {
   const target = parseRoute(route), next = target.next;
   if (view === next && settingsCategory === target.category && location.hash.slice(1) === target.hash) return;
-  if (view === "report" && next !== "report") { cancelReport(); cancelComparison(); }
+  if (view === "report" && next !== "report") { cancelReport(); cancelComparison(); sessionListController?.abort(); }
   if (view === "events" && next !== "events" && entityHistory?.pending) cancelEntityHistory("Entity history read canceled because you left the Event stream. Loaded pages are retained.");
   view = next;
   settingsCategory = target.category;
@@ -141,9 +142,11 @@ function renderSessionComparison() {
   const scope = JSON.stringify([data?.identity, comparisonQuery()]);
   if (comparisonScope !== scope) {
     cancelComparison(); comparison = null; comparisonScope = scope;
+    sessionListId += 1; sessionListController?.abort(); sessionListController = null; sessionList = null;
+    $("#session-list-status").textContent = "Find session aliases from accepted ledger records under the shared comparison filters.";
     comparisonMessage = "Choose two distinct sessions. Shared filters apply to both.";
   }
-  const choices = [...new Set((data?.entities || []).map((row) => JSON.stringify([row.source, row.session])))].sort();
+  const choices = [...new Set([...(data?.entities || []), ...(sessionList?.sessions || [])].map((row) => JSON.stringify([row.source, row.session])))].sort();
   const signature = JSON.stringify(choices);
   if (comparisonChoices !== signature) {
     comparisonChoices = signature;
@@ -162,6 +165,10 @@ function renderSessionComparison() {
     }
   }
   const first = $("#compare-first").value, second = $("#compare-second").value;
+  const more = $("#session-list-more");
+  more.hidden = !sessionList || sessionList.next_offset === null || sessionList.sessions.length >= 2000;
+  more.disabled = paused || snapshotReadUnavailable || !!sessionListController;
+  $("#session-list-form button[type=submit]").disabled = paused || snapshotReadUnavailable || !!sessionListController;
   $("#compare-sessions").disabled = !first || !second || first === second || paused || snapshotReadUnavailable || !!comparisonController;
   const status = $("#session-compare-status"), target = $("#session-compare-table");
   status.textContent = comparisonMessage;
@@ -187,6 +194,45 @@ function renderSessionComparison() {
   countRow("Unknown tool outcomes", reports.map((value) => value.tools?.unknown_outcomes));
   countRow("Receipt-time usage summaries", reports.map((value) => value.coverage?.receipt_time_summary_records));
   table("#session-compare-table", ["Measure", names[0], names[1], "Second minus first"], rows);
+}
+
+async function loadSessionChoices(after = 0) {
+  if (paused || snapshotReadUnavailable) return;
+  sessionListController?.abort();
+  const id = ++sessionListId, scope = comparisonScope, identity = data?.identity;
+  const controller = new AbortController(); sessionListController = controller;
+  if (!after) sessionList = null;
+  const params = new URLSearchParams(comparisonQuery());
+  const search = after ? sessionList.search : $("#session-list-search").value.trim();
+  if (search) params.set("search", search);
+  params.set("limit", "100"); params.set("after", String(after));
+  if (after) params.set("expected_revision", String(sessionList.revision));
+  $("#session-list-status").textContent = "Reading recorded session aliases.";
+  renderSessionComparison();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    const response = await fetch(`/api/v1/sessions?${params}`, { signal: controller.signal, cache: "no-store" });
+    if (response.status === 409) throw new Error("The ledger changed. Choose Find sessions to restart the list.");
+    if (!response.ok) throw new Error(`Session list unavailable (${response.status}). Older owners may not support this route.`);
+    const value = await response.json();
+    const alias = (text) => typeof text === "string" && /^[A-Za-z0-9_.:@-]{1,160}$/.test(text);
+    if (value.schema !== "monitoring.sessions.v1" || value.identity !== identity || !Number.isSafeInteger(value.revision) ||
+      !Number.isSafeInteger(value.total) || !Array.isArray(value.sessions) || value.sessions.length > 100 ||
+      !value.sessions.every((row) => alias(row.source) && alias(row.session)) ||
+      !(value.next_offset === null || (Number.isSafeInteger(value.next_offset) && value.next_offset > after)) ||
+      (after && value.revision !== sessionList.revision)) throw new Error("Session list did not match this owner or page.");
+    if (id !== sessionListId || scope !== comparisonScope) return;
+    sessionList = { ...value, sessions: [...(after ? sessionList.sessions : []), ...value.sessions] };
+    $("#session-list-status").textContent = `${sessionList.sessions.length} of ${value.total} recorded session choices loaded at revision ${value.revision}. ${sessionList.sessions.length >= 2000 ? "Choice limit reached; narrow the search or filters." : "Choose a pair below. These are recorded identities, not current workers."}`;
+  } catch (error) {
+    if (id === sessionListId) {
+      if (sessionList) sessionList.next_offset = null;
+      $("#session-list-status").textContent = error.name === "AbortError" ? "Session list read canceled or timed out. Choose Find sessions to retry." : error.message;
+    }
+  } finally {
+    clearTimeout(timer);
+    if (id === sessionListId) { sessionListController = null; renderSessionComparison(); }
+  }
 }
 
 async function compareSessions() {
@@ -1885,6 +1931,7 @@ $("#pause").addEventListener("click", () => {
   paused = !paused; $("#pause").textContent = paused ? "Resume refresh" : "Pause refresh";
   if (paused) {
     cancelComparison();
+    sessionListController?.abort();
     $("#connection").textContent = "Refresh paused"; $("#connection").classList.add("offline");
     if (view === "report") cancelReport();
     if (entityHistory?.pending) cancelEntityHistory("Entity history read canceled because refresh was paused. Loaded pages are retained; resume and retry explicitly.");
@@ -1925,6 +1972,8 @@ $("#restart-entity-history").addEventListener("click", () => {
   startEntityHistory();
 });
 $("#compare-sessions").addEventListener("click", compareSessions);
+$("#session-list-form").addEventListener("submit", (event) => { event.preventDefault(); loadSessionChoices(); });
+$("#session-list-more").addEventListener("click", () => { if (sessionList?.next_offset != null) loadSessionChoices(sessionList.next_offset); });
 for (const selector of ["#compare-first", "#compare-second"]) $(selector).addEventListener("change", () => {
   cancelComparison(); comparison = null; comparisonMessage = "Selection changed. Choose Compare sessions to read this pair."; renderSessionComparison();
 });

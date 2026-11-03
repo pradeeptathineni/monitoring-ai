@@ -66,3 +66,14 @@ test("a selection change cancels delayed comparison replies", async ({ page }) =
   await page.waitForTimeout(350);
   await expect(page.locator("#session-compare-table table")).toHaveCount(0);
 });
+
+test("finds recorded session choices through the independent catalog", async ({ page }) => {
+  await choose(page);
+  await page.fill("#session-list-search", "synthetic");
+  await page.getByRole("button", { name: "Find sessions", exact: true }).click();
+  await expect(page.locator("#session-list-status")).toContainText("recorded session choices loaded");
+  await expect(page.locator("#session-list-status")).toContainText("not current workers");
+  await page.fill("#session-list-search", "/private/path");
+  await page.getByRole("button", { name: "Find sessions", exact: true }).click();
+  await expect(page.locator("#session-list-status")).toContainText("Session list unavailable (400)");
+});
