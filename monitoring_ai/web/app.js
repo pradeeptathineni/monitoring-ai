@@ -41,7 +41,7 @@ function cash(value) {
 function parseRoute(route) {
   const [requested, category] = String(route || "overview").replace(/^#/, "").split("/");
   const next = titles[requested] ? requested : "overview";
-  const selectedCategory = next === "settings" && ["appearance", "sources"].includes(category) ? category : "all";
+  const selectedCategory = next === "settings" && ["appearance", "sources", "thresholds"].includes(category) ? category : "all";
   return { next, category: selectedCategory, hash: next === "settings" && selectedCategory !== "all" ? `settings/${selectedCategory}` : next };
 }
 
@@ -73,10 +73,10 @@ function showView(route) {
     else link.removeAttribute("aria-current");
   });
   const baseBreadcrumb = { overview: "Overview", sessions: "Sessions & workers", usage: "Usage & costs", events: "Event stream", report: "Report", settings: "Settings" }[next];
-  const categoryLabel = { appearance: "Appearance", sources: "Sources and connections" }[target.category];
+  const categoryLabel = { appearance: "Appearance", sources: "Sources and connections", thresholds: "Thresholds" }[target.category];
   $("#breadcrumb").textContent = categoryLabel ? `${baseBreadcrumb} / ${categoryLabel}` : baseBreadcrumb;
-  $("#title").textContent = target.category === "appearance" ? "Appearance" : target.category === "sources" ? "Sources and connections" : titles[next][0];
-  $("#subtitle").textContent = target.category === "appearance" ? "Choose a preset or adjust the display theme for this browser." : target.category === "sources" ? "Setup guidance for explicitly selected, authorized inputs." : titles[next][1];
+  $("#title").textContent = target.category === "appearance" ? "Appearance" : target.category === "sources" ? "Sources and connections" : target.category === "thresholds" ? "Thresholds" : titles[next][0];
+  $("#subtitle").textContent = target.category === "appearance" ? "Choose a preset or adjust the display theme for this browser." : target.category === "sources" ? "Setup guidance for explicitly selected, authorized inputs." : target.category === "thresholds" ? "The threshold is separate from provider quota and billing." : titles[next][1];
   if (location.hash.slice(1) !== target.hash) location.hash = target.hash;
   window.dispatchEvent(new CustomEvent("monitoring:navigate", { detail: { view: next } }));
   window.monitoringNavigation?.reveal(next);
@@ -1027,6 +1027,27 @@ function renderUsage() {
     cash(row.costs.estimated.amount), cash(row.costs.billed.amount), `${row.unknown_cost_events} / ${row.unconverted_cost_events}`,
   ]));
   renderCodeburnCache();
+  renderTokenThreshold();
+}
+
+function renderTokenThreshold() {
+  const panel = $("#token-threshold-panel"), status = $("#token-threshold-status"), details = $("#token-threshold-details");
+  const value = data?.token_threshold;
+  panel.hidden = value?.schema !== "monitoring.token-threshold.v1";
+  if (panel.hidden) return;
+  details.replaceChildren();
+  const valid = [value.limit_tokens, value.observed_tokens, value.remaining_observed_tokens, value.usage_records,
+    value.excluded_receipt_summaries, value.excluded_future_records].every((n) => Number.isSafeInteger(n) && n >= 0)
+    && ["no-observations", "observed-below", "observed-reached"].includes(value.state);
+  if (!valid) { status.textContent = "Threshold data is unavailable."; return; }
+  status.textContent = value.state === "observed-reached" ? "Observed threshold reached" : value.state === "no-observations" ? "No counted usage observations today" : "Observed use below threshold";
+  if (paused || snapshotReadUnavailable) status.textContent += " · retained snapshot; current use unknown";
+  if (data.source_status?.state === "unavailable") status.textContent += " · selected source unavailable; accepted history retained";
+  details.append(confidenceRow("Observed / threshold", `${number.format(value.observed_tokens)} / ${number.format(value.limit_tokens)} tokens`));
+  details.append(confidenceRow("Headroom to threshold", `${number.format(value.remaining_observed_tokens)} tokens`));
+  details.append(confidenceRow("UTC day", `${value.window?.from || "Unknown"} to ${value.window?.until || "Unknown"}`));
+  details.append(confidenceRow("Usage records", number.format(value.usage_records)));
+  details.append(confidenceRow("Excluded result summaries / future records", `${number.format(value.excluded_receipt_summaries)} / ${number.format(value.excluded_future_records)}`));
 }
 
 function recordCodeburnActivityReceipt(snapshot) {

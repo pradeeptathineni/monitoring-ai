@@ -141,6 +141,15 @@ The opt-in installed Codex collector launches its own stdio app-server process, 
 
 A raw Codex account response can also be normalized with `quota --file response.json --format codex --captured-at ORIGINAL_RESPONSE_TIME`. The original time is required. This conversion does not establish a live connection. Claude quota data can be imported through the same normalized contract, but no Claude account collector or hook ships here.
 
+## Observed daily token threshold
+
+`serve --token-threshold N` and `top --token-threshold N` accept an explicit positive integer up to one trillion tokens. When configured, snapshot and `top --json` add `token_threshold` with schema `monitoring.token-threshold.v1`. Older owners omit the field; consumers should retain that compatibility. The source selection and ledger are unchanged by this option.
+Capabilities advertises `token_threshold: monitoring.token-threshold.v1` only when configured.
+
+The block reports `scope: all-accepted-events-unfiltered`, `complete_coverage: false`, a current UTC-day `[from, until)` window, read `observed_at`, `limit_tokens`, `observed_tokens`, `remaining_observed_tokens`, `usage_records`, `excluded_receipt_summaries`, `excluded_future_records` and `state`. State is `no-observations`, `observed-below` or `observed-reached`. Every accepted usage record with a producer timestamp from midnight UTC through the read time contributes its disjoint token buckets, regardless of dashboard filters. Status and tool records do not contribute. Future-dated rows are excluded until their timestamp arrives. Cumulative Claude CLI result summaries are excluded because their capture receipt time cannot assign work to that day.
+
+This is an on-screen threshold over the accepted ledger, not a provider quota, complete account usage, billed cost, notification or call-enforcement mechanism. Missing or unavailable sources can make actual use higher. The observation does not trigger model calls, send a message or reset any allowance. The supplied Deep reader validates this optional block but need not display it.
+
 ## Detailed report
 
 `GET /api/v1/report` accepts the same dimension, date and current-state filters as snapshots. State selection shares the snapshot evidence logic across the full ledger, even if the latest status lies outside the chosen usage period. It never revives old running evidence as current. Future records remain in the ledger but are excluded from reports, with an explicit count. Requested end times after the read time are clamped to observation time.

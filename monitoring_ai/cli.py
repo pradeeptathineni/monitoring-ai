@@ -40,6 +40,9 @@ def parser():
             command.add_argument("--format", choices=["normalized", "claude", "codex", "claude-results"], default="normalized")
             command.add_argument("--source-id", help="Stable alias for this native input, reused across replay")
             command.add_argument("--project", help="Public-safe project alias for native input")
+        if name in ("serve", "top"):
+            command.add_argument("--token-threshold", type=int,
+                                 help="Optional observed-token threshold for the current UTC day; not provider quota")
         if name == "serve":
             command.add_argument("--port", type=int, default=5274)
             command.add_argument("--demo", action="store_true", help="Seed an empty ledger with fictional data")
@@ -122,6 +125,9 @@ def terminal(value):
     for row in value["entities"]:
         lines.append(f"{row['entity'][:22]:<22} {row['state']:<12} {row['model'][:24]:<24} {row['metrics']['total_tokens']:>12,} {money(row['metrics']['costs']['estimated']['amount']):>12}")
     lines.extend(["", "Coverage: explicitly supplied events. Lifecycle ages independently of usage."])
+    threshold = value.get("token_threshold")
+    if threshold:
+        lines.append(f"UTC-day observed token threshold: {threshold['observed_tokens']:,} / {threshold['limit_tokens']:,} · {threshold['state']}. Incomplete source coverage; no provider enforcement.")
     insights = value.get("insights", {})
     pace = insights.get("pace", {})
     forecast = insights.get("forecast", {})
@@ -244,6 +250,9 @@ def run(args):
     if args.command == "demo":
         (stream_demo if args.stream else write_demo)(args.file)
         return
+    if args.command in ("serve", "top") and args.token_threshold is not None:
+        from .token_threshold import validate_limit
+        validate_limit(args.token_threshold)
     store = Store(args.db)
     if args.command == "import":
         result = store.ingest(load(args.file, args.format, args.source_id, args.project))
@@ -314,6 +323,7 @@ def run(args):
                           cached_usage_loader=cache_loader,
                           codeburn_activity_loader=activity_loader,
                           process_observer=process_observer,
+                          token_threshold=args.token_threshold,
                           quota_book=demo_quotas() if args.demo and not args.quota_file and not args.codex_quota else None), args.port)
     else:
         if args.watch and (args.json or not sys.stdout.isatty()):
@@ -332,6 +342,10 @@ def run(args):
                 last_quota_read = time.monotonic()
             revision, rows = store.read()
             value = snapshot(revision, rows, query, pricing, fx, quota_book=book)
+            if args.token_threshold is not None:
+                from .token_threshold import evaluate_token_threshold
+                value["token_threshold"] = evaluate_token_threshold(rows, limit=args.token_threshold,
+                                                                       now=value["observed_at"])
             value["insights"]["quotas"]["read_status"] = dict(state="unavailable" if quota_error else "following" if quota_read else "unconfigured")
             if args.watch:
                 print("\033[2J\033[H", end="")

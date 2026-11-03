@@ -52,6 +52,7 @@ export type Snapshot = {
   source_status: { state: "static" | "following" | "unavailable"; last_success_at: string | null; error: string | null; degraded?: boolean };
   inputs?: ManagedInputs;
   source_coverage?: SourceCoverage;
+  token_threshold?: TokenThreshold;
   summary: Metrics & { sessions: number; entities: number; active: number; attention: number };
   entities: Entity[];
   insights?: {
@@ -72,6 +73,17 @@ export type Snapshot = {
       window_minutes: number | null; resets_at: string | null; freshness: string; age_seconds: number;
     }>; read_status?: { state: string; last_success_at: string | null; error: string | null } };
   };
+};
+
+export type TokenThreshold = {
+  schema: "monitoring.token-threshold.v1";
+  scope: "all-accepted-events-unfiltered";
+  complete_coverage: false;
+  window: { from: string; until: string; observed_at: string };
+  limit_tokens: number; observed_tokens: number; remaining_observed_tokens: number;
+  state: "no-observations" | "observed-below" | "observed-reached";
+  usage_records: number; excluded_receipt_summaries: number; excluded_future_records: number;
+  note: string;
 };
 
 export type ManagedInput = {
@@ -160,6 +172,26 @@ function nullableTimestamp(value: unknown): value is string | null {
 
 function nonnegativeInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+function tokenThreshold(value: unknown): value is TokenThreshold {
+  if (!record(value) || Object.keys(value).sort().join(",") !==
+      ["schema", "scope", "complete_coverage", "window", "limit_tokens", "observed_tokens",
+       "remaining_observed_tokens", "state", "usage_records", "excluded_receipt_summaries",
+       "excluded_future_records", "note"].sort().join(",") ||
+      value.schema !== "monitoring.token-threshold.v1" || value.scope !== "all-accepted-events-unfiltered" ||
+      value.complete_coverage !== false || !record(value.window) ||
+      Object.keys(value.window).sort().join(",") !== "from,observed_at,until" ||
+      ![value.window.from, value.window.until, value.window.observed_at].every((at) => typeof at === "string" && Number.isFinite(Date.parse(at))) ||
+      ![value.limit_tokens, value.observed_tokens, value.remaining_observed_tokens, value.usage_records,
+        value.excluded_receipt_summaries, value.excluded_future_records].every(nonnegativeInteger) ||
+      (value.limit_tokens as number) < 1 || (value.limit_tokens as number) > 1_000_000_000_000 ||
+      value.remaining_observed_tokens !== Math.max(0, (value.limit_tokens as number) - (value.observed_tokens as number)) ||
+      !["no-observations", "observed-below", "observed-reached"].includes(String(value.state)) ||
+      (value.state === "no-observations") !== (value.usage_records === 0) ||
+      (value.state === "observed-reached") !== ((value.observed_tokens as number) >= (value.limit_tokens as number) && (value.usage_records as number) > 0) ||
+      typeof value.note !== "string" || value.note.length > 300) return false;
+  return true;
 }
 
 function managedInputs(value: unknown): value is ManagedInputs {
@@ -294,6 +326,7 @@ export function decodeSnapshot(value: unknown): Snapshot {
       !Array.isArray(value.entities) || value.entities.length > 500 ||
       (value.inputs !== undefined && !managedInputs(value.inputs)) ||
       (value.source_coverage !== undefined && !sourceCoverage(value.source_coverage)) ||
+      (value.token_threshold !== undefined && !tokenThreshold(value.token_threshold)) ||
       (value.insights !== undefined && !insights(value.insights)) ||
       !value.entities.every((row) => record(row) && typeof row.source === "string" &&
         typeof row.session === "string" && typeof row.entity === "string" &&

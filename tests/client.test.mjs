@@ -70,6 +70,27 @@ test("unavailable amounts stay null and malformed costs refuse", () => {
   assert.throws(() => decodeSnapshot(broken), /incompatible/);
 });
 
+test("optional daily token threshold is qualified and rejects inconsistent totals", () => {
+  const value = structuredClone(snapshot);
+  value.token_threshold = { schema: "monitoring.token-threshold.v1", scope: "all-accepted-events-unfiltered",
+    complete_coverage: false, window: { from: "2026-11-02T00:00:00.000Z", until: "2026-11-03T00:00:00.000Z",
+      observed_at: snapshot.observed_at }, limit_tokens: 10, observed_tokens: 12,
+    remaining_observed_tokens: 0, state: "observed-reached", usage_records: 1,
+    excluded_receipt_summaries: 0, excluded_future_records: 0,
+    note: "Observed events only; no provider enforcement." };
+  assert.equal(decodeSnapshot(value).token_threshold.state, "observed-reached");
+  for (const mutation of [
+    (row) => { row.complete_coverage = true; },
+    (row) => { row.remaining_observed_tokens = 2; },
+    (row) => { row.state = "observed-below"; },
+    (row) => { row.private_path = "/private/source"; },
+  ]) {
+    const invalid = structuredClone(value);
+    mutation(invalid.token_threshold);
+    assert.throws(() => decodeSnapshot(invalid), /incompatible/);
+  }
+});
+
 test("optional managed-input health is strict and remains backward compatible", () => {
   assert.equal(decodeSnapshot(snapshot).identity, "owner-one"); // Older owners omit inputs.
   const value = structuredClone(snapshot);

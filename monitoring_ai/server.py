@@ -20,7 +20,8 @@ WEB = Path(__file__).with_name("web")
 
 class Observatory:
     def __init__(self, store, pricing, fx, loader=None, quota_loader=None, quota_book=None, source_observer=None,
-                 cached_usage_loader=None, codeburn_activity_loader=None, process_observer=None):
+                 cached_usage_loader=None, codeburn_activity_loader=None, process_observer=None,
+                 token_threshold=None):
         if loader is not None and source_observer is not None:
             raise ValueError("Choose one input configuration")
         self.store, self.pricing, self.fx, self.loader = store, pricing, fx, loader
@@ -38,6 +39,10 @@ class Observatory:
         self.codeburn_activity = None
         self.codeburn_activity_status = dict(state="unread", last_success_at=None, error=None)
         self.process_observer = process_observer
+        if token_threshold is not None:
+            from .token_threshold import validate_limit
+            validate_limit(token_threshold)
+        self.token_threshold = token_threshold
 
     def refresh_codeburn_activity(self):
         if self.codeburn_activity_loader is None:
@@ -162,6 +167,10 @@ class Observatory:
             inputs = self.input_status()
             revision, events = self.store.read()
             value = snapshot(revision, events, query, self.pricing, self.fx, quota_book=self.quota_book)
+            if self.token_threshold is not None:
+                from .token_threshold import evaluate_token_threshold
+                value["token_threshold"] = evaluate_token_threshold(events, limit=self.token_threshold,
+                                                                        now=value["observed_at"])
             value["insights"]["quotas"]["read_status"] = dict(self.quota_status)
             value.update(identity=self.identity, source_status=dict(self.source_status))
             self._include_cached_usage(value)
@@ -247,6 +256,8 @@ def handler(observatory):
                     )
                     if observatory.process_observer is not None:
                         capabilities["os_processes"] = "monitoring.os-processes.v1"
+                    if observatory.token_threshold is not None:
+                        capabilities["token_threshold"] = "monitoring.token-threshold.v1"
                     if ((observatory.source_observer is not None and
                          observatory.source_observer.responses()["configured_sources"]) or
                             getattr(observatory.loader, "supports_responses", False)):

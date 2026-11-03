@@ -4,7 +4,7 @@ Local monitoring for AI sessions, agents, workers, tokens and costs. Use it in y
 
 **Experimental alpha.** It observes explicitly supplied sources. Personal source compatibility, additional collectors and full-vision acceptance remain incomplete. [Version policy and v1.0.0 requirements](docs/release-readiness.md) keep maturity separate from version numbers.
 
-Current checked version: **v0.8.17**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
+Current checked version: **v0.8.18**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
 
 ![Monitoring AI dashboard with fictional sessions and costs](docs/observatory.png)
 
@@ -42,6 +42,7 @@ The producer appends usage and lifecycle evidence. The server imports complete l
 - A versioned read contract and a [server-side Deep AI consumer](integrations/deep-ai). Deep integration is supplied for review, not deployed by this repository.
 - Source-age views, trailing-window token pace and cautious linear forecasts with observed span, sample count and explicit cost coverage.
 - Independent quota observations from an explicit file or an opt-in installed Codex allowance read. Stale values and passed reset times retain their last supplied values.
+- An optional current UTC-day token threshold over accepted usage, independent of dashboard filters. It is an on-screen observation, not provider quota, complete account use or a spending control.
 - A detailed Report view with UTC period presets, adjacent equal-length comparisons, project/model/day breakdowns and categorized tool activity. Unknown timing and unsupported workflow measures stay explicit.
 - An explicit multi-file manifest with independent input health, replay counts and retained history when one source fails. Input aliases and event-source filters remain distinct.
 - [Entity history](docs/session-history.md) with chronological pages scoped to its source and session. Pages retain one ledger revision, with an explicit restart when history changes.
@@ -56,6 +57,8 @@ For an existing CodeBurn v74 daily cache, use the [explicit cached-usage view](d
 An existing CodeBurn 0.9.27 menubar status file can be selected through the [optional recent-activity view](docs/codeburn-status.md). It reports source-generation time and recent transcript writes without reading native transcripts. Stale or empty output does not establish that no workers are running. This adapter does not make CodeBurn a runtime dependency.
 
 For completed headless Claude results, use the [explicit capture and check workflow](docs/claude-results.md). It imports cumulative model-level summaries with declared receipt times and estimated costs. It does not infer live worker states or individual call chronology.
+
+To show an observed daily token threshold, add `--token-threshold 100000` to `serve`, or to `top` for terminal use. Choose your own positive limit. Usage & costs shows accepted usage from the current UTC day across all projects, even when view filters select fewer records. Cumulative Claude CLI result summaries and future-dated events are excluded; the panel counts their excluded records. This is a local display threshold only. It never sends a notification, blocks a provider call, establishes account-wide usage or converts tokens to billed spend. Change the setting by deliberately restarting the owner. [The read contract](docs/contract.md) documents its optional response block.
 
 For an existing authorized Maestro campaign, [receive its passive event export](docs/maestro-passive-export.md) as a selected normalized JSONL input. The fixture-tested receiving path retains Maestro's original event timestamps and source identity. No actual Maestro run feed was available for qualification here; this is not a live-worker claim or a runtime dependency on Maestro.
 

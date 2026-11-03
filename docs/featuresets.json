@@ -382,11 +382,14 @@
         "Maciek-roboblog/Claude-Code-Usage-Monitor",
         "steipete/CodexBar"
       ],
-      "decision": "Implemented selected-window token pace and linear one-hour scenarios with observed span, sample count, heuristic confidence and partial price coverage. Budget notifications and quota-exhaustion forecasting remain planned. No automatic reset or paid overage.",
+      "decision": "Implemented selected-window token pace and linear one-hour scenarios with observed span, sample count, heuristic confidence and partial price coverage. An opt-in on-screen UTC-day token threshold now counts accepted timestamped usage independently of filters, with unknown source coverage. It is not provider quota or enforcement. Cost budgets, notifications and quota-exhaustion forecasting remain planned. No automatic reset or paid overage.",
       "evidence": [
         "monitoring_ai/insights.py",
+        "monitoring_ai/token_threshold.py",
         "tests/test_insights.py",
-        "tests/browser/insights.spec.mjs"
+        "tests/browser/insights.spec.mjs",
+        "tests/test_token_threshold.py",
+        "tests/browser/token-threshold.spec.mjs"
       ]
     },
     {
