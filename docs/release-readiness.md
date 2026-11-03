@@ -1,6 +1,6 @@
 # Versions and release readiness
 
-Public versions use `vX.Y.Z`. Python package metadata and the read API use `X.Y.Z`, without the display prefix. The current checked version is `v0.8.40`. Its maturity is **Experimental alpha**. The number is not a fraction of the work completed.
+Public versions use `vX.Y.Z`. Python package metadata and the read API use `X.Y.Z`, without the display prefix. The current checked version is `v0.8.41`. Its maturity is **Experimental alpha**. The number is not a fraction of the work completed.
 
 Earlier source declarations such as `0.8.0a1` remain in published history. They have not been renamed or retagged. No Git tags existed when this policy was reconciled on 2026-11-03. Minor numbers will not advance for each development checkpoint. Version selection follows the scope of an accepted change, with compatibility and maturity stated separately.
 
@@ -39,3 +39,5 @@ At local v0.8.38, `ledger verify` and backup publication validate every stored n
 At local v0.8.39, the Report view can download a CSV summary of its currently displayed filter scope. It carries the ledger revision, observation time, UTC bounds, selected filters, cost-basis coverage and truncation flags; unknown amounts remain blank. A finite headless browser trial against a copied private task-owned accepted ledger produced 11 rows without page errors. This is export of recorded history, not fresh producer activity, full report parity, live account coverage or Deep adoption. Hosted acceptance and publication remain pending the later batch.
 
 At local v0.8.40, guided setup can preview a newly saved selection against an explicitly named existing ledger before suggesting a restart. A private task-owned accepted 344-event ledger and one fictional new file produced one proposed addition, zero replays and unchanged ledger bytes in 182.569 ms. A synthetic conflict refused without starting an owner. This improves setup decisions, not live provider coverage or a guarantee about later file changes. Publication and hosted acceptance remain pending.
+
+At local v0.8.41, the Overview change list compares successive same-owner, same-filter snapshots and labels newly visible or revised ledger records. It keeps eight observations, displays source event time separately from owner observation time, resets on filter/owner changes and qualifies paused or disconnected history. The latest-100 snapshot window can omit intermediate changes. A finite browser trial over a copied private accepted 344-event ledger observed one fictional new usage record after an explicit local import, with no page errors. This proves the refresh path, not a fresh provider event, running worker, complete activity stream or Deep adoption.

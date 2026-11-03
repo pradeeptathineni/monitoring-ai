@@ -114,3 +114,5 @@ The local v0.8.38 ledger event verification is original code using Monitoring's 
 The local v0.8.39 report CSV is original browser code over Monitoring's existing detailed-report response, using built-in Blob and download APIs. It imports no upstream code or runtime package.
 
 The local v0.8.40 guided preview reuses Monitoring's own disposable source-readiness engine and terminal presentation. It imports no upstream code or runtime package.
+
+The local v0.8.41 browser change list is original code over Monitoring's existing read-only snapshot and normalized event schema. It imports no upstream code or runtime package.

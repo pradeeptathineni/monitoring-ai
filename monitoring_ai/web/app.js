@@ -18,6 +18,7 @@ let entityHistory = null;
 let collapsedHierarchyKeys = new Set();
 let lastSuccess = 0;
 let snapshotReadUnavailable = false;
+let lastSnapshotQuery = null, ledgerChanges = [], ledgerChangeNote = "Waiting for the first snapshot.";
 let reportController = null, reportRequestId = 0, reportData = null, reportDataQuery = null;
 let cachedRange = "all", cachedExactDate = "", cachedView = "daily";
 let cachedDimensionFilters = { providers: "", models: "" };
@@ -1628,6 +1629,7 @@ function render() {
   );
   bars("#model-bars", data.groups.model, true); bars("#project-bars", data.groups.project);
   bars("#daily", data.groups.date, true); timeline();
+  renderLedgerChanges();
   $("#token-legend").replaceChildren(...Object.entries(bucketNames).map(([key, text]) => {
     const item = node("span"); item.append(node("i", null, "bucket-" + key), document.createTextNode(text)); return item;
   }));
@@ -1653,16 +1655,65 @@ function render() {
   $("#footnote").textContent = `Read only · ${summary.tools} tool records · ${summary.tool_errors} tool errors · revision ${data.revision}${coverage.entities_truncated ? " · entity list limited to 500" : ""}`;
 }
 
+function recordLedgerChanges(next, requestedQuery) {
+  const previous = data;
+  if (!previous || previous.identity !== next.identity || requestedQuery !== lastSnapshotQuery ||
+      next.revision < previous.revision) {
+    ledgerChanges = [];
+    ledgerChangeNote = !previous ? "Watching from the first successful snapshot. Earlier records are in Event stream."
+      : previous.identity !== next.identity ? "Owner changed. Watching from this owner's first snapshot."
+        : "Filter scope or ledger revision changed. Watching from this snapshot.";
+  } else if (next.revision > previous.revision) {
+    const earlier = new Map((previous.events || []).map((row) => [JSON.stringify([row.source, row.id]), row]));
+    const visible = [];
+    for (const row of next.events || []) {
+      const prior = earlier.get(JSON.stringify([row.source, row.id]));
+      if (prior && JSON.stringify(prior) === JSON.stringify(row)) continue;
+      visible.push({ kind: prior ? "Revised" : "Added", row, observed_at: next.observed_at });
+    }
+    ledgerChanges = [...visible, ...ledgerChanges].slice(0, 8);
+    ledgerChangeNote = visible.length
+      ? `${visible.length} changed record${visible.length === 1 ? "" : "s"} visible in the latest snapshot. This list keeps the latest eight observations.`
+      : "Ledger revision changed, but no changed record is visible in the latest 100 matching records.";
+  }
+  lastSnapshotQuery = requestedQuery;
+}
+
+function renderLedgerChanges() {
+  const status = $("#ledger-changes-status"), root = $("#ledger-changes");
+  if (paused || snapshotReadUnavailable) {
+    status.textContent = `${paused ? "Browser refresh is paused" : "The Monitoring service is unavailable"}. Prior changes are retained; new activity is unknown.`;
+  } else status.textContent = ledgerChangeNote;
+  root.replaceChildren();
+  if (!ledgerChanges.length) {
+    root.append(node("p", "No changes observed by this browser under the current filters yet.", "empty"));
+    return;
+  }
+  for (const change of ledgerChanges) {
+    const row = change.row;
+    const detail = row.kind === "usage"
+      ? `${Object.values(row.tokens || {}).reduce((sum, value) => sum + value, 0)} recorded tokens`
+      : row.kind === "status" ? `state ${row.state}`
+        : row.kind === "tool" ? `tool ${row.tool} · ${row.outcome}` : row.kind;
+    const item = node("li", null, "ledger-change");
+    item.append(node("strong", `${change.kind} ${row.kind} · ${row.source} / ${row.session}`),
+      node("span", `${detail} · source time ${row.timestamp} · observed ${change.observed_at}`));
+    root.append(item);
+  }
+}
+
 async function refresh() {
   if (paused || busy) return;
   busy = true;
   const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 8000);
   try {
-    const response = await fetch(`/api/v1/snapshot?${query()}`, { signal: controller.signal, cache: "no-store" });
+    const requestedQuery = query().toString();
+    const response = await fetch(`/api/v1/snapshot?${requestedQuery}`, { signal: controller.signal, cache: "no-store" });
     if (!response.ok) throw new Error(`Read failed (${response.status}). Check the filters and ledger limits.`);
     const value = await response.json();
     if (value.schema !== "monitoring.snapshot.v1") throw new Error("The Monitoring service returned an unsupported data format.");
     if (data && value.identity !== data.identity) collapsedHierarchyKeys.clear();
+    recordLedgerChanges(value, requestedQuery);
     recordCachedUsageReceipt(value);
     recordCodeburnActivityReceipt(value);
     data = value; lastSuccess = Date.now(); snapshotReadUnavailable = false;
