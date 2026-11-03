@@ -20,7 +20,7 @@ WEB = Path(__file__).with_name("web")
 
 class Observatory:
     def __init__(self, store, pricing, fx, loader=None, quota_loader=None, quota_book=None, source_observer=None,
-                 cached_usage_loader=None, codeburn_activity_loader=None):
+                 cached_usage_loader=None, codeburn_activity_loader=None, process_observer=None):
         if loader is not None and source_observer is not None:
             raise ValueError("Choose one input configuration")
         self.store, self.pricing, self.fx, self.loader = store, pricing, fx, loader
@@ -37,6 +37,7 @@ class Observatory:
         self.codeburn_activity_loader = codeburn_activity_loader
         self.codeburn_activity = None
         self.codeburn_activity_status = dict(state="unread", last_success_at=None, error=None)
+        self.process_observer = process_observer
 
     def refresh_codeburn_activity(self):
         if self.codeburn_activity_loader is None:
@@ -154,6 +155,8 @@ class Observatory:
             value.update(identity=self.identity, source_status=dict(self.source_status))
             self._include_cached_usage(value)
             self._include_codeburn_activity(value)
+            if self.process_observer is not None:
+                value["os_processes"] = self.process_observer.snapshot()
             if inputs is not None:
                 value["source_status"] = self._source_status_for_inputs(inputs, self.source_status)
                 self.source_status = dict(value["source_status"])
@@ -169,6 +172,8 @@ class Observatory:
             value.update(identity=self.identity, source_status=dict(self.source_status))
             self._include_cached_usage(value)
             self._include_codeburn_activity(value)
+            if self.process_observer is not None:
+                value["os_processes"] = self.process_observer.snapshot()
             if inputs is not None:
                 value["source_status"] = self._source_status_for_inputs(inputs, self.source_status)
                 self.source_status = dict(value["source_status"])
@@ -213,7 +218,7 @@ def handler(observatory):
                 if parsed.path == "/api/v1/capabilities":
                     if query:
                         raise ValueError("Capabilities takes no query")
-                    self.send(200, dict(
+                    capabilities = dict(
                         schema="monitoring.capabilities.v1", version=__version__,
                         identity=observatory.identity, read_only=True,
                         snapshot="/api/v1/snapshot", events="/api/v1/events",
@@ -226,7 +231,10 @@ def handler(observatory):
                         filters=["provider", "model", "surface", "project", "source", "session", "since", "until", "state"],
                         event_filters=["provider", "model", "surface", "project", "source", "session", "since", "until", "entity"],
                         limits={"read_events": 100000, "snapshot_entities": 500, "event_page": 500},
-                    ))
+                    )
+                    if observatory.process_observer is not None:
+                        capabilities["os_processes"] = "monitoring.os-processes.v1"
+                    self.send(200, capabilities)
                 elif parsed.path == "/api/v1/snapshot":
                     self.send(200, observatory.read(query))
                 elif parsed.path == "/api/v1/report":
@@ -268,6 +276,8 @@ def handler(observatory):
                             value["cached_usage_status"] = dict(observatory.cached_usage_status)
                         if observatory.codeburn_activity_loader is not None:
                             value["codeburn_activity_status"] = dict(observatory.codeburn_activity_status)
+                        if observatory.process_observer is not None:
+                            value["os_process_status"] = observatory.process_observer.snapshot()["state"]
                     if inputs is not None:
                         value["inputs"] = inputs
                     self.send(200, value)
@@ -326,6 +336,12 @@ def serve(observatory, port):
             if stop.wait(5):
                 break
 
+    def processes():
+        while not stop.is_set():
+            observatory.process_observer.refresh()
+            if stop.wait(2):
+                break
+
     observatory.refresh()
     worker = threading.Thread(target=follow, daemon=True)
     if observatory.loader or observatory.source_observer is not None:
@@ -342,6 +358,10 @@ def serve(observatory, port):
     if observatory.codeburn_activity_loader is not None:
         activity_worker = threading.Thread(target=codeburn_activity, daemon=True)
         activity_worker.start()
+    process_worker = None
+    if observatory.process_observer is not None:
+        process_worker = threading.Thread(target=processes, daemon=True)
+        process_worker.start()
     print(f"Monitoring AI → http://127.0.0.1:{server.server_port}", flush=True)
     try:
         server.serve_forever(poll_interval=0.25)
@@ -356,5 +376,7 @@ def serve(observatory, port):
             cache_worker.join(timeout=5)
         if activity_worker:
             activity_worker.join(timeout=5)
+        if process_worker:
+            process_worker.join(timeout=5)
         if previous_term is not None:
             signal.signal(signal.SIGTERM, previous_term)

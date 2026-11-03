@@ -1066,6 +1066,31 @@ function renderCodeburnActivity() {
   }));
 }
 
+function renderOsProcesses() {
+  const panel = $("#os-process-panel"), status = $("#os-process-status"), target = $("#os-process-table");
+  const sample = data?.os_processes?.schema === "monitoring.os-processes.v1" ? data.os_processes : null;
+  panel.hidden = !sample;
+  if (!sample) return;
+  status.replaceChildren(); target.replaceChildren();
+  const age = sample.sampled_at ? (Date.now() - Date.parse(sample.sampled_at)) / 1000 : null;
+  const current = sample.state === "following" && Number.isFinite(age) && age >= 0 && age <= 10 && !paused && !snapshotReadUnavailable;
+  if (!current) {
+    status.append(node("p", sample.state === "unavailable" ? "OS process read unavailable. Current process presence is unknown." :
+      sample.state === "unread" ? "Waiting for the first OS process sample." :
+      `Last OS sample ${sample.sampled_at || "unknown"} is retained; current process presence is unknown.`, "confidence-note"));
+  } else {
+    status.append(node("p", `${number.format(sample.processes.length)} matching executables in OS sample ${sample.sampled_at}. Session and worker mappings are unknown.`, "confidence-note"));
+  }
+  if (sample.state !== "following") return;
+  if (!sample.processes.length) status.append(node("p", "No matching executable names were visible in this OS sample. Other AI activity may exist.", "empty"));
+  else table("#os-process-table", ["Executable", "PID / parent", "CPU", "RSS", "Started · UTC", "Session / worker"],
+    sample.processes.map((row) => [row.executable, `${row.pid} / ${row.parent_pid}`, `${row.cpu_percent}%`,
+      `${number.format(Math.round(row.rss_bytes / 1048576))} MiB`, row.started_at, "Unknown"]));
+  if (sample.no_longer_observed?.length) status.append(node("p", `${number.format(sample.no_longer_observed.length)} previously sampled process${sample.no_longer_observed.length === 1 ? " is" : "es are"} absent from this OS sample. This is not a session completion event.`, "confidence-note"));
+  if (sample.changed_count) status.append(node("p", `${number.format(sample.changed_count)} continuing process${sample.changed_count === 1 ? " has" : "es have"} changed CPU or RSS since the previous sample.`, "confidence-note"));
+  if (sample.truncated) status.append(node("p", "Process rows are limited to 200; the matching set is incomplete.", "confidence-note"));
+}
+
 function cachedUsage() {
   const value = data?.cached_usage;
   return value?.schema === "monitoring.cached-usage.v1" ? value : null;
@@ -1265,6 +1290,7 @@ function render() {
   renderSourceCoverage();
   renderInputHealth();
   renderEntityTable();
+  renderOsProcesses();
   renderCodeburnActivity();
   renderUsage(); renderEvents();
   const info = $("#currency-info"); info.replaceChildren();

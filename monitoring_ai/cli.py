@@ -48,6 +48,8 @@ def parser():
                                  help="Explicit CodeBurn v74 daily cache. Separate totals with unknown billing basis")
             command.add_argument("--codeburn-status", type=Path,
                                  help="Explicit existing CodeBurn menubar status output. Recent writes, not process liveness")
+            command.add_argument("--processes", action="store_true",
+                                 help="Sample matching AI executable names from macOS; no arguments or session inference")
         if name == "top":
             command.add_argument("--json", action="store_true")
             command.add_argument("--watch", action="store_true", help="Refresh every two seconds in this terminal")
@@ -271,10 +273,17 @@ def run(args):
             from .codeburn_status import read_codeburn_status
             alias_salt = secrets.token_bytes(32)
             activity_loader = lambda: read_codeburn_status(args.codeburn_status, alias_salt=alias_salt)
+        process_observer = None
+        if args.processes:
+            if sys.platform != "darwin":
+                raise ValueError("OS process sampling currently supports macOS")
+            from .process_observer import ProcessObserver
+            process_observer = ProcessObserver()
         serve(Observatory(store, pricing, fx, loader, quota_loader=quota_loader(args),
                           source_observer=observer,
                           cached_usage_loader=cache_loader,
                           codeburn_activity_loader=activity_loader,
+                          process_observer=process_observer,
                           quota_book=demo_quotas() if args.demo and not args.quota_file and not args.codex_quota else None), args.port)
     else:
         if args.watch and (args.json or not sys.stdout.isatty()):
