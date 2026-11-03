@@ -10,6 +10,7 @@ from pathlib import Path
 import stat
 
 from .adapters import MAX_BYTES, claude, claude_row, parse_jsonl
+from .claude_responses import response_spans
 
 
 class ClaudeFollower:
@@ -80,3 +81,7 @@ class ClaudeFollower:
 
     def discard(self):
         self._pending = None
+
+    def responses(self):
+        """Derive optional evidence only from committed, projected source rows."""
+        return response_spans(self._rows, self.source, self.project)

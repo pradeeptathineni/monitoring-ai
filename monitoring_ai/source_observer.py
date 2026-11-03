@@ -108,3 +108,15 @@ class SourceObserver:
             summaries = [self._coverage_summaries[source_id] for _, source_id, _, _ in self._sources]
         sources = [source for source, _, _, _ in self._sources]
         return source_coverage(sources, statuses, summaries, now=now)
+
+    def responses(self):
+        """Separate native response markers from ledger entity lifecycle."""
+        with self._lock:
+            books = [(source_id, follower.responses(), self._status[source_id]["state"])
+                     for source_id, follower in self._followers.items()]
+        rows = [dict(row, source_state=state) for _, book, state in books for row in book["rows"]]
+        rows.sort(key=lambda row: (row["prompt_at"], row["source"], row["session"]))
+        return dict(schema="monitoring.claude-responses.v1", rows=rows[-100:],
+                    truncated=len(rows) > 100 or any(book["truncated"] for _, book, _ in books),
+                    configured_sources=len(books),
+                    unavailable_sources=sum(state == "unavailable" for _, _, state in books))

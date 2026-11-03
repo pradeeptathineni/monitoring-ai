@@ -1066,6 +1066,29 @@ function renderCodeburnActivity() {
   }));
 }
 
+function renderClaudeResponses() {
+  const panel = $("#claude-response-panel"), status = $("#claude-response-status"), target = $("#claude-response-table");
+  const book = data?.claude_responses?.schema === "monitoring.claude-responses.v1" ? data.claude_responses : null;
+  panel.hidden = !book;
+  if (!book) return;
+  status.replaceChildren(); target.replaceChildren();
+  const selectedSource = $("#filters [name=source]")?.value || "";
+  const selectedProject = $("#filters [name=project]")?.value || "";
+  const selectedSession = $("#filters [name=session]")?.value || "";
+  const rows = (Array.isArray(book.rows) ? book.rows : []).filter((row) =>
+    (!selectedSource || row.source === selectedSource) && (!selectedProject || row.project === selectedProject) &&
+    (!selectedSession || row.session === selectedSession));
+  status.append(node("p", `${number.format(rows.length)} response span${rows.length === 1 ? "" : "s"} in the selected source/project/session scope. Other event filters do not apply. Current activity and session closure are unknown.`, "confidence-note"));
+  if (book.unavailable_sources || snapshotReadUnavailable || paused) status.append(node("p", "A source read or dashboard refresh is unavailable or paused; rows are retained history.", "confidence-note"));
+  if (book.truncated) status.append(node("p", "Only the latest 100 response spans are shown.", "confidence-note"));
+  if (!rows.length) return;
+  const evidence = { prompt_observed: "Prompt only", response_end_observed: "Response ended", stop_hook_observed: "Stop hook observed" };
+  table("#claude-response-table", ["Source / session", "Prompt · UTC", "Response end · UTC", "Stop hook · UTC", "Evidence"], rows.map((row) => [
+    `${row.source} / ${row.session?.length > 18 ? `${row.session.slice(0, 9)}…${row.session.slice(-4)}` : row.session || "Unknown"}`, row.prompt_at || "Unknown", row.response_end_at || "Not observed",
+    row.stop_hook_at || "Not observed", `${evidence[row.evidence] || "Unknown"}${row.source_state === "unavailable" ? " · source unavailable" : ""}`,
+  ]));
+}
+
 function renderOsProcesses() {
   const panel = $("#os-process-panel"), status = $("#os-process-status"), target = $("#os-process-table");
   const sample = data?.os_processes?.schema === "monitoring.os-processes.v1" ? data.os_processes : null;
@@ -1303,6 +1326,7 @@ function render() {
   renderSourceCoverage();
   renderInputHealth();
   renderEntityTable();
+  renderClaudeResponses();
   renderOsProcesses();
   renderCodeburnActivity();
   renderUsage(); renderEvents();
@@ -1437,6 +1461,7 @@ setInterval(() => {
     renderInsights();
     renderSourceCoverage();
     renderInputHealth();
+    renderClaudeResponses();
     renderOsProcesses();
     renderCodeburnCache();
     renderCodeburnActivity();

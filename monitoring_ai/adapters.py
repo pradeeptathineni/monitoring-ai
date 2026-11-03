@@ -90,11 +90,22 @@ def claude_row(row):
     kept = {key: row[key] for key in CLAUDE_FIELDS if key in row}
     if isinstance(row.get("type"), str):
         kept["type"] = row["type"]
+    if row.get("type") == "system" and row.get("subtype") == "stop_hook_summary":
+        kept["stop_hook_observed"] = True
+    if isinstance(row.get("uuid"), str):
+        kept["row_id"] = stable_id(row["uuid"])
     message = row.get("message")
     if isinstance(message, dict):
         slim = {key: message[key] for key in ("role", "model") if isinstance(message.get(key), str)}
         if "id" in message:
             slim["id"] = message["id"]
+        if row.get("type") == "assistant" and message.get("stop_reason") == "end_turn":
+            kept["response_end_observed"] = True
+        if row.get("type") == "user":
+            content = message.get("content")
+            kept["prompt_observed"] = (bool(content.strip()) if isinstance(content, str) else
+                                       any(isinstance(block, dict) and block.get("type") != "tool_result"
+                                           for block in content) if isinstance(content, list) else False)
         if isinstance(message.get("usage"), dict):
             slim["usage"] = {key: message["usage"][key] for key in CLAUDE_USAGE if key in message["usage"]}
         if isinstance(message.get("content"), list):

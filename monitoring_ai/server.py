@@ -10,6 +10,7 @@ from urllib.parse import parse_qs, urlsplit
 import uuid
 
 from . import __version__
+from .claude_follow import ClaudeFollower
 from .events import label as event_label
 from .metrics import filters, now_iso, selected, snapshot
 from .insights import validate_quota_book
@@ -146,6 +147,17 @@ class Observatory:
     def input_status(self):
         return self.source_observer.snapshot() if self.source_observer is not None else None
 
+    def _include_responses(self, value):
+        if self.source_observer is not None:
+            book = self.source_observer.responses()
+            if book["configured_sources"]:
+                value["claude_responses"] = book
+        elif isinstance(self.loader, ClaudeFollower):
+            book = self.loader.responses()
+            value["claude_responses"] = dict(book, configured_sources=1,
+                unavailable_sources=int(self.source_status["state"] == "unavailable"),
+                rows=[dict(row, source_state=self.source_status["state"]) for row in book["rows"]])
+
     def read(self, query):
         with self.lock:
             inputs = self.input_status()
@@ -155,6 +167,7 @@ class Observatory:
             value.update(identity=self.identity, source_status=dict(self.source_status))
             self._include_cached_usage(value)
             self._include_codeburn_activity(value)
+            self._include_responses(value)
             if self.process_observer is not None:
                 value["os_processes"] = self.process_observer.snapshot()
             if inputs is not None:
@@ -172,6 +185,7 @@ class Observatory:
             value.update(identity=self.identity, source_status=dict(self.source_status))
             self._include_cached_usage(value)
             self._include_codeburn_activity(value)
+            self._include_responses(value)
             if self.process_observer is not None:
                 value["os_processes"] = self.process_observer.snapshot()
             if inputs is not None:
@@ -234,6 +248,10 @@ def handler(observatory):
                     )
                     if observatory.process_observer is not None:
                         capabilities["os_processes"] = "monitoring.os-processes.v1"
+                    if ((observatory.source_observer is not None and
+                         observatory.source_observer.responses()["configured_sources"]) or
+                            isinstance(observatory.loader, ClaudeFollower)):
+                        capabilities["claude_responses"] = "monitoring.claude-responses.v1"
                     self.send(200, capabilities)
                 elif parsed.path == "/api/v1/snapshot":
                     self.send(200, observatory.read(query))
