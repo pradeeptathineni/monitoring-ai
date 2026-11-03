@@ -126,10 +126,15 @@ class Observatory:
         if self.loader is None:
             return
         try:
-            result = self.store.ingest(self.loader())
+            result = self.store.ingest(self.loader(),
+                                       claude_timestamp_replay=getattr(self.loader, "replay_timestamp", False))
+            if hasattr(self.loader, "commit"):
+                self.loader.commit()
             with self.lock:
                 self.source_status = dict(state="following", last_success_at=now_iso(), error=None, **result)
         except (ValueError, OSError, sqlite3.Error):
+            if hasattr(self.loader, "discard"):
+                self.loader.discard()
             with self.lock:
                 # Diagnostics never echo a native source path or a malformed record
                 self.source_status = dict(

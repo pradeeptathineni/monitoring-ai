@@ -257,7 +257,11 @@ def run(args):
             if store.read()[0]:
                 raise ValueError("Demo seeding requires an empty ledger")
             store.ingest(demo_events())
-        loader = (lambda: load(args.file, args.format, args.source_id, args.project, live=True)) if args.file else None
+        if args.file and args.format == "claude":
+            from .claude_follow import ClaudeFollower
+            loader = ClaudeFollower(args.file, args.source_id, args.project)
+        else:
+            loader = (lambda: load(args.file, args.format, args.source_id, args.project, live=True)) if args.file else None
         cache_loader = None
         if args.codeburn_cache:
             from .codeburn_cache import read_codeburn_cache

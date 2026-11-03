@@ -43,11 +43,12 @@ class Store:
         finally:
             db.close()
 
-    def ingest(self, rows):
+    def ingest(self, rows, *, claude_timestamp_replay=False, accepted_rows=False):
         events = [validate(row) for row in rows]
         if len(events) > 50000:
             raise ValueError("Import exceeds 50,000 events")
         added = 0
+        accepted = [] if accepted_rows else None
         with self.connect() as db:
             for event in events:
                 payload = json.dumps(event, sort_keys=True, separators=(",", ":"))
@@ -56,16 +57,35 @@ class Store:
                     (event["source"], event["id"]),
                 ).fetchone()
                 if existing:
+                    previous = json.loads(existing[0]) if accepted_rows else None
                     if existing[0] != payload:
-                        raise ValueError("An existing event identity has different content")
+                        # A rotated Claude file can retain only a later copy of
+                        # the same message. Preserve the accepted source time;
+                        # never apply this exception to changed usage or other
+                        # producer formats.
+                        previous = previous or json.loads(existing[0])
+                        same_usage = (claude_timestamp_replay and event["kind"] == "usage"
+                                      and event["provider"] == "anthropic"
+                                      and event["surface"] == "claude-code"
+                                      and {k: v for k, v in previous.items() if k != "timestamp"}
+                                      == {k: v for k, v in event.items() if k != "timestamp"})
+                        if not same_usage:
+                            raise ValueError("An existing event identity has different content")
+                    if accepted_rows:
+                        accepted.append(previous)
                     continue
                 db.execute(
                     "INSERT INTO events(source,event_id,timestamp,payload) VALUES(?,?,?,?)",
                     (event["source"], event["id"], event["timestamp"], payload),
                 )
                 added += 1
+                if accepted_rows:
+                    accepted.append(event)
             self._check_hierarchy(db)
-        return {"added": added, "replayed": len(events) - added}
+        result = {"added": added, "replayed": len(events) - added}
+        if accepted_rows:
+            result["rows"] = accepted
+        return result
 
     def _check_hierarchy(self, db):
         # Out-of-order parents are allowed, but entity identity and ancestry cannot change

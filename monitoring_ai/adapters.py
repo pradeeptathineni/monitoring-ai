@@ -43,7 +43,11 @@ def read_source(path):
 
 
 def read_jsonl(path, *, live=False, strict=False, shape=None):
-    content = read_source(path)
+    return parse_jsonl(read_source(path), live=live, strict=strict, shape=shape)
+
+
+def parse_jsonl(content, *, live=False, strict=False, shape=None):
+    """Parse bounded bytes; callers may supply only complete appended lines."""
     lines = content.splitlines(keepends=True)
     if live and lines and not lines[-1].endswith(b"\n"):
         lines.pop()  # A producer may still be writing the final record

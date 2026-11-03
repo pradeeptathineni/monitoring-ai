@@ -2,6 +2,7 @@
 
 import threading
 
+from .claude_follow import ClaudeFollower
 from .metrics import now_iso
 from .source_coverage import source_coverage, source_summary
 
@@ -32,6 +33,10 @@ class SourceObserver:
             for _, source_id, format_name, project in configured
         }
         self._coverage_summaries = {source_id: None for _, source_id, _, _ in configured}
+        self._followers = {
+            source_id: ClaudeFollower(source.path, source_id, project)
+            for source, source_id, format_name, project in configured if format_name == "claude"
+        }
 
     @staticmethod
     def _error_message(error):
@@ -51,13 +56,23 @@ class SourceObserver:
 
             records_seen = None
             added = replayed = 0
+            follower = self._followers.get(source_id)
             try:
-                rows = list(source.load(live=True))
+                rows = list(follower() if follower else source.load(live=True))
                 records_seen = len(rows)
                 summary = source_summary(source, rows, sampled_at=now_iso())
-                result = store.ingest(rows)
+                result = store.ingest(rows, claude_timestamp_replay=bool(follower),
+                                      accepted_rows=bool(follower))
+                if follower:
+                    # A rotated file may contain only a later row timestamp for
+                    # a previously accepted message. Coverage uses ledger time.
+                    summary = source_summary(source, result.pop("rows"), sampled_at=now_iso())
+                if follower:
+                    follower.commit()
                 added, replayed = result["added"], result["replayed"]
             except Exception as exc:
+                if follower:
+                    follower.discard()
                 with self._lock:
                     status = self._status[source_id]
                     status.update(state="unavailable", records_seen=records_seen,

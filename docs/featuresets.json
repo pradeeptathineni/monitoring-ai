@@ -157,7 +157,7 @@
         "deduplication",
         "cost-provenance"
       ],
-      "workflow": "Select authorized source \u2192 parse provider usage \u2192 deduplicate \u2192 normalize deltas \u2192 retain history",
+      "workflow": "Select authorized source → parse provider usage → deduplicate → normalize deltas → retain history",
       "subfeatures": [
         "provider adapters",
         "cumulative counter deltas",
@@ -175,7 +175,7 @@
         "ccusage/ccusage",
         "Helicone/helicone"
       ],
-      "decision": "Implemented normalized and Claude/Codex usage imports plus metadata-only completed Claude tool pairs. Replay identities remain stable. Explicit multi-source configuration is implemented. More native tools and a correction protocol remain planned. Completed Claude CLI result snapshots supply per-model cumulative deltas and client-side estimates without private transcript discovery. One task-owned Claude Code 2.1.308 native JSONL source now has actual first-message, resumed append, metadata projection, disjoint-token, API-revision and private dashboard proof. Repeated identical usage with different row timestamps keeps the first source event time. Changed accepted usage refuses. Native Codex, broader Claude formats, rotations and general lifecycle remain unqualified.",
+      "decision": "Implemented normalized and Claude/Codex usage imports plus metadata-only completed Claude tool pairs. Replay identities remain stable. Explicit multi-source configuration is implemented. More native tools and a correction protocol remain planned. Completed Claude CLI result snapshots supply per-model cumulative deltas and client-side estimates without private transcript discovery. One task-owned Claude Code 2.1.308 native JSONL source now has actual first-message, resumed append, metadata projection, disjoint-token, API-revision and private dashboard proof. Repeated identical usage with different row timestamps keeps the first source event time. Changed accepted usage refuses. An in-memory Claude follower now reads complete appended lines incrementally, detects replacement/truncation, and keeps first accepted time for timestamp-only replay; actual owned-source idle/restart checks and fictional rotation/partial-line checks pass. Native Codex, provider-driven rotation, changed-usage correction, larger histories and general lifecycle remain unqualified.",
       "evidence": [
         "tests/test_monitoring.py",
         "monitoring_ai/adapters.py",
@@ -188,7 +188,9 @@
         "tests/test_result_capture.py",
         "docs/claude-results.md",
         "docs/claude-native.md",
-        "tests/test_claude_projection.py"
+        "tests/test_claude_projection.py",
+        "monitoring_ai/claude_follow.py",
+        "tests/test_claude_follow.py"
       ]
     },
     {
@@ -203,7 +205,7 @@
         "terminal",
         "web"
       ],
-      "workflow": "Receive lifecycle evidence \u2192 relate sessions and children \u2192 follow in terminal or web \u2192 inspect chronology \u2192 retain stale observations",
+      "workflow": "Receive lifecycle evidence → relate sessions and children → follow in terminal or web → inspect chronology → retain stale observations",
       "subfeatures": [
         "session-agent-worker tree",
         "status evidence age",
@@ -264,7 +266,7 @@
         "costs",
         "history"
       ],
-      "workflow": "Filter usage \u2192 compare model/provider/surface/project/date \u2192 inspect token composition \u2192 qualify cost coverage \u2192 view explicit currency conversion",
+      "workflow": "Filter usage → compare model/provider/surface/project/date → inspect token composition → qualify cost coverage → view explicit currency conversion",
       "subfeatures": [
         "grouped views",
         "token charts",
@@ -319,7 +321,7 @@
         "model",
         "last-known"
       ],
-      "workflow": "Use authorized supported quota source \u2192 capture named windows and reset times \u2192 show current or last-known usage with age",
+      "workflow": "Use authorized supported quota source → capture named windows and reset times → show current or last-known usage with age",
       "subfeatures": [
         "account and model windows",
         "reset times",
@@ -357,7 +359,7 @@
         "uncertainty",
         "notifications"
       ],
-      "workflow": "Observe supported usage windows \u2192 estimate pace with explicit assumptions \u2192 compare budget \u2192 explain forecast or issue an authorized notification",
+      "workflow": "Observe supported usage windows → estimate pace with explicit assumptions → compare budget → explain forecast or issue an authorized notification",
       "subfeatures": [
         "burn rate",
         "projected exhaustion",
@@ -395,7 +397,7 @@
         "latency",
         "subagents"
       ],
-      "workflow": "Configure authorized producer \u2192 ingest metadata spans \u2192 preserve causal hierarchy \u2192 inspect calls and failures across connected systems",
+      "workflow": "Configure authorized producer → ingest metadata spans → preserve causal hierarchy → inspect calls and failures across connected systems",
       "subfeatures": [
         "SDK or OpenTelemetry ingestion",
         "trace/session hierarchy",
