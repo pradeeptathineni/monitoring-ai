@@ -46,13 +46,13 @@ def run_setup(output=None, previous=None):
     print("MONITORING AI SOURCE SETUP")
     print("Choose one local file you are authorized to read. No directories are scanned or agents contacted.")
     print("The file may contain private conversation text; only parsed metrics enter the local ledger.")
-    print("Formats: normalized (Monitoring JSONL), claude (Claude Code session JSONL), codex (Codex session JSONL), claude-results (captured result JSONL).")
+    print("Formats: normalized (Monitoring JSONL), claude (Claude Code session JSONL), codex (Codex session JSONL), claude-results (captured result JSONL), otlp-jsonl (completed OTLP trace batches).")
     raw = _answer("Absolute file path: ")
     if not raw or not Path(raw).is_absolute():
         raise ValueError("Select an absolute file path")
     source_file = Path(raw)
     format_name = _answer("Format [normalized]: ") or "normalized"
-    if format_name not in {"normalized", "claude", "codex", "claude-results"}:
+    if format_name not in {"normalized", "claude", "codex", "claude-results", "otlp-jsonl"}:
         raise ValueError("Unsupported source format")
     alias = _answer("Source alias (short, stable, no path or private name): ")
     project = None if format_name == "normalized" else _answer("Project alias (short, no path or private name): ")

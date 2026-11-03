@@ -276,6 +276,13 @@ def codex(rows, source, project):
 
 
 def load(path, format="normalized", source=None, project=None, live=False):
+    if format == "otlp-jsonl":
+        if not source or not project:
+            raise ValueError("OTLP imports require --source-id and --project aliases")
+        from .otlp import project_request
+        batches = read_jsonl(path, live=live, strict=True,
+                             shape=lambda row: project_request(row, source, project))
+        return [event for batch in batches for event in batch]
     shape = claude_row if format == "claude" else codex_row if format == "codex" else None
     rows = read_jsonl(path, live=live, strict=format == "claude-results", shape=shape)
     if format == "normalized":

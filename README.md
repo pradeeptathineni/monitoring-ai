@@ -4,7 +4,7 @@ Local monitoring for AI sessions, agents, workers, tokens and costs. Use it in y
 
 **Experimental alpha.** It observes explicitly supplied sources. Personal source compatibility, additional collectors and full-vision acceptance remain incomplete. [Version policy and v1.0.0 requirements](docs/release-readiness.md) keep maturity separate from version numbers.
 
-Current checked version: **v0.8.24**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
+Current checked version: **v0.8.25**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
 
 ![Monitoring AI dashboard with fictional sessions and costs](docs/observatory.png)
 
@@ -61,6 +61,8 @@ For an existing CodeBurn v74 daily cache, use the [explicit cached-usage view](d
 An existing CodeBurn 0.9.27 menubar status file can be selected through the [optional recent-activity view](docs/codeburn-status.md). It reports source-generation time and recent transcript writes without reading native transcripts. Stale or empty output does not establish that no workers are running. This adapter does not make CodeBurn a runtime dependency.
 
 For completed headless Claude results, use the [explicit capture and check workflow](docs/claude-results.md). It imports cumulative model-level summaries with declared receipt times and estimated costs. It does not infer live worker states or individual call chronology.
+
+For an already authorized local OTLP/JSON trace export, [select completed trace batches](docs/otlp-jsonl.md) as `otlp-jsonl`. The file adapter projects GenAI inference tokens, agent invocation endings and tool outcomes without retaining prompt bodies. It does not run a collector, discover remote workers or infer billed spend. Its qualification is fictional until a real permitted export is selected.
 
 To show an observed daily token threshold, add `--token-threshold 100000` to `serve`, or to `top` for terminal use. Choose your own positive limit. Usage & costs shows accepted usage from the current UTC day across all projects, even when view filters select fewer records. Cumulative Claude CLI result summaries and future-dated events are excluded; the panel counts their excluded records. This is a local display threshold only. It never sends a notification, blocks a provider call, establishes account-wide usage or converts tokens to billed spend. Change the setting by deliberately restarting the owner. [The read contract](docs/contract.md) documents its optional response block.
 

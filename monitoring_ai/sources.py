@@ -17,7 +17,7 @@ SCHEMA = "monitoring.sources.v1"
 MAX_MANIFEST_BYTES = 64 * 1024
 MAX_SOURCES = 32
 MAX_PATH_CHARS = 4096
-FORMATS = frozenset({"normalized", "claude", "codex", "claude-results"})
+FORMATS = frozenset({"normalized", "claude", "codex", "claude-results", "otlp-jsonl"})
 REQUIRED = frozenset({"id", "format", "path"})
 ALLOWED = REQUIRED | {"project"}
 
@@ -148,7 +148,7 @@ def _entry(entry):
     identifier = _label(entry["id"], "Source id must be a short identifier")
     kind = entry["format"]
     if type(kind) is not str or kind not in FORMATS:
-        raise SourceManifestError("Source format must be normalized, claude, codex or claude-results")
+        raise SourceManifestError("Unsupported source format")
     project = entry.get("project")
     if kind == "normalized":
         if project is not None:

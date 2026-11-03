@@ -101,7 +101,7 @@ export type CodexTurns = {
 
 export type ManagedInput = {
   id: string;
-  format: "normalized" | "claude" | "claude-results" | "codex";
+  format: "normalized" | "claude" | "claude-results" | "codex" | "otlp-jsonl";
   project: string | null;
   state: "following" | "unavailable" | "unread";
   last_attempt_at: string | null;
@@ -131,7 +131,7 @@ export type SourceCoverage = {
 
 export type SourceCoverageInput = {
   id: string;
-  format: "normalized" | "claude" | "claude-results" | "codex";
+  format: "normalized" | "claude" | "claude-results" | "codex" | "otlp-jsonl";
   capabilities: { usage: string; lifecycle: string; tools: string };
   sampled_at: string | null;
   records: { total: number; usage: number; status: number; tool: number;
@@ -244,7 +244,7 @@ function managedInputs(value: unknown): value is ManagedInputs {
   let healthy = 0, unavailable = 0, unread = 0;
   for (const row of value.inputs) {
     if (!record(row) || Object.keys(row).sort().join(",") !== [...INPUT_KEYS].sort().join(",") ||
-        !alias(row.id) || seen.has(row.id) || !["normalized", "claude", "claude-results", "codex"].includes(String(row.format)) ||
+        !alias(row.id) || seen.has(row.id) || !["normalized", "claude", "claude-results", "codex", "otlp-jsonl"].includes(String(row.format)) ||
         !(row.project === null || alias(row.project)) ||
         !["following", "unavailable", "unread"].includes(String(row.state)) ||
         !nullableTimestamp(row.last_attempt_at) || !nullableTimestamp(row.last_success_at) ||
@@ -280,7 +280,7 @@ function sourceCoverage(value: unknown): value is SourceCoverage {
 function sourceCoverageInput(value: unknown, seen: Set<string>): value is SourceCoverageInput {
   if (!record(value) || Object.keys(value).sort().join(",") !== [...SOURCE_COVERAGE_INPUT_KEYS].sort().join(",") ||
       !alias(value.id) || seen.has(value.id) ||
-      !["normalized", "claude", "claude-results", "codex"].includes(String(value.format)) ||
+      !["normalized", "claude", "claude-results", "codex", "otlp-jsonl"].includes(String(value.format)) ||
       !record(value.capabilities) || Object.keys(value.capabilities).sort().join(",") !== "lifecycle,tools,usage" ||
       !nullableTimestamp(value.sampled_at) ||
       ![value.latest_event_at, value.latest_usage_at, value.latest_status_at, value.latest_tool_at].every(nullableTimestamp) ||
@@ -294,7 +294,8 @@ function sourceCoverageInput(value: unknown, seen: Set<string>): value is Source
     claude: { usage: "native-reconstruction", lifecycle: "unsupported", tools: "completed-pairs" },
     "claude-results": { usage: "cumulative-result-deltas", lifecycle: "unsupported", tools: "unsupported" },
     codex: { usage: "native-reconstruction", lifecycle: "unsupported", tools: "unsupported" },
-  }[value.format as "normalized" | "claude" | "claude-results" | "codex"];
+    "otlp-jsonl": { usage: "completed-inference-spans", lifecycle: "completed-agent-spans-only", tools: "completed-tool-spans" },
+  }[value.format as "normalized" | "claude" | "claude-results" | "codex" | "otlp-jsonl"];
   if (value.capabilities.usage !== expectedCapabilities.usage ||
       value.capabilities.lifecycle !== expectedCapabilities.lifecycle ||
       (value.format === "codex" ? !["unsupported", "completed-items"].includes(String(value.capabilities.tools)) :

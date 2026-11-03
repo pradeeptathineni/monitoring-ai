@@ -207,6 +207,22 @@ test("claude-results is a distinct cumulative-result source format with closed c
   assert.throws(() => decodeSnapshot(unknownFormat), /incompatible/);
 });
 
+test("selected OTLP file capabilities are accepted without broadening other formats", () => {
+  const value = structuredClone(snapshot);
+  value.inputs = managedInputs();
+  value.inputs.inputs[2].format = "otlp-jsonl";
+  value.source_coverage = sourceCoverage();
+  const coverage = structuredClone(value.source_coverage.inputs[1]);
+  coverage.id = "selected-traces";
+  coverage.format = "otlp-jsonl";
+  coverage.capabilities = { usage: "completed-inference-spans", lifecycle: "completed-agent-spans-only", tools: "completed-tool-spans" };
+  value.source_coverage.inputs.push(coverage);
+  assert.equal(decodeSnapshot(value).source_coverage.inputs.at(-1).format, "otlp-jsonl");
+  const wrong = structuredClone(value);
+  wrong.source_coverage.inputs.at(-1).capabilities.lifecycle = "producer-supplied";
+  assert.throws(() => decodeSnapshot(wrong), /incompatible/);
+});
+
 test("Codex completed-item tool coverage is additive and older owners remain readable", () => {
   const value = structuredClone(snapshot);
   value.source_coverage = sourceCoverage();

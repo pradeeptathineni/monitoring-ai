@@ -66,6 +66,27 @@ test("older owners show unknown coverage, keep analytics, and expose private-man
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
 });
 
+test("selected OTLP evidence labels completed spans without calling them live workers", async ({ page }) => {
+  await snapshotWithCoverage(page, {
+    schema: "monitoring.source-coverage.v1", observed_at: "2026-11-03T00:00:01Z",
+    scope: "latest-accepted-input-reads", complete_coverage: false,
+    inputs: [{ id: "selected-traces", format: "otlp-jsonl", project: "demo-project",
+      capabilities: { usage: "completed-inference-spans", lifecycle: "completed-agent-spans-only", tools: "completed-tool-spans" },
+      sampled_at: "2026-11-03T00:00:01Z", records: { total: 3, usage: 1, status: 1, tool: 1, sessions: 1, entities: 2, event_sources: 1 },
+      latest_event_at: "2026-11-03T00:00:00Z", latest_usage_at: "2026-11-03T00:00:00Z",
+      latest_status_at: "2026-11-03T00:00:00Z", latest_tool_at: "2026-11-03T00:00:00Z",
+      read_state: "following", retained: false, event_age_seconds: 1, event_freshness: "recent" }],
+  });
+  await page.goto("/");
+  const coverage = page.locator("#source-coverage");
+  await expect(coverage).toContainText("Completed inference spans");
+  await expect(coverage).toContainText("Agent invocation ends only");
+  await expect(coverage).toContainText("Completed tool spans");
+  await expect(coverage).not.toContainText("running workers");
+  await openSettings(page);
+  await expect(page.locator("#coverage-setup")).toContainText("otlp-jsonl");
+});
+
 test("event age advances while paused without reads and retained inventory is qualified after owner disconnect", async ({ page }) => {
   await page.addInitScript(() => {
     let offset = 0;

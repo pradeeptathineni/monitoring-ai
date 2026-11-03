@@ -497,9 +497,9 @@ function inputCount(value) {
 
 function capabilityText(kind, value) {
   const labels = {
-    usage: { "normalized-deltas": "Normalized usage deltas", "native-reconstruction": "Native usage reconstruction", "cumulative-result-deltas": "Claude CLI cumulative-result deltas" },
-    lifecycle: { "producer-supplied": "Producer-supplied lifecycle", unsupported: "Lifecycle unsupported" },
-    tools: { "producer-supplied": "Producer-supplied tool events", "completed-pairs": "Completed tool pairs", "completed-items": "Completed tool items", unsupported: "Tool events unsupported" },
+    usage: { "normalized-deltas": "Normalized usage deltas", "native-reconstruction": "Native usage reconstruction", "cumulative-result-deltas": "Claude CLI cumulative-result deltas", "completed-inference-spans": "Completed inference spans" },
+    lifecycle: { "producer-supplied": "Producer-supplied lifecycle", "completed-agent-spans-only": "Agent invocation ends only", unsupported: "Lifecycle unsupported" },
+    tools: { "producer-supplied": "Producer-supplied tool events", "completed-pairs": "Completed tool pairs", "completed-items": "Completed tool items", "completed-tool-spans": "Completed tool spans", unsupported: "Tool events unsupported" },
   };
   return labels[kind]?.[value] || `${kind}: ${value || "Unknown"}`;
 }

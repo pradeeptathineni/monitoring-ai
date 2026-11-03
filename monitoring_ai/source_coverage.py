@@ -8,6 +8,7 @@ _CAPABILITIES = {
     "claude": {"usage": "native-reconstruction", "lifecycle": "unsupported", "tools": "completed-pairs"},
     "claude-results": {"usage": "cumulative-result-deltas", "lifecycle": "unsupported", "tools": "unsupported"},
     "codex": {"usage": "native-reconstruction", "lifecycle": "unsupported", "tools": "completed-items"},
+    "otlp-jsonl": {"usage": "completed-inference-spans", "lifecycle": "completed-agent-spans-only", "tools": "completed-tool-spans"},
 }
 
 _KINDS = ("usage", "status", "tool")
