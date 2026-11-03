@@ -31,6 +31,23 @@ class Observatory:
         self.quota_book = validate_quota_book(quota_book) if quota_book else None
         self.quota_status = dict(state="static" if quota_book else "unconfigured", last_success_at=None, error=None)
 
+    @staticmethod
+    def _source_status_for_inputs(inputs, previous):
+        rows = inputs["inputs"]
+        if not rows or inputs["unread_inputs"] == len(rows):
+            return dict(previous)
+        complete = inputs["healthy_inputs"] == len(rows)
+        if complete:
+            successful_reads = [row["last_success_at"] for row in rows if row["last_success_at"] is not None]
+            return dict(state="following", degraded=False,
+                        last_success_at=max(successful_reads) if successful_reads else None, error=None)
+        return dict(
+            state="unavailable",
+            degraded=bool(inputs["healthy_inputs"]),
+            last_success_at=previous.get("last_success_at"),
+            error="Some configured inputs are unavailable. Accepted history is retained.",
+        )
+
     def refresh_quotas(self):
         if self.quota_loader is None:
             return
@@ -49,14 +66,8 @@ class Observatory:
     def refresh(self):
         if self.source_observer is not None:
             value = self.source_observer.refresh(self.store)
-            complete = value["healthy_inputs"] == len(value["inputs"])
             with self.lock:
-                self.source_status = dict(
-                    state="following" if complete else "unavailable",
-                    degraded=bool(value["healthy_inputs"]) and not complete,
-                    last_success_at=now_iso() if complete else self.source_status["last_success_at"],
-                    error=None if complete else "Some configured inputs are unavailable. Accepted history is retained.",
-                )
+                self.source_status = self._source_status_for_inputs(value, self.source_status)
             return
         if self.loader is None:
             return
@@ -77,22 +88,28 @@ class Observatory:
 
     def read(self, query):
         with self.lock:
+            inputs = self.input_status()
             revision, events = self.store.read()
             value = snapshot(revision, events, query, self.pricing, self.fx, quota_book=self.quota_book)
             value["insights"]["quotas"]["read_status"] = dict(self.quota_status)
             value.update(identity=self.identity, source_status=dict(self.source_status))
-            if self.source_observer is not None:
-                value["inputs"] = self.input_status()
+            if inputs is not None:
+                value["source_status"] = self._source_status_for_inputs(inputs, self.source_status)
+                self.source_status = dict(value["source_status"])
+                value["inputs"] = inputs
                 value["source_coverage"] = self.source_observer.coverage(now=value["observed_at"])
             return value
 
     def report(self, query):
         with self.lock:
+            inputs = self.input_status()
             revision, events = self.store.read()
             value = detailed_report(revision, events, query, self.pricing, self.fx)
             value.update(identity=self.identity, source_status=dict(self.source_status))
-            if self.source_observer is not None:
-                value["inputs"] = self.input_status()
+            if inputs is not None:
+                value["source_status"] = self._source_status_for_inputs(inputs, self.source_status)
+                self.source_status = dict(value["source_status"])
+                value["inputs"] = inputs
                 value["source_coverage"] = self.source_observer.coverage(now=value["observed_at"])
             return value
 
@@ -175,9 +192,13 @@ def handler(observatory):
                             next_offset=after + limit if after + limit < len(matched) else None))
                 elif parsed.path == "/health":
                     with observatory.lock:
-                        value = dict(schema="monitoring.health.v1", status="ok", source_status=dict(observatory.source_status),
+                        inputs = observatory.input_status()
+                        source_status = dict(observatory.source_status)
+                        if inputs is not None:
+                            source_status = observatory._source_status_for_inputs(inputs, source_status)
+                            observatory.source_status = dict(source_status)
+                        value = dict(schema="monitoring.health.v1", status="ok", source_status=source_status,
                                      quota_status=dict(observatory.quota_status))
-                    inputs = observatory.input_status()
                     if inputs is not None:
                         value["inputs"] = inputs
                     self.send(200, value)
