@@ -61,6 +61,11 @@ def parser():
         if name == "top":
             command.add_argument("--json", action="store_true")
             command.add_argument("--watch", action="store_true", help="Refresh every two seconds in this terminal")
+            command.add_argument("--sources", type=Path, help="Follow explicitly selected files in this terminal")
+            command.add_argument("--processes", action="store_true",
+                                 help="Sample matching macOS executable names; separate from session identity")
+            command.add_argument("--process-interval", type=int,
+                                 help="OS sample interval in seconds (2–60; default 5; requires --processes)")
             for key in (*DIMENSIONS, "since", "until", "state"):
                 command.add_argument("--" + key)
     demo = sub.add_parser("demo", help="Write fictional normalized JSONL, optionally keep appending")
@@ -144,6 +149,29 @@ def terminal(value):
     for row in value["entities"]:
         lines.append(f"{row['entity'][:22]:<22} {row['state']:<12} {row['model'][:24]:<24} {row['metrics']['total_tokens']:>12,} {money(row['metrics']['costs']['estimated']['amount']):>12}")
     lines.extend(["", "Coverage: explicitly supplied events. Lifecycle ages independently of usage."])
+    inputs = value.get("inputs")
+    if inputs:
+        rows = value.get("source_coverage", {}).get("inputs", [])
+        lines.append(f"Selected inputs: {inputs['healthy_inputs']}/{len(inputs['inputs'])} readable. A read does not prove a live session.")
+        for row in rows[:8]:
+            count = row["records"]["total"] if row["records"] is not None else "unknown"
+            age = row["event_age_seconds"]
+            freshness = row["event_freshness"]
+            evidence = f"{round(age)}s old · {freshness}" if age is not None and age >= 0 else freshness
+            retained = " · retained history" if row["retained"] else ""
+            lines.append(f"  {row['id']} ({row['format']}): {row['read_state']} · {count} records · {evidence}{retained}")
+        if len(rows) > 8:
+            lines.append(f"  {len(rows) - 8} more selected inputs; inspect --json for all read states.")
+    processes = value.get("os_processes")
+    if processes:
+        if processes["state"] != "following":
+            lines.append("OS process sample unavailable. Current process presence is unknown.")
+        else:
+            lines.append(f"OS sample: {len(processes['processes'])} matching executables at {processes['sampled_at']}; no verified session or worker links.")
+            for row in processes["processes"][:8]:
+                lines.append(f"  {row['executable'][:18]:18} PID {row['pid']:>7}  CPU {row['cpu_percent']:>5.1f}%  RSS {row['rss_bytes'] / 1048576:>6.1f} MiB")
+            if processes["truncated"] or len(processes["processes"]) > 8:
+                lines.append("  Additional matching processes omitted from this terminal view.")
     threshold = value.get("token_threshold")
     if threshold:
         lines.append(f"UTC-day observed token threshold: {threshold['observed_tokens']:,} / {threshold['limit_tokens']:,} · {threshold['state']}. Incomplete source coverage; no provider enforcement.")
@@ -380,11 +408,30 @@ def run(args):
     else:
         if args.watch and (args.json or not sys.stdout.isatty()):
             raise ValueError("--watch needs an interactive terminal and cannot combine with --json")
+        if args.process_interval is not None and not args.processes:
+            raise ValueError("--process-interval requires --processes")
+        source_observer = None
+        if args.sources:
+            from .sources import load_sources
+            from .source_observer import SourceObserver
+            source_observer = SourceObserver(load_sources(args.sources))
+        process_observer = None
+        if args.processes:
+            if sys.platform != "darwin":
+                raise ValueError("OS process sampling currently supports macOS")
+            from .process_observer import ProcessObserver
+            process_observer = ProcessObserver(interval_seconds=args.process_interval if args.process_interval is not None else 5)
+        last_process_read = float("-inf")
         query = {key: getattr(args, key) for key in (*DIMENSIONS, "since", "until", "state") if getattr(args, key)}
         quota_read = quota_loader(args)
         book, last_quota_read = None, float("-inf")
         quota_error = False
         while True:
+            if source_observer is not None:
+                inputs = source_observer.refresh(store)
+            if process_observer is not None and time.monotonic() - last_process_read >= process_observer.interval_seconds:
+                process_observer.refresh()
+                last_process_read = time.monotonic()
             if quota_read and time.monotonic() - last_quota_read >= 60:
                 try:
                     book = quota_read()
@@ -394,6 +441,11 @@ def run(args):
                 last_quota_read = time.monotonic()
             revision, rows = store.read()
             value = snapshot(revision, rows, query, pricing, fx, quota_book=book)
+            if source_observer is not None:
+                value["inputs"] = inputs
+                value["source_coverage"] = source_observer.coverage(now=value["observed_at"])
+            if process_observer is not None:
+                value["os_processes"] = process_observer.snapshot()
             if args.token_threshold is not None:
                 from .token_threshold import evaluate_token_threshold
                 value["token_threshold"] = evaluate_token_threshold(rows, limit=args.token_threshold,

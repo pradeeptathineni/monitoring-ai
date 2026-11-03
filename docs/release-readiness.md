@@ -1,6 +1,6 @@
 # Versions and release readiness
 
-Public versions use `vX.Y.Z`. Python package metadata and the read API use `X.Y.Z`, without the display prefix. The current checked version is `v0.8.29`. Its maturity is **Experimental alpha**. The number is not a fraction of the work completed.
+Public versions use `vX.Y.Z`. Python package metadata and the read API use `X.Y.Z`, without the display prefix. The current checked version is `v0.8.30`. Its maturity is **Experimental alpha**. The number is not a fraction of the work completed.
 
 Earlier source declarations such as `0.8.0a1` remain in published history. They have not been renamed or retagged. No Git tags existed when this policy was reconciled on 2026-11-03. Minor numbers will not advance for each development checkpoint. Version selection follows the scope of an accepted change, with compatibility and maturity stated separately.
 
@@ -17,3 +17,5 @@ Earlier source declarations such as `0.8.0a1` remain in published history. They 
 | Receiving integration | Accepted standalone-to-Deep journeys against exact owner pins, reconnect/failure behavior and representative live source evidence | Deep has its own Monitoring view. Every newer standalone feature has not been admitted there, and live session/UAT acceptance remains separate. |
 
 The [feature catalog](featuresets.json) and [roadmap](roadmap.md) define the cohesive workflows. Existing work logs retain the detailed evidence. A v1.0.0 review must identify an accepted result for each row and disclose any deliberately excluded scope. It must not convert an untested feature into an implicit exception.
+
+At v0.8.30, an interactive `top --sources --watch` trial followed one task-owned Claude Code 2.1.308 invocation from unavailable input to running and completed status. The optional macOS process sample remained independent with no verified session or worker link. This improves local inspection, but it does not close the broad lifecycle and connected-source gaps above.
