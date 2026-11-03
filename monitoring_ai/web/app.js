@@ -1108,6 +1108,7 @@ function renderUsage() {
   ]));
   renderCodeburnCache();
   renderTokenThreshold();
+  renderCostThresholds();
 }
 
 function renderTokenThreshold() {
@@ -1128,6 +1129,35 @@ function renderTokenThreshold() {
   details.append(confidenceRow("UTC day", `${value.window?.from || "Unknown"} to ${value.window?.until || "Unknown"}`));
   details.append(confidenceRow("Usage records", number.format(value.usage_records)));
   details.append(confidenceRow("Excluded result summaries / future records", `${number.format(value.excluded_receipt_summaries)} / ${number.format(value.excluded_future_records)}`));
+}
+
+function renderCostThresholds() {
+  const panel = $("#cost-threshold-panel"), status = $("#cost-threshold-status"), details = $("#cost-threshold-details");
+  const value = data?.cost_thresholds;
+  panel.hidden = value?.schema !== "monitoring.cost-thresholds.v1";
+  if (panel.hidden) return;
+  details.replaceChildren();
+  if (!Array.isArray(value.items) || !value.items.length || !/^[A-Z]{3}$/.test(value.currency || "")) {
+    status.textContent = "Cost threshold data is unavailable."; return;
+  }
+  status.textContent = "Known cost observations for the current UTC day";
+  if (paused || snapshotReadUnavailable) status.textContent += " · retained snapshot; current use unknown";
+  if (data.source_status?.state === "unavailable") status.textContent += " · selected source unavailable; accepted history retained";
+  for (const item of value.items) {
+    if (!["estimated", "billed"].includes(item.basis) ||
+        !["no-observations", "observed-below", "observed-reached"].includes(item.state) ||
+        !/^\d+(?:\.\d+)?$/.test(item.limit_amount || "")) {
+      details.append(node("p", "A cost threshold row is unavailable.", "empty")); continue;
+    }
+    const basis = item.basis === "estimated" ? "Estimated" : "Billed";
+    const observed = item.observed_amount === null ? "unknown" : item.observed_amount;
+    const label = item.state === "observed-reached" ? "observed threshold reached" :
+      item.state === "no-observations" ? "no converted observations" : "observed below threshold";
+    details.append(confidenceRow(`${basis} cost · ${label}`, `${observed} / ${item.limit_amount} ${value.currency}`));
+    details.append(confidenceRow(`${basis} coverage`, `${item.covered_records} converted · ${item.unpriced_records} unpriced · ${item.unconverted_records} missing FX · ${item.other_basis_records} other basis · ${item.future_records} future · ${item.receipt_time_records} receipt-time summaries`));
+    details.append(confidenceRow(`${basis} provenance`, `${item.cost_provenance?.join(", ") || "none"}${item.provenance_truncated ? " and more" : ""}`));
+  }
+  details.append(confidenceRow("UTC day", `${value.window?.from || "Unknown"} to ${value.window?.until || "Unknown"}`));
 }
 
 function recordCodeburnActivityReceipt(snapshot) {

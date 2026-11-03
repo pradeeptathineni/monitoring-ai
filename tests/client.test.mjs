@@ -91,6 +91,32 @@ test("optional daily token threshold is qualified and rejects inconsistent total
   }
 });
 
+test("optional daily cost thresholds preserve separate bases and refuse private fields", () => {
+  const value = structuredClone(snapshot);
+  value.cost_thresholds = {
+    schema: "monitoring.cost-thresholds.v1", scope: "all-accepted-events-unfiltered",
+    complete_coverage: false, currency: "USD", note: "Known subset only.",
+    window: { from: "2026-11-02T00:00:00.000Z", until: "2026-11-03T00:00:00.000Z",
+      observed_at: snapshot.observed_at },
+    items: [{ basis: "estimated", limit_amount: "2", observed_amount: "3.25",
+      remaining_observed_amount: "0", state: "observed-reached", covered_records: 1,
+      receipt_time_records: 1, unpriced_records: 0, unconverted_records: 0,
+      other_basis_records: 0, future_records: 0, cost_provenance: ["fixture"], provenance_truncated: false }],
+  };
+  assert.equal(decodeSnapshot(value).cost_thresholds.items[0].basis, "estimated");
+  for (const mutation of [
+    (row) => { row.complete_coverage = true; },
+    (row) => { row.items[0].basis = "billed"; row.items.push(structuredClone(row.items[0])); },
+    (row) => { row.items[0].observed_amount = "NaN"; },
+    (row) => { row.items[0].covered_records = 0; },
+    (row) => { row.items[0].private_path = "/private/source"; },
+  ]) {
+    const invalid = structuredClone(value);
+    mutation(invalid.cost_thresholds);
+    assert.throws(() => decodeSnapshot(invalid), /incompatible/);
+  }
+});
+
 test("optional Codex turn markers stay separate and reject private or contradictory fields", () => {
   const value = structuredClone(snapshot);
   value.codex_turns = { schema: "monitoring.codex-turns.v1", configured_sources: 1,

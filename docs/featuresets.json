@@ -401,14 +401,17 @@
         "Maciek-roboblog/Claude-Code-Usage-Monitor",
         "steipete/CodexBar"
       ],
-      "decision": "Implemented selected-window token pace and linear one-hour scenarios with observed span, sample count, heuristic confidence and partial price coverage. An opt-in on-screen UTC-day token threshold now counts accepted timestamped usage independently of filters, with unknown source coverage. It is not provider quota or enforcement. Cost budgets, notifications and quota-exhaustion forecasting remain planned. No automatic reset or paid overage.",
+      "decision": "Implemented selected-window token pace and linear one-hour scenarios with observed span, sample count, heuristic confidence and partial price coverage. Opt-in on-screen UTC-day token and separate known estimated/billed cost thresholds use all accepted records, independently of filters. Claude CLI result cost is a receipt-day estimate, not individual call timing or a bill. Source, price and FX gaps remain unknown. Notifications, enforcement and quota-exhaustion forecasting remain planned. No automatic reset or paid overage.",
       "evidence": [
         "monitoring_ai/insights.py",
         "monitoring_ai/token_threshold.py",
+        "monitoring_ai/cost_thresholds.py",
         "tests/test_insights.py",
         "tests/browser/insights.spec.mjs",
         "tests/test_token_threshold.py",
-        "tests/browser/token-threshold.spec.mjs"
+        "tests/browser/token-threshold.spec.mjs",
+        "tests/test_cost_thresholds.py",
+        "tests/browser/cost-thresholds.spec.mjs"
       ]
     },
     {

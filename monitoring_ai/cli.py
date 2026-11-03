@@ -43,6 +43,10 @@ def parser():
         if name in ("serve", "top"):
             command.add_argument("--token-threshold", type=int,
                                  help="Optional observed-token threshold for the current UTC day; not provider quota")
+            command.add_argument("--estimated-cost-threshold",
+                                 help="Optional current UTC-day threshold over known estimated cost in display currency")
+            command.add_argument("--billed-cost-threshold",
+                                 help="Optional current UTC-day threshold over known billed cost in display currency")
         if name == "serve":
             command.add_argument("--port", type=int, default=5274)
             command.add_argument("--demo", action="store_true", help="Seed an empty ledger with fictional data")
@@ -180,6 +184,11 @@ def terminal(value):
     threshold = value.get("token_threshold")
     if threshold:
         lines.append(f"UTC-day observed token threshold: {threshold['observed_tokens']:,} / {threshold['limit_tokens']:,} · {threshold['state']}. Incomplete source coverage; no provider enforcement.")
+    cost_thresholds = value.get("cost_thresholds")
+    if cost_thresholds:
+        for item in cost_thresholds["items"]:
+            observed = item["observed_amount"] if item["observed_amount"] is not None else "unknown"
+            lines.append(f"UTC-day {item['basis']} cost threshold: {observed} / {item['limit_amount']} {cost_thresholds['currency']} · {item['state']}. Known subset only; no spending enforcement.")
     insights = value.get("insights", {})
     pace = insights.get("pace", {})
     forecast = insights.get("forecast", {})
@@ -331,6 +340,15 @@ def run(args):
     if args.command in ("serve", "top") and args.token_threshold is not None:
         from .token_threshold import validate_limit
         validate_limit(args.token_threshold)
+    cost_limits = {}
+    if args.command in ("serve", "top"):
+        if args.estimated_cost_threshold is not None:
+            cost_limits["estimated"] = args.estimated_cost_threshold
+        if args.billed_cost_threshold is not None:
+            cost_limits["billed"] = args.billed_cost_threshold
+        if cost_limits:
+            from .cost_thresholds import validate_limits
+            cost_limits = validate_limits(cost_limits)
     store = Store(args.db)
     if args.command == "import":
         result = store.ingest(load(args.file, args.format, args.source_id, args.project))
@@ -414,6 +432,7 @@ def run(args):
                           session_cache_loader=session_cache_loader,
                           process_observer=process_observer,
                           token_threshold=args.token_threshold,
+                          cost_thresholds=cost_limits,
                           quota_book=demo_quotas() if args.demo and not args.quota_file and not args.codex_quota else None), args.port)
     else:
         if args.watch and (args.json or not sys.stdout.isatty()):
@@ -460,6 +479,10 @@ def run(args):
                 from .token_threshold import evaluate_token_threshold
                 value["token_threshold"] = evaluate_token_threshold(rows, limit=args.token_threshold,
                                                                        now=value["observed_at"])
+            if cost_limits:
+                from .cost_thresholds import evaluate_cost_thresholds
+                value["cost_thresholds"] = evaluate_cost_thresholds(rows, limits=cost_limits,
+                    pricing=pricing, fx=fx, now=value["observed_at"])
             value["insights"]["quotas"]["read_status"] = dict(state="unavailable" if quota_error else "following" if quota_read else "unconfigured")
             if args.watch:
                 print("\033[2J\033[H", end="")

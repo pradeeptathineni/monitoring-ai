@@ -54,6 +54,7 @@ export type Snapshot = {
   inputs?: ManagedInputs;
   source_coverage?: SourceCoverage;
   token_threshold?: TokenThreshold;
+  cost_thresholds?: CostThresholds;
   codex_turns?: CodexTurns;
   summary: Metrics & { sessions: number; entities: number; active: number; attention: number };
   entities: Entity[];
@@ -85,6 +86,23 @@ export type TokenThreshold = {
   limit_tokens: number; observed_tokens: number; remaining_observed_tokens: number;
   state: "no-observations" | "observed-below" | "observed-reached";
   usage_records: number; excluded_receipt_summaries: number; excluded_future_records: number;
+  note: string;
+};
+
+export type CostThresholds = {
+  schema: "monitoring.cost-thresholds.v1";
+  scope: "all-accepted-events-unfiltered";
+  complete_coverage: false;
+  currency: string;
+  window: { from: string; until: string; observed_at: string };
+  items: Array<{
+    basis: "estimated" | "billed"; limit_amount: string;
+    observed_amount: string | null; remaining_observed_amount: string | null;
+    state: "no-observations" | "observed-below" | "observed-reached";
+    covered_records: number; receipt_time_records: number; unpriced_records: number;
+    unconverted_records: number; other_basis_records: number; future_records: number;
+    cost_provenance: string[]; provenance_truncated: boolean;
+  }>;
   note: string;
 };
 
@@ -204,6 +222,41 @@ function tokenThreshold(value: unknown): value is TokenThreshold {
       (value.state === "no-observations") !== (value.usage_records === 0) ||
       (value.state === "observed-reached") !== ((value.observed_tokens as number) >= (value.limit_tokens as number) && (value.usage_records as number) > 0) ||
       typeof value.note !== "string" || value.note.length > 300) return false;
+  return true;
+}
+
+function costThresholds(value: unknown): value is CostThresholds {
+  if (!record(value) || Object.keys(value).sort().join(",") !==
+      ["schema", "scope", "complete_coverage", "currency", "window", "items", "note"].sort().join(",") ||
+      value.schema !== "monitoring.cost-thresholds.v1" || value.scope !== "all-accepted-events-unfiltered" ||
+      value.complete_coverage !== false || typeof value.currency !== "string" ||
+      !/^[A-Z]{3}$/.test(value.currency) || !record(value.window) ||
+      Object.keys(value.window).sort().join(",") !== "from,observed_at,until" ||
+      ![value.window.from, value.window.until, value.window.observed_at].every((at) =>
+        typeof at === "string" && Number.isFinite(Date.parse(at))) ||
+      !Array.isArray(value.items) || value.items.length < 1 || value.items.length > 2 ||
+      typeof value.note !== "string" || value.note.length > 400) return false;
+  const bases = new Set<string>();
+  for (const item of value.items) {
+    if (!record(item) || Object.keys(item).sort().join(",") !==
+        ["basis", "limit_amount", "observed_amount", "remaining_observed_amount", "state",
+         "covered_records", "receipt_time_records", "unpriced_records", "unconverted_records",
+         "other_basis_records", "future_records", "cost_provenance", "provenance_truncated"].sort().join(",") ||
+        !["estimated", "billed"].includes(String(item.basis)) || bases.has(String(item.basis)) ||
+        typeof item.limit_amount !== "string" || !/^\d+(?:\.\d+)?$/.test(item.limit_amount) ||
+        !(Number(item.limit_amount) > 0 && Number(item.limit_amount) <= 1_000_000_000) ||
+        !decimal(item.observed_amount) || !decimal(item.remaining_observed_amount) ||
+        ![item.covered_records, item.receipt_time_records, item.unpriced_records,
+          item.unconverted_records, item.other_basis_records, item.future_records].every(nonnegativeInteger) ||
+        (item.receipt_time_records as number) > (item.covered_records as number) ||
+        !["no-observations", "observed-below", "observed-reached"].includes(String(item.state)) ||
+        (item.covered_records === 0) !== (item.state === "no-observations") ||
+        (item.covered_records === 0) !== (item.observed_amount === null && item.remaining_observed_amount === null) ||
+        !Array.isArray(item.cost_provenance) || item.cost_provenance.length > 20 ||
+        typeof item.provenance_truncated !== "boolean" ||
+        !item.cost_provenance.every(alias)) return false;
+    bases.add(String(item.basis));
+  }
   return true;
 }
 
@@ -369,6 +422,7 @@ export function decodeSnapshot(value: unknown): Snapshot {
       (value.inputs !== undefined && !managedInputs(value.inputs)) ||
       (value.source_coverage !== undefined && !sourceCoverage(value.source_coverage)) ||
       (value.token_threshold !== undefined && !tokenThreshold(value.token_threshold)) ||
+      (value.cost_thresholds !== undefined && !costThresholds(value.cost_thresholds)) ||
       (value.codex_turns !== undefined && !codexTurns(value.codex_turns)) ||
       (value.insights !== undefined && !insights(value.insights)) ||
       !value.entities.every((row) => record(row) && typeof row.source === "string" &&

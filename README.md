@@ -4,7 +4,7 @@ Local monitoring for AI sessions, agents, workers, tokens and costs. Use it in y
 
 **Experimental alpha.** It observes explicitly supplied sources. Personal source compatibility, additional collectors and full-vision acceptance remain incomplete. [Version policy and v1.0.0 requirements](docs/release-readiness.md) keep maturity separate from version numbers.
 
-Current checked version: **v0.8.32**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
+Current checked version: **v0.8.33**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
 
 ![Monitoring AI dashboard with fictional sessions and costs](docs/observatory.png)
 
@@ -45,6 +45,7 @@ An optional [selected CodeBurn session-cache view](docs/codeburn-session-cache.m
 - Source-age views, trailing-window token pace and cautious linear forecasts with observed span, sample count and explicit cost coverage.
 - Independent quota observations from an explicit file or an opt-in installed Codex allowance read. Stale values and passed reset times retain their last supplied values.
 - An optional current UTC-day token threshold over accepted usage, independent of dashboard filters. It is an on-screen observation, not provider quota, complete account use or a spending control.
+- Optional current UTC-day estimated and billed cost thresholds in the display currency. Known converted subsets are compared separately; missing prices, FX or sources remain unknown.
 - A detailed Report view with UTC period presets, adjacent equal-length comparisons, project/model/day breakdowns, and a daily tool-category chart over the selected records. Unknown timing and unsupported workflow measures stay explicit.
 - An explicit multi-file manifest with independent input health, replay counts and retained history when one source fails. Input aliases and event-source filters remain distinct.
 - [Entity history](docs/session-history.md) with chronological pages scoped to its source and session. Pages retain one ledger revision, with an explicit restart when history changes.
@@ -65,6 +66,8 @@ For completed headless Claude results, use the [explicit capture and check workf
 For an already authorized local OTLP/JSON trace export, [select completed trace batches](docs/otlp-jsonl.md) as `otlp-jsonl`. The file adapter projects GenAI inference tokens, agent invocation endings and tool outcomes without retaining prompt bodies. It does not run a collector, discover remote workers or infer billed spend. Its qualification is fictional until a real permitted export is selected.
 
 To show an observed daily token threshold, add `--token-threshold 100000` to `serve`, or to `top` for terminal use. Choose your own positive limit. Usage & costs shows accepted usage from the current UTC day across all projects, even when view filters select fewer records. Cumulative Claude CLI result summaries and future-dated events are excluded; the panel counts their excluded records. This is a local display threshold only. It never sends a notification, blocks a provider call, establishes account-wide usage or converts tokens to billed spend. Change the setting by deliberately restarting the owner. [The read contract](docs/contract.md) documents its optional response block.
+
+To compare observed daily cost evidence with a limit, add `--estimated-cost-threshold 10` and/or `--billed-cost-threshold 10` to `serve` or `top`. The limit uses the chosen display currency, USD by default, and all accepted usage rather than the current view filters. Estimates and reported bills never combine. Unknown prices, missing FX and missing sources make the known amount incomplete. Claude CLI cumulative results count on their receipt day, not the day of individual calls. The on-screen state sends no notification and cannot enforce spending. Change it by deliberately restarting the owner. [The optional read block](docs/contract.md) remains absent on older owners.
 
 For an existing authorized Maestro campaign, [receive its passive event export](docs/maestro-passive-export.md) as a selected normalized JSONL input. The fixture-tested receiving path retains Maestro's original event timestamps and source identity. No actual Maestro run feed was available for qualification here; this is not a live-worker claim or a runtime dependency on Maestro.
 

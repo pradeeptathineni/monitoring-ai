@@ -161,6 +161,14 @@ The block reports `scope: all-accepted-events-unfiltered`, `complete_coverage: f
 
 This is an on-screen threshold over the accepted ledger, not a provider quota, complete account usage, billed cost, notification or call-enforcement mechanism. Missing or unavailable sources can make actual use higher. The observation does not trigger model calls, send a message or reset any allowance. The supplied Deep reader validates this optional block but need not display it.
 
+## Observed daily cost thresholds
+
+`serve` and `top` optionally accept `--estimated-cost-threshold AMOUNT` and `--billed-cost-threshold AMOUNT`. Each is a positive plain decimal with at most six fractional digits, no greater than one billion in the selected display currency. When either is configured, snapshot and `top --json` add `cost_thresholds` with schema `monitoring.cost-thresholds.v1`. Capabilities advertises this optional block only when configured. Older owners omit it, so a strict Deep reader must explicitly admit the new field before selecting this owner version.
+
+The block contains `scope: all-accepted-events-unfiltered`, `complete_coverage: false`, `currency`, a UTC-day `[from, until)` window with read `observed_at`, and one `items` row per configured basis. Each row has its own `limit_amount`, nullable `observed_amount` and `remaining_observed_amount`, `state` (`no-observations`, `observed-below`, `observed-reached`), covered, unpriced, unconverted, other-basis, future and receipt-time record counts, and up to 20 cost provenance labels with a truncation flag. Amounts are decimal strings. Every accepted usage record in the elapsed UTC day is considered independently of dashboard filters. Explicit event cost takes precedence over a matching dated price estimate. A price or exchange rate is never guessed. Billed and estimated records cannot contribute to each other's threshold. Future-dated rows wait until their timestamp arrives. Claude CLI cumulative result summaries count on receipt day because individual call dates are unavailable; that differs from the activity-day token threshold.
+
+These are local on-screen comparisons of known subsets, not provider quota, a complete invoice, an outbound notification or spending enforcement. A missing source or cost can make actual use higher. The ledger and provider account are unchanged.
+
 ## Detailed report
 
 `GET /api/v1/report` accepts the same dimension, date and current-state filters as snapshots. State selection shares the snapshot evidence logic across the full ledger, even if the latest status lies outside the chosen usage period. It never revives old running evidence as current. Future records remain in the ledger but are excluded from reports, with an explicit count. Requested end times after the read time are clamped to observation time.

@@ -21,7 +21,7 @@ WEB = Path(__file__).with_name("web")
 class Observatory:
     def __init__(self, store, pricing, fx, loader=None, quota_loader=None, quota_book=None, source_observer=None,
                  cached_usage_loader=None, codeburn_activity_loader=None, session_cache_loader=None, process_observer=None,
-                 token_threshold=None):
+                 token_threshold=None, cost_thresholds=None):
         if loader is not None and source_observer is not None:
             raise ValueError("Choose one input configuration")
         self.store, self.pricing, self.fx, self.loader = store, pricing, fx, loader
@@ -46,6 +46,11 @@ class Observatory:
             from .token_threshold import validate_limit
             validate_limit(token_threshold)
         self.token_threshold = token_threshold
+        if cost_thresholds:
+            from .cost_thresholds import validate_limits
+            self.cost_thresholds = validate_limits(cost_thresholds)
+        else:
+            self.cost_thresholds = None
 
     def refresh_codeburn_activity(self):
         if self.codeburn_activity_loader is None:
@@ -207,6 +212,10 @@ class Observatory:
                 from .token_threshold import evaluate_token_threshold
                 value["token_threshold"] = evaluate_token_threshold(events, limit=self.token_threshold,
                                                                         now=value["observed_at"])
+            if self.cost_thresholds is not None:
+                from .cost_thresholds import evaluate_cost_thresholds
+                value["cost_thresholds"] = evaluate_cost_thresholds(events, limits=self.cost_thresholds,
+                    pricing=self.pricing, fx=self.fx, now=value["observed_at"])
             value["insights"]["quotas"]["read_status"] = dict(self.quota_status)
             value.update(identity=self.identity, source_status=dict(self.source_status))
             self._include_cached_usage(value)
@@ -300,6 +309,8 @@ def handler(observatory):
                         capabilities["selected_cache_session"] = "monitoring.selected-cache-session.v1"
                     if observatory.token_threshold is not None:
                         capabilities["token_threshold"] = "monitoring.token-threshold.v1"
+                    if observatory.cost_thresholds is not None:
+                        capabilities["cost_thresholds"] = "monitoring.cost-thresholds.v1"
                     if ((observatory.source_observer is not None and
                          observatory.source_observer.responses()["configured_sources"]) or
                             getattr(observatory.loader, "supports_responses", False)):
