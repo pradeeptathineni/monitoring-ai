@@ -81,7 +81,7 @@ function showView(route) {
   const categoryLabel = { appearance: "Appearance", sources: "Sources and connections", thresholds: "Thresholds" }[target.category];
   $("#breadcrumb").textContent = categoryLabel ? `${baseBreadcrumb} / ${categoryLabel}` : baseBreadcrumb;
   $("#title").textContent = target.category === "appearance" ? "Appearance" : target.category === "sources" ? "Sources and connections" : target.category === "thresholds" ? "Thresholds" : titles[next][0];
-  $("#subtitle").textContent = target.category === "appearance" ? "Choose a preset or adjust the display theme for this browser." : target.category === "sources" ? "Setup guidance for explicitly selected, authorized inputs." : target.category === "thresholds" ? "The threshold is separate from provider quota and billing." : titles[next][1];
+  $("#subtitle").textContent = target.category === "appearance" ? "Choose a preset or adjust the display theme for this browser." : target.category === "sources" ? "Setup guidance for explicitly selected, authorized inputs." : target.category === "thresholds" ? "Local usage thresholds and source-qualified quota reserve warnings." : titles[next][1];
   if (location.hash.slice(1) !== target.hash) location.hash = target.hash;
   window.dispatchEvent(new CustomEvent("monitoring:navigate", { detail: { view: next } }));
   window.monitoringNavigation?.reveal(next);
@@ -626,6 +626,7 @@ function confidenceRow(label, value) {
 }
 
 function renderInsights() {
+  window.monitoringQuotaWatch?.update(data, paused, snapshotReadUnavailable);
   const value = insight(), freshness = $("#freshness"), pace = $("#pace"), quotas = $("#quotas");
   freshness.replaceChildren(); pace.replaceChildren(); quotas.replaceChildren();
   if (!value) {

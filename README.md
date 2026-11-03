@@ -43,7 +43,7 @@ An optional [selected CodeBurn session-cache view](docs/codeburn-session-cache.m
 - Atomic SQLite imports, replay deduplication, changed-identity refusal, hierarchy validation and retained observations when a followed source fails.
 - A versioned read contract and a [server-side Deep AI consumer](integrations/deep-ai). Deep integration is supplied for review, not deployed by this repository.
 - Source-age views, trailing-window token pace and cautious linear forecasts with observed span, sample count and explicit cost coverage.
-- Independent quota observations from an explicit file or an opt-in installed Codex allowance read. Stale values and passed reset times retain their last supplied values.
+- Independent quota observations from an explicit file or an opt-in installed Codex allowance read. An optional [on-screen reserve watch](docs/quotas.md), configured in Settings, pins one owner/window and preserves unknown readings. Stale values and passed reset times retain their last supplied values.
 - An optional current UTC-day token threshold over accepted usage, independent of dashboard filters. It is an on-screen observation, not provider quota, complete account use or a spending control.
 - Optional current UTC-day estimated and billed cost thresholds in the display currency. Known converted subsets are compared separately; missing prices, FX or sources remain unknown.
 - A detailed Report view with UTC period presets, adjacent equal-length comparisons, project/model/day breakdowns, and a daily tool-category chart over the selected records. Unknown timing and unsupported workflow measures stay explicit.

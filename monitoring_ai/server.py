@@ -410,6 +410,7 @@ def handler(observatory):
                     self.send(200, value)
                 else:
                     files = {"/": (WEB / "index.html", "text/html; charset=utf-8"),
+                             "/quota-watch.js": (WEB / "quota-watch.js", "text/javascript; charset=utf-8"),
                              "/app.js": (WEB / "app.js", "text/javascript; charset=utf-8"),
                              "/appearance.js": (WEB / "appearance.js", "text/javascript; charset=utf-8"),
                              "/navigation.js": (WEB / "navigation.js", "text/javascript; charset=utf-8"),

@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/theme/workspace-navigation.css">
   <link rel="stylesheet" href="/navigation.css">
+  <script src="/quota-watch.js" defer></script>
   <script src="/app.js" defer></script>
   <script src="/appearance.js" type="module"></script>
   <script src="/navigation.js" type="module"></script>
@@ -47,6 +48,7 @@
     <div class="content">
       <section class="title-row"><div><h1 id="title">Overview</h1><p id="subtitle">Status evidence and usage from the sources selected for this ledger.</p></div><div class="clock"><span id="updated">Waiting for data</span><small>All dates in UTC</small></div></section>
       <div id="notice" class="notice" role="status" hidden></div>
+      <div id="quota-watch-banner" class="notice quota-watch-banner" role="status" aria-live="polite" hidden></div>
       <form id="filters" class="filters" aria-label="Filter monitoring data">
         <label>Provider<select name="provider"><option value="">All providers</option></select></label>
         <label>Model<select name="model"><option value="">All models</option></select></label>
@@ -110,11 +112,17 @@
           <details id="appearance-settings" class="appearance-settings"><summary>Appearance preferences</summary><div id="appearance-controls"></div></details>
         </article>
         <article class="panel" data-settings-category="thresholds">
-          <div class="panel-head"><div><h2>Thresholds</h2><p>Configure an observed-token threshold when starting the local owner.</p></div><span class="tag">LOCAL CONFIGURATION</span></div>
+          <div class="panel-head"><div><h2>Thresholds</h2><p>Usage thresholds and this browser's quota reserve watch.</p></div><span class="tag">LOCAL CONFIGURATION</span></div>
           <p class="prose">Add <code>--token-threshold 100000</code> to <code>serve</code> to show an on-screen UTC-day threshold over all accepted, timestamped usage. Choose your own positive token limit. The setting is independent of dashboard filters, provider quota, costs and account billing. Restart your owner deliberately to change it.</p>
           <pre><code>python3 -m monitoring_ai serve --sources /path/to/private-sources.json --db /path/to/private-ledger.sqlite --token-threshold 100000</code></pre>
           <p class="prose">Add <code>--estimated-cost-threshold 10</code> and/or <code>--billed-cost-threshold 10</code> to compare known UTC-day cost evidence with limits in the selected display currency. Estimates and bills remain separate. The default display currency is USD; use explicit <code>--fx</code> rates when another currency needs conversion. Restart the owner to change a threshold.</p>
           <p class="prose">Cumulative Claude CLI result summaries use receipt time, so they are excluded from the activity-day token threshold but counted on their receipt day for cost thresholds. Future-dated usage is excluded until its timestamp arrives. No alerts leave the local dashboard, and missing sources remain unknown.</p>
+        </article>
+        <article class="panel" data-settings-category="thresholds">
+          <div class="panel-head"><div><h2>Quota reserve watch</h2><p>Choose one supplied window and an on-screen remaining-percentage warning.</p></div><span class="tag">THIS BROWSER</span></div>
+          <div class="process-controls"><label>Quota window<select id="quota-watch-window"><option value="">Choose a supplied quota window</option></select></label><label>Warn at remaining percent<input id="quota-watch-percent" type="number" min="0" max="100" step="0.1" value="2" /></label><button id="quota-watch-save" type="button">Save reserve watch</button><button id="quota-watch-disable" type="button" class="quiet">Disable reserve watch</button></div>
+          <p id="quota-watch-status" class="prose" role="status">Reserve watch is off.</p>
+          <p class="prose">Saved only in this browser for this Monitoring owner and exact source/provider/account alias/window. A changed owner requires review and saving again. Stale, missing, reset-passed, paused or unavailable observations make the watch unknown. No notification is sent while this page is closed, and no provider action, quota reset, purchase or spending control is performed.</p>
         </article>
         <article class="panel" data-settings-category="sources">
           <div class="panel-head"><div><h2>Sources and connections</h2><p>Explicitly select authorized inputs through the local CLI.</p></div><span class="tag">LOCAL CONFIGURATION</span></div>
