@@ -112,6 +112,11 @@ def parser():
     capture.add_argument("--file", type=Path, required=True)
     capture.add_argument("--captured-at", required=True, help="Original receipt time, with timezone. Never inferred from a reread")
     capture.add_argument("--output", type=Path, required=True, help="New private metadata JSONL file. Existing files refuse")
+    live = actions.add_parser("capture-claude-stream", help="Capture one Claude CLI stream from stdin as invocation status only")
+    live.add_argument("--output", type=Path, required=True, help="New private normalized JSONL file; existing files refuse")
+    live.add_argument("--source-id", required=True, help="Stable local alias for this CLI stream")
+    live.add_argument("--project", required=True, help="Safe project alias")
+    live.add_argument("--forward", action="store_true", help="Pass raw native stream to stdout for an explicit downstream consumer")
     check = actions.add_parser("check", help="Check selected file parsing and coverage without changing a ledger")
     check.add_argument("--sources", type=Path, required=True)
     check.add_argument("--json", action="store_true")
@@ -212,6 +217,13 @@ def run(args):
                 from .result_capture import capture_cli_result
                 capture_cli_result(args.file, args.output, captured_at=args.captured_at)
                 print("Created a private metadata result frame. It records usage summaries, not live worker status. Select it with sources create --format claude-results.")
+                return
+            if args.source_action == "capture-claude-stream":
+                from .claude_stream import capture_stream
+                result = capture_stream(sys.stdin.buffer, args.output,
+                                        source=args.source_id, project=args.project,
+                                        forward=sys.stdout.buffer if args.forward else None)
+                print(json.dumps(result), file=sys.stderr if args.forward else sys.stdout)
                 return
             if args.source_action == "create":
                 create_selection(args.output, file=args.file, id=args.id, format=args.format, project=args.project)

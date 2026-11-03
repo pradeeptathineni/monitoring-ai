@@ -4,7 +4,7 @@ Local monitoring for AI sessions, agents, workers, tokens and costs. Use it in y
 
 **Experimental alpha.** It observes explicitly supplied sources. Personal source compatibility, additional collectors and full-vision acceptance remain incomplete. [Version policy and v1.0.0 requirements](docs/release-readiness.md) keep maturity separate from version numbers.
 
-Current checked version: **v0.8.28**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
+Current checked version: **v0.8.29**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
 
 ![Monitoring AI dashboard with fictional sessions and costs](docs/observatory.png)
 
@@ -78,6 +78,8 @@ python3 -m monitoring_ai serve --file /path/to/authorized-events.jsonl --db /tmp
 
 Two native transcript adapters are included. Only use files you own or are authorized to read. Select one explicit Claude Code JSONL file for [bounded live following](docs/claude-native.md), or a complete [Codex session JSONL file](docs/codex-native.md). There is no home-directory scan, credential reader, hook installation or account connection.
 
+For a Claude CLI invocation you explicitly run with structured stdout, [capture its live start and reported end](docs/claude-cli-stream.md) into a private normalized event file. This supplies invocation lifecycle without reading saved transcripts or assuming that the whole conversation closed. It records no tokens or cost, so it does not duplicate the separate native usage ledger.
+
 When a selected Codex file contains `task_started` and `task_complete` markers, **Sessions** shows their paired or unpaired chronology and source-reported timing separately from ledger lifecycle. The panel does not claim a task succeeded, a session closed or a process remains running. A historical selected file supplied nine paired groups in a private local qualification; a fresh native Codex append remains unverified.
 
 When that file contains supported completed tool items, **Events** and **Report** show their categorized timestamps, counts, error evidence and available durations. A completed MCP call or file change without explicit failure has an unknown outcome; it is not counted as a verified success. A selected historical source yielded 213 tool observations in a private local check. These are historical item records, not live worker status or billed usage.
@@ -149,7 +151,7 @@ python3 -m monitoring_ai ledger backup --db /path/to/events.sqlite --output /pat
 python3 -m monitoring_ai ledger verify --db /path/to/new-private-backup.sqlite
 ```
 
-The receipt reports event, correction and native-version counts, revision and file size; `verify` checks SQLite integrity without writing. Keep the backup and any source manifest private. To use a backup as the active ledger, stop the owner first and deliberately select the backup with `serve --db`; this command never swaps a running owner. The current backup limit is 512 MiB and five seconds. It does not prune history or lift the 100,000-event view limit.
+The receipt reports event, correction and native-version counts, revision and file size; `verify` checks SQLite integrity without changing accepted history. Keep the backup and any source manifest private. To use a backup as the active ledger, stop the owner first and deliberately select the backup with `serve --db`; this command never swaps a running owner. The current backup limit is 512 MiB and five seconds. It does not prune history or lift the 100,000-event view limit.
 
 The manifest is loaded once at startup and admits at most 32 files. Restart deliberately to change that selection. File paths stay in the private configuration; the read API and dashboard show only aliases, format, project and read outcomes. Native inputs require a project alias. Normalized inputs retain their supplied source and project dimensions, so a managed input alias is not necessarily an event-source filter.
 

@@ -28,6 +28,8 @@ Imports are transactional. Identical source/ID content is replay. Changed conten
 
 From `v0.8.2`, the optional [runtime producer helper](runtime-producers.md) writes this same contract to a new private file. It accepts caller-owned metadata and does not inspect, execute or cancel processes. Runtime authority and observation identity remain separate. No input or read-API schema changes are required.
 
+From `v0.8.29`, [Claude CLI stream capture](claude-cli-stream.md) projects one explicitly piped native invocation's init/result frames into this existing normalized status format. The start and end timestamps are local frame-receipt observations. The child agent entity describes the CLI invocation only; the parent conversation lifecycle and any OS process relationship remain unobserved. Incomplete streams end unknown. It emits no usage or cost and adds no source format or read-API field.
+
 ## Read API
 
 The standalone server listens only on `127.0.0.1`, default port 5274. Host checking and no browser CORS prevent casual cross-origin access. This is a local boundary, not multi-user authentication. Host applications should proxy reads through their own server. Do not expose this service on a public interface or add it to a tunnel.
