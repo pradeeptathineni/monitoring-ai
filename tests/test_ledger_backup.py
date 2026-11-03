@@ -38,6 +38,9 @@ class LedgerBackupTests(unittest.TestCase):
             self.assertEqual(receipt["revision"], 2)
             self.assertEqual(stat.S_IMODE(output.stat().st_mode), 0o600)
             self.assertEqual(inspect_ledger(output), receipt)
+            with sqlite3.connect(output) as check:
+                self.assertEqual(check.execute("PRAGMA journal_mode").fetchone(), ("delete",))
+            self.assertFalse(list(self.root.glob(".backup.sqlite.*.tmp*")))
             writer.execute("INSERT INTO events(source,event_id,timestamp,payload) VALUES(?,?,?,?)",
                            ("fixture", "two", row["timestamp"], json.dumps({**row, "id": "two"})))
             writer.commit()
