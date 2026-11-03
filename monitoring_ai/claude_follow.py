@@ -1,4 +1,4 @@
-"""Incrementally follow one explicitly selected Claude JSONL file.
+"""Incrementally follow one explicitly selected native JSONL file.
 
 Only complete lines are committed. The caller commits this in-memory cursor
 after the corresponding ledger batch commits, so rejected batches are retried.
@@ -13,12 +13,13 @@ from .adapters import MAX_BYTES, claude, claude_row, parse_jsonl
 from .claude_responses import response_spans
 
 
-class ClaudeFollower:
-    correct_usage = True
+class NativeFollower:
+    correct_usage = False
+    supports_responses = False
 
     def __init__(self, path, source, project):
         if not source or not project:
-            raise ValueError("Claude following requires source and project aliases")
+            raise ValueError("Native following requires source and project aliases")
         self.path = Path(path)
         self.source, self.project = source, project
         self._identity = None
@@ -63,10 +64,12 @@ class ClaudeFollower:
                 self._pending = (identity, offset, info.st_mtime_ns, self._tail_hash,
                                  self._rows, self._events)
                 return self._events
-            rows = ([] if reset else self._rows) + parse_jsonl(chunk[:complete], shape=claude_row)
+            rows = ([] if reset else self._rows) + parse_jsonl(chunk[:complete], shape=self.shape)
             if len(rows) > 50000:
                 raise ValueError("Source exceeds 50,000 records")
-            events = claude(rows, self.source, self.project, versions=True)
+            events = self._convert(rows)
+            if reset:
+                self._validate_generation(events)
             new_offset = offset + complete
             tail_hash = self._hash_tail(stream, new_offset)
             self._pending = (identity, new_offset, info.st_mtime_ns, tail_hash, rows, events)
@@ -74,13 +77,28 @@ class ClaudeFollower:
 
     def commit(self):
         if self._pending is None:
-            raise RuntimeError("No accepted Claude source read to commit")
+            raise RuntimeError("No accepted native source read to commit")
         (self._identity, self._offset, self._modified, self._tail_hash,
          self._rows, self._events) = self._pending
         self._pending = None
 
     def discard(self):
         self._pending = None
+
+    def _convert(self, rows):
+        raise NotImplementedError
+
+    def _validate_generation(self, events):
+        pass
+
+
+class ClaudeFollower(NativeFollower):
+    correct_usage = True
+    supports_responses = True
+    shape = staticmethod(claude_row)
+
+    def _convert(self, rows):
+        return claude(rows, self.source, self.project, versions=True)
 
     def responses(self):
         """Derive optional evidence only from committed, projected source rows."""

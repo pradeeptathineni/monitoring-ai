@@ -261,9 +261,10 @@ def run(args):
             if store.read()[0]:
                 raise ValueError("Demo seeding requires an empty ledger")
             store.ingest(demo_events())
-        if args.file and args.format == "claude":
+        if args.file and args.format in ("claude", "codex"):
             from .claude_follow import ClaudeFollower
-            loader = ClaudeFollower(args.file, args.source_id, args.project)
+            from .codex_follow import CodexFollower
+            loader = (ClaudeFollower if args.format == "claude" else CodexFollower)(args.file, args.source_id, args.project)
         else:
             loader = (lambda: load(args.file, args.format, args.source_id, args.project, live=True)) if args.file else None
         cache_loader = None

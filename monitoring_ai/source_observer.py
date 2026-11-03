@@ -3,6 +3,7 @@
 import threading
 
 from .claude_follow import ClaudeFollower
+from .codex_follow import CodexFollower
 from .metrics import now_iso
 from .source_coverage import source_coverage, source_summary
 
@@ -34,8 +35,9 @@ class SourceObserver:
         }
         self._coverage_summaries = {source_id: None for _, source_id, _, _ in configured}
         self._followers = {
-            source_id: ClaudeFollower(source.path, source_id, project)
-            for source, source_id, format_name, project in configured if format_name == "claude"
+            source_id: (ClaudeFollower if format_name == "claude" else CodexFollower)(source.path, source_id, project)
+            for source, source_id, format_name, project in configured
+            if format_name in ("claude", "codex")
         }
 
     @staticmethod
@@ -62,7 +64,7 @@ class SourceObserver:
                 records_seen = len(rows)
                 if not follower:
                     summary = source_summary(source, rows, sampled_at=now_iso())
-                result = store.ingest(rows, claude_corrections=bool(follower),
+                result = store.ingest(rows, claude_corrections=getattr(follower, "correct_usage", False),
                                       accepted_rows=bool(follower))
                 if follower:
                     # Versions of one message resolve to one current ledger row.
@@ -113,7 +115,7 @@ class SourceObserver:
         """Separate native response markers from ledger entity lifecycle."""
         with self._lock:
             books = [(source_id, follower.responses(), self._status[source_id]["state"])
-                     for source_id, follower in self._followers.items()]
+                     for source_id, follower in self._followers.items() if follower.supports_responses]
         rows = [dict(row, source_state=state) for _, book, state in books for row in book["rows"]]
         rows.sort(key=lambda row: (row["prompt_at"], row["source"], row["session"]))
         return dict(schema="monitoring.claude-responses.v1", rows=rows[-100:],
