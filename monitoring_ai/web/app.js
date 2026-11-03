@@ -1556,6 +1556,46 @@ function renderProcessSourceCoverage(root, sample, current) {
   }
 }
 
+function renderAppTurns() {
+  const book = data?.codex_app_turns, panel = $("#app-turns-panel");
+  panel.hidden = !book;
+  if (!book) return;
+  const captureAge = (Date.now() - Date.parse(book.captured_at)) / 1000;
+  const recent = book.read_state === "following" && captureAge >= -5 && captureAge <= 30 && !paused && !snapshotReadUnavailable;
+  const tasks = book.tasks || [], rows = [];
+  const query = $("#app-turn-alias-filter").value.trim().toLowerCase(), filter = $("#app-turn-state-filter").value;
+  let currentTasks = 0;
+  for (const task of tasks) {
+    const age = (Date.now() - Date.parse(task.observed_at)) / 1000;
+    const current = recent && age >= -5 && age <= 30;
+    if (current) currentTasks++;
+    if (query && !task.alias.toLowerCase().includes(query)) continue;
+    for (const turn of task.turns.length ? task.turns : [null]) {
+      const state = current && turn ? turn.status : "unknown";
+      if (filter && state !== filter) continue;
+      const taskCell = node("div", task.alias);
+      const app = data.app_threads;
+      if (["codex-app-task-inventory", "codex-app-task-history"].includes(app?.source) && app.threads?.some(row => row.alias === task.alias)) {
+        const focus = node("button", "Show app task", "quiet app-turn-focus");
+        focus.type = "button";
+        focus.addEventListener("click", () => {
+          $("#app-alias-filter").value = task.alias;
+          $("#app-kind-filter").value = ""; $("#app-status-filter").value = ""; appTaskPage = 0;
+          showView("overview"); renderAppThreads(); $("#app-threads-panel").scrollIntoView({ block: "start" });
+        });
+        taskCell.append(focus);
+      }
+      rows.push([taskCell, turn?.alias || "No supplied turns",
+        turn ? current ? turn.status : `Previously ${turn.status} · current unknown` : "Unknown",
+        turn?.started_at || "Unknown", turn?.completed_at || "Not supplied", turn?.duration_ms ?? "Unknown",
+        turn ? turn.error_present ? "Error reported · details omitted" : "None reported in capture" : "Unknown", task.observed_at]);
+    }
+  }
+  $("#app-turns-status").textContent = `Capture ${book.captured_at || "unavailable"} · ${currentTasks} of ${tasks.length} selected tasks have recent metadata${currentTasks < tasks.length || !recent ? "; current status is unknown for stale, unreadable or paused observations" : ""}. ${tasks.filter(task => task.has_more).length} task pages omit older turns. Source coverage is incomplete.`;
+  if (rows.length) table("#app-turns-table", ["Task alias", "Turn alias", "Reported turn status", "Started · UTC", "Ended · UTC", "Source duration · ms", "Error observation", "Metadata observed · UTC"], rows);
+  else $("#app-turns-table").replaceChildren(node("p", "No supplied turns match this view. Missing observations do not establish inactivity.", "empty"));
+}
+
 function retainAppObservations(book, recent) {
   if (!recent) { appObservations.continuous = false; return; }
   const captured = Date.parse(book.captured_at);
@@ -1945,6 +1985,7 @@ function render() {
   renderCodeburnActivity();
   renderUsage(); renderEvents();
   renderAppThreads();
+  renderAppTurns();
   renderSessionComparison();
   const info = $("#currency-info"); info.replaceChildren();
   info.append(node("p", `Display currency: ${data.currency}. ${data.fx ? `USD-based conversion as of ${data.fx.as_of}, provenance ${data.fx.provenance}. This is a display conversion, not an invoice exchange rate.` : "No conversion rates supplied. Amounts in other currencies stay unconverted."}`));
@@ -2137,7 +2178,7 @@ showView(location.hash.slice(1) || "overview");
 refresh();
 setInterval(() => {
   if (data) updateLifecycleEvidenceAges();
-  if (data) renderAppThreads();
+  if (data) { renderAppThreads(); renderAppTurns(); }
   if (paused && data) {
     retainInsights("Dashboard refresh is paused. Showing previously recorded quota observations.");
     renderInsights();
@@ -2165,3 +2206,5 @@ $("#clear-app-changes").addEventListener("click", () => {
   appObservations.note = "Observations cleared. The latest capture remains the baseline.";
   renderAppThreads();
 });
+$("#app-turn-alias-filter").addEventListener("input", renderAppTurns);
+$("#app-turn-state-filter").addEventListener("change", renderAppTurns);

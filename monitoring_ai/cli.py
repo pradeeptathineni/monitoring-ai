@@ -44,6 +44,7 @@ def parser():
             command.add_argument("--project", help="Public-safe project alias for native input")
         if name in ("serve", "top"):
             command.add_argument("--app-threads", type=Path, help="Explicit metadata-only app task inventory export")
+            command.add_argument("--app-turns", type=Path, help="Explicit private selected Codex app turn metadata export")
             command.add_argument("--token-threshold", type=int,
                                  help="Optional observed-token threshold for the current UTC day; not provider quota")
             command.add_argument("--estimated-cost-threshold",
@@ -147,6 +148,10 @@ def parser():
     app_capture.add_argument("--output", type=Path, required=True)
     app_capture.add_argument("--captured-at", required=True, help="Original supported inventory observation time")
     app_capture.add_argument("--replace", action="store_true", help="Refresh an existing owned 0600 inventory export")
+    turn_capture = actions.add_parser("capture-codex-app-turns", help="Capture only selected Codex app turn metadata from stdin")
+    turn_capture.add_argument("--output", type=Path, required=True)
+    turn_capture.add_argument("--captured-at", required=True, help="Original supported app metadata capture time")
+    turn_capture.add_argument("--replace", action="store_true", help="Refresh the same selected tasks in an owned private export")
     create = actions.add_parser("create", help="Create one private selection without overwriting a file")
     create.add_argument("--output", type=Path, required=True)
     create.add_argument("--file", type=Path, required=True)
@@ -243,6 +248,21 @@ def terminal(value, *, app_kind=None, app_status=None, app_alias=None, app_limit
         if len(matching) > app_limit:
             lines.append(f"  {len(matching) - app_limit} matching app rows omitted; narrow --app-kind, --app-status or --app-alias, or increase --app-limit.")
         lines.append("  Reported app status is not model inference, worker lifecycle, token usage or billing.")
+    app_turns = value.get("codex_app_turns")
+    if app_turns:
+        lines.append(f"Selected Codex app turns: {app_turns.get('read_state', 'unknown')} read · captured {app_turns.get('captured_at', 'unavailable')}")
+        if app_turns.get("read_state") != "following" or app_turns.get("freshness") != "recent":
+            lines.append("  Current Codex turn status unknown. Prior turn observations remain historical.")
+        for task in app_turns.get("tasks", []):
+            from .metrics import seconds
+            age = seconds(value["observed_at"]) - seconds(task["observed_at"])
+            current = app_turns.get("read_state") == "following" and app_turns.get("freshness") == "recent" and -5 <= age <= 30
+            for turn in task["turns"]:
+                state = turn["status"] if current else f"previously {turn['status']}; current unknown"
+                lines.append(f"  {task['alias']} · {turn['alias']} · reported {state} · started {turn['started_at'] or 'unknown'} · ended {turn['completed_at'] or 'unknown'}")
+            if not task["turns"]:
+                lines.append(f"  {task['alias']} · no supplied turns; current turn status unknown")
+        lines.append("  Selected turn pages only. An in-progress turn does not prove model inference. A completed turn does not close the task, session or process.")
     processes = value.get("os_processes")
     if processes:
         if processes["state"] != "following":
@@ -451,6 +471,10 @@ def run(args):
             print(json.dumps(capture_app_threads(sys.stdin.buffer, args.output, args.captured_at, replace=args.replace,
                                                 source="codex-app-task-history" if args.codex_history else "codex-app-task-inventory")))
             return
+        if args.source_action == "capture-codex-app-turns":
+            from .app_turns import capture_app_turns
+            print(json.dumps(capture_app_turns(sys.stdin.buffer, args.output, args.captured_at, replace=args.replace)))
+            return
         from .source_setup import add_selection, create_selection, check_selection, select_claude_stream
         from .sources import SourceManifestError
         try:
@@ -628,9 +652,11 @@ def run(args):
             from .process_observer import ProcessObserver
             process_observer = ProcessObserver(interval_seconds=args.process_interval if args.process_interval is not None else 5)
         from .app_threads import read_app_threads
+        from .app_turns import read_app_turns
         serve(Observatory(store, pricing, fx, loader, quota_loader=quota_loader(args),
                           source_observer=observer,
                           app_threads_loader=(lambda: read_app_threads(args.app_threads)) if args.app_threads else None,
+                          app_turns_loader=(lambda: read_app_turns(args.app_turns)) if args.app_turns else None,
                           cached_usage_loader=cache_loader,
                           codeburn_activity_loader=activity_loader,
                           session_cache_loader=session_cache_loader,
@@ -667,6 +693,7 @@ def run(args):
         prior_watch = None
         recent_changes = []
         app_capture = None
+        turn_capture = None
         while True:
             if source_observer is not None:
                 inputs = source_observer.refresh(store)
@@ -683,9 +710,15 @@ def run(args):
             revision, rows = store.read()
             value = snapshot(revision, rows, query, pricing, fx, quota_book=book)
             if args.app_threads:
-                from .app_threads import app_threads_snapshot, read_app_threads
-                app_capture = app_threads_snapshot(lambda: read_app_threads(args.app_threads), app_capture, value["observed_at"])
+                from .app_threads import dated_app_snapshot, read_app_threads
+                app_capture = dated_app_snapshot(lambda: read_app_threads(args.app_threads), app_capture, value["observed_at"])
                 value["app_threads"] = app_capture
+            if args.app_turns:
+                from .app_threads import dated_app_snapshot
+                from .app_turns import read_app_turns, SCHEMA
+                turn_capture = dated_app_snapshot(lambda: read_app_turns(args.app_turns), turn_capture, value["observed_at"],
+                                                  schema=SCHEMA, rows="tasks")
+                value["codex_app_turns"] = turn_capture
             if source_observer is not None:
                 value["inputs"] = inputs
                 value["source_coverage"] = source_observer.coverage(now=value["observed_at"])

@@ -11,7 +11,7 @@ from .metrics import now_iso, seconds
 SCOPES = {"codex-app-task-inventory": "recent-app-page", "codex-local-app-server": "selected-cwd-page", "codex-app-task-history": "codex-history-page"}
 
 
-def app_threads_snapshot(loader, previous, observed_at):
+def dated_app_snapshot(loader, previous, observed_at, *, schema="monitoring.app-threads.v1", rows="threads"):
     """Retain dated metadata on read failure without renewing its capture time."""
     try:
         value = loader()
@@ -19,7 +19,7 @@ def app_threads_snapshot(loader, previous, observed_at):
     except (OSError, ValueError, TypeError):
         value, state = previous, "unavailable"
     if not value or "captured_at" not in value:
-        return {"schema": "monitoring.app-threads.v1", "read_state": "unavailable", "threads": []}
+        return {"schema": schema, "read_state": "unavailable", rows: []}
     age = seconds(observed_at) - seconds(value["captured_at"])
     return dict(value, age_seconds=age,
                 freshness="future" if age < -5 else "recent" if age <= 30 else "stale",

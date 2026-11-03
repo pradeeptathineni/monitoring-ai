@@ -64,3 +64,5 @@ main{margin-left:242px;min-height:100vh}.topbar{height:72px;padding:0 38px;borde
 .quota-watch-banner{border-color:var(--theme-status-warning,var(--warn));color:var(--theme-text-primary,var(--text));overflow-wrap:anywhere}.quota-watch-banner[data-state="unknown"]{border-color:var(--theme-border-strong,var(--line-strong))}#quota-watch-window{max-width:min(100%,520px)}
 
 #app-page-prev,#app-page-next{min-height:44px}
+
+.app-turn-focus{display:block;min-height:44px;margin-top:6px}

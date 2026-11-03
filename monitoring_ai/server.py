@@ -22,7 +22,7 @@ WEB = Path(__file__).with_name("web")
 class Observatory:
     def __init__(self, store, pricing, fx, loader=None, quota_loader=None, quota_book=None, source_observer=None,
                  cached_usage_loader=None, codeburn_activity_loader=None, session_cache_loader=None, process_observer=None,
-                 token_threshold=None, cost_thresholds=None, app_threads_loader=None):
+                 token_threshold=None, cost_thresholds=None, app_threads_loader=None, app_turns_loader=None):
         if loader is not None and source_observer is not None:
             raise ValueError("Choose one input configuration")
         self.store, self.pricing, self.fx, self.loader = store, pricing, fx, loader
@@ -45,6 +45,7 @@ class Observatory:
         self.process_observer = process_observer
         self.app_threads_loader = app_threads_loader
         self.app_threads = None
+        self.app_turns_loader, self.app_turns = app_turns_loader, None
         if token_threshold is not None:
             from .token_threshold import validate_limit
             validate_limit(token_threshold)
@@ -58,9 +59,17 @@ class Observatory:
     def _include_app_threads(self, value):
         if self.app_threads_loader is None:
             return
-        from .app_threads import app_threads_snapshot
-        self.app_threads = app_threads_snapshot(self.app_threads_loader, self.app_threads, value["observed_at"])
+        from .app_threads import dated_app_snapshot
+        self.app_threads = dated_app_snapshot(self.app_threads_loader, self.app_threads, value["observed_at"])
         value["app_threads"] = self.app_threads
+
+    def _include_app_turns(self, value):
+        if self.app_turns_loader is None:
+            return
+        from .app_threads import dated_app_snapshot
+        self.app_turns = dated_app_snapshot(self.app_turns_loader, self.app_turns, value["observed_at"],
+                                           schema="monitoring.codex-app-turns.v1", rows="tasks")
+        value["codex_app_turns"] = self.app_turns
 
     def refresh_codeburn_activity(self):
         if self.codeburn_activity_loader is None:
@@ -219,6 +228,7 @@ class Observatory:
             revision, events = self.store.read()
             value = snapshot(revision, events, query, self.pricing, self.fx, quota_book=self.quota_book)
             self._include_app_threads(value)
+            self._include_app_turns(value)
             if self.token_threshold is not None:
                 from .token_threshold import evaluate_token_threshold
                 value["token_threshold"] = evaluate_token_threshold(events, limit=self.token_threshold,
@@ -318,6 +328,8 @@ def handler(observatory):
                     )
                     if observatory.app_threads_loader is not None:
                         capabilities["app_threads"] = "monitoring.app-threads.v1"
+                    if observatory.app_turns_loader is not None:
+                        capabilities["codex_app_turns"] = "monitoring.codex-app-turns.v1"
                     if observatory.process_observer is not None:
                         capabilities["os_processes"] = "monitoring.os-processes.v1"
                     if observatory.session_cache_loader is not None:

@@ -1,5 +1,7 @@
 # Deep AI consumer
 
+The optional [selected Codex app turns](../../docs/codex-app-turns.md) contract adds `capabilities.codex_app_turns` and a separate snapshot block. It carries at most four selected tasks with four turn statuses/timing rows each, hashed app identities, original source timestamps and per-task observation age. It supplies no ledger entity, execution target, worker/process relationship, usage or billing. A receiver must enforce both root and per-task freshness and preserve unknown values. Monitoring has an actual finite source-to-standalone trial, but this block has not been admitted into Deep by this task. Deep's accepted scoped app-inventory variants do not imply selected-turn support. No shared checkout or managed owner was changed.
+
 `client.ts` is a server-side, dependency-free TypeScript consumption adapter. It is delivered here for the Deep implementation owner to review and apply. This repository does not modify or claim deployment into Deep.
 
 ```ts

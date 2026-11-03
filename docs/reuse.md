@@ -136,3 +136,5 @@ Bounded app-history browsing extends the existing owned supported-tool bridge, p
 The bounded app-change list is original browser code over that same sanitized source contract. It reuses the owned table helper and freshness rules. It imports no upstream code, account client or runtime dependency and retains no history outside the tab. Existing licensed theme bytes remain unchanged.
 
 Terminal app-source recovery reuses the same owned dated-read projection as the HTTP owner. Its filtered, bounded text view uses existing normalized metadata and standard-library sorting. It copies no upstream code and adds no collector, account client or runtime dependency.
+
+Selected Codex app turns use original allowlist projection over the supported app `read_thread` schema version 1, inspected locally with outputs disabled. The owned private publisher, dated-read projection and browser table/navigation controls are reused. No app implementation, upstream collector or account client is copied or imported. Native turn-marker and app-inventory semantics informed the separate status/timing view, without joining their identities or treating app status as model inference.

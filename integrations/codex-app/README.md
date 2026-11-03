@@ -1,5 +1,7 @@
 # Finite app inventory refresh
 
+For turn status and timing of explicitly selected Codex tasks, use the separate [selected-turn recipe](selected-turns.js) and [source/consumer guide](../../docs/codex-app-turns.md). It uses bounded supported `read_thread` metadata, not `wait_threads`, native session directories or a new host. Its optional `codex_app_turns` block stays separate from the inventory below and from ledger lifecycle/usage. No persistent acquisition is installed by either recipe.
+
 `finite-refresh.js` runs inside an already authorized assistant tool runtime exposing `tools`, `text` and `setTimeout`. It is not an account client or a standalone OS daemon. It uses the supported app `list_threads` interface, selects only five metadata fields, and invokes Monitoring's existing private capture command. It never sends a message, starts a model, changes account access or reads native session directories.
 
 After evaluating the file in that runtime, invoke:

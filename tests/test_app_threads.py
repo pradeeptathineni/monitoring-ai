@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from monitoring_ai.app_threads import app_threads_snapshot, read_app_threads, capture_app_threads
+from monitoring_ai.app_threads import dated_app_snapshot, read_app_threads, capture_app_threads
 from monitoring_ai.metrics import Exchange, Pricing
 from monitoring_ai.server import Observatory
 from monitoring_ai.store import Store
@@ -72,22 +72,22 @@ class AppHistoryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "capture.json"
             loader = lambda: read_app_threads(path)
-            initial = app_threads_snapshot(loader, None, "2026-11-03T19:00:01Z")
+            initial = dated_app_snapshot(loader, None, "2026-11-03T19:00:01Z")
             self.assertEqual(initial["read_state"], "unavailable")
             self.assertEqual(initial["threads"], [])
             path.write_text(json.dumps(inventory()))
-            recovered = app_threads_snapshot(loader, initial, "2026-11-03T19:00:02Z")
+            recovered = dated_app_snapshot(loader, initial, "2026-11-03T19:00:02Z")
             self.assertEqual(recovered["read_state"], "following")
             self.assertEqual(recovered["freshness"], "recent")
             path.write_text('{"unsupported":"capture"}')
-            failed = app_threads_snapshot(loader, recovered, "2026-11-03T19:01:00Z")
+            failed = dated_app_snapshot(loader, recovered, "2026-11-03T19:01:00Z")
             self.assertEqual(failed["read_state"], "unavailable")
             self.assertEqual(failed["captured_at"], recovered["captured_at"])
             self.assertEqual(failed["threads"], recovered["threads"])
             self.assertEqual(failed["freshness"], "stale")
             self.assertEqual(failed["age_seconds"], 60)
             path.write_text(json.dumps(inventory()))
-            reread = app_threads_snapshot(loader, failed, "2026-11-03T19:01:02Z")
+            reread = dated_app_snapshot(loader, failed, "2026-11-03T19:01:02Z")
             self.assertEqual(reread["read_state"], "following")
             self.assertEqual(reread["freshness"], "stale")
 
