@@ -70,6 +70,12 @@ class EventWriter:
                 os.fchmod(fd, 0o600)
                 if not stat.S_ISREG(os.fstat(fd).st_mode):
                     raise OSError("not a regular file")
+                # A flushed record also needs a durable name for its new file.
+                parent_fd = os.open(parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+                try:
+                    os.fsync(parent_fd)
+                finally:
+                    os.close(parent_fd)
             except Exception:
                 os.close(fd)
                 raise

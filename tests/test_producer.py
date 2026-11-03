@@ -78,6 +78,21 @@ class ProducerTests(unittest.TestCase):
                 EventWriter(root / "missing-parent" / "events.jsonl")
             self.assertFalse((root / "missing-parent").exists())
 
+    def test_new_event_file_syncs_its_directory_before_accepting_records(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "new.jsonl"
+            calls = []
+            original = os.fsync
+
+            def record(fd):
+                calls.append(stat.S_ISDIR(os.fstat(fd).st_mode))
+                return original(fd)
+
+            with patch("monitoring_ai.producer.os.fsync", side_effect=record):
+                with EventWriter(path) as writer:
+                    writer.write(status("first"))
+            self.assertEqual(calls, [True, False])
+
     def test_validation_happens_before_any_bytes_are_written_and_closed_writer_fails(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "events.jsonl"
