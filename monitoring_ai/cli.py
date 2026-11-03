@@ -102,6 +102,7 @@ def parser():
     setup = sub.add_parser("setup", help="Choose one authorized local file with guided prompts")
     setup.add_argument("--output", type=Path, help="New private selection file; default user config directory")
     setup.add_argument("--from-selection", type=Path, help="Existing selection to add to; left unchanged")
+    setup.add_argument("--db", type=Path, help="Preview selected inputs against this existing ledger before suggesting a restart")
     sources = sub.add_parser("sources", help="Select explicit inputs and check their supplied evidence")
     actions = sources.add_subparsers(dest="source_action", required=True)
     create = actions.add_parser("create", help="Create one private selection without overwriting a file")
@@ -239,6 +240,26 @@ def _print_source_check(value):
     print("A recent file read does not prove a live session. Missing evidence means coverage is unknown, not idle.")
 
 
+def _print_source_preview(value):
+    base = value["base"]
+    print(f"MONITORING AI INGESTION PREVIEW · {base['kind']} · revision {base['revision']} · {base['events']} accepted observations in base")
+    for row in value["inputs"]:
+        print(f"\n{row['id']} · {row['format']} · {row['state']}")
+        if row["proposed"] is not None:
+            print(f"Proposed additions {row['proposed']['added']} · replays {row['proposed']['replayed']}")
+        if row["error"]:
+            print(row["error"])
+        if row["summary"]:
+            counts = row["summary"]["records"]
+            print(f"Unique sample: {counts['usage']} usage · {counts['status']} lifecycle · {counts['tool']} tool observations")
+            if not counts["total"]:
+                print("The selected file supplies no complete supported observations yet.")
+        if row["summary"] and row["summary"]["capabilities"]["lifecycle"] == "unsupported":
+            print("This usage adapter supplies no live worker lifecycle.")
+    print("\nPrivate temporary preview completed. Accepted ledger history is unchanged.")
+    print(value["note"])
+
+
 def run(args):
     if args.command == "ledger":
         from .ledger_backup import backup_ledger, inspect_ledger
@@ -248,7 +269,7 @@ def run(args):
         return
     if args.command == "setup":
         from .guided_setup import run_setup
-        run_setup(args.output, args.from_selection)
+        run_setup(args.output, args.from_selection, args.db)
         return
     if args.command == "sources":
         from .source_setup import add_selection, create_selection, check_selection, select_claude_stream
@@ -301,23 +322,7 @@ def run(args):
                 if args.json:
                     print(json.dumps(value, indent=2))
                 else:
-                    base = value["base"]
-                    print(f"MONITORING AI INGESTION PREVIEW · {base['kind']} · revision {base['revision']} · {base['events']} accepted observations in base")
-                    for row in value["inputs"]:
-                        print(f"\n{row['id']} · {row['format']} · {row['state']}")
-                        if row["proposed"] is not None:
-                            print(f"Proposed additions {row['proposed']['added']} · replays {row['proposed']['replayed']}")
-                        if row["error"]:
-                            print(row["error"])
-                        if row["summary"]:
-                            counts = row["summary"]["records"]
-                            print(f"Unique sample: {counts['usage']} usage · {counts['status']} lifecycle · {counts['tool']} tool observations")
-                            if not counts["total"]:
-                                print("The selected file supplies no complete supported observations yet.")
-                        if row["summary"] and row["summary"]["capabilities"]["lifecycle"] == "unsupported":
-                            print("This usage adapter supplies no live worker lifecycle.")
-                    print("\nPrivate temporary preview completed. Accepted ledger history is unchanged.")
-                    print(value["note"])
+                    _print_source_preview(value)
                 if not value["ready"]:
                     raise SystemExit(1)
                 return

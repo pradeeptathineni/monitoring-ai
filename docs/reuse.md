@@ -112,3 +112,5 @@ The v0.8.37 selected quota refresh is original code built on Monitoring's existi
 The local v0.8.38 ledger event verification is original code using Monitoring's existing normalized event validator and Python's standard-library SQLite and JSON modules. It adds no upstream code or runtime dependency.
 
 The local v0.8.39 report CSV is original browser code over Monitoring's existing detailed-report response, using built-in Blob and download APIs. It imports no upstream code or runtime package.
+
+The local v0.8.40 guided preview reuses Monitoring's own disposable source-readiness engine and terminal presentation. It imports no upstream code or runtime package.

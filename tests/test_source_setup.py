@@ -8,6 +8,7 @@ import tempfile
 import unittest
 
 from monitoring_ai.source_setup import add_selection, create_selection, check_selection, select_claude_stream
+from monitoring_ai.store import Store
 from test_multi_sources import event
 
 
@@ -229,6 +230,35 @@ class SourceSetupTests(unittest.TestCase):
                                   text=True, timeout=5)
         self.assertEqual(repeated.returncode, 2)
         self.assertEqual(saved.read_bytes(), original)
+
+    def test_guided_setup_optional_ledger_preview_reports_acceptance_without_import(self):
+        ledger = self.root / "accepted.sqlite"
+        Store(ledger).ingest([event("known")])
+        self.file.write_text(json.dumps(event("new")) + "\n")
+        output = self.root / "next-selection.json"
+        project = str(Path(__file__).resolve().parents[1])
+        command = [sys.executable, "-m", "monitoring_ai", "setup", "--output", str(output), "--db", str(ledger)]
+        options = dict(cwd=self.root, env=dict(os.environ, PYTHONPATH=project), capture_output=True,
+                       text=True, timeout=10)
+        ready = subprocess.run(command, input=f"{self.file}\nnormalized\nselected\n", **options)
+        self.assertEqual(ready.returncode, 0, ready.stderr)
+        self.assertIn("Proposed additions 1 · replays 0", ready.stdout)
+        self.assertIn("Accepted ledger history is unchanged", ready.stdout)
+        self.assertIn("--db " + str(ledger), ready.stdout)
+        self.assertNotIn(str(self.file), ready.stdout)
+        with Store(ledger).connect() as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM events").fetchone()[0], 1)
+
+        self.file.write_text(json.dumps(event("known", tokens=99)) + "\n")
+        rejected_output = self.root / "conflict-selection.json"
+        rejected = subprocess.run([*command[:5], str(rejected_output), *command[6:]],
+                                  input=f"{self.file}\nnormalized\nselected\n", **options)
+        self.assertEqual(rejected.returncode, 1, rejected.stderr)
+        self.assertTrue(rejected_output.exists())
+        self.assertIn("selected · normalized · rejected", rejected.stdout)
+        self.assertIn("Review the conflict before restarting", rejected.stdout)
+        with Store(ledger).connect() as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM events").fetchone()[0], 1)
 
     def test_guided_setup_adds_to_existing_selection_without_replacing_it(self):
         self.file.write_text(json.dumps(event("first")) + "\n")

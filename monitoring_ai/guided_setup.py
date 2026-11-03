@@ -34,11 +34,12 @@ def _private_default_directory():
     return directory
 
 
-def run_setup(output=None, previous=None):
+def run_setup(output=None, previous=None, db=None):
     """Create a private immutable selection and check only its chosen files."""
     if previous is not None:
         load_sources(previous)  # Validate configuration before asking for new input.
     selected = Path(output).expanduser().absolute() if output else None
+    default_output = selected is None
     if selected is not None and selected.exists():
         print("Selection output already exists. Choose a new --output; the running service was not changed.", file=sys.stderr)
         raise SystemExit(2)
@@ -72,16 +73,27 @@ def run_setup(output=None, previous=None):
         print(f"Source selection rejected: {error}", file=sys.stderr)
         raise SystemExit(2) from None
 
-    from .cli import _print_source_check
+    from .cli import _print_source_check, _print_source_preview
     print("\nPrivate selection saved. Existing selection and running service are unchanged.")
-    print("Keep the selection out of version control. The default config directory is outside the current project.")
+    print("Keep the selection private and out of version control.")
+    if default_output:
+        print("The default config directory is outside the current project.")
     check = check_selection(selected)
     _print_source_check(check)
     if not check["all_readable"]:
         print("The selection is saved, but at least one input is not readable. Fix the selected source before serving.")
         raise SystemExit(1)
+    if db is not None:
+        from .source_readiness import preview_selection
+        preview = preview_selection(selected, db)
+        _print_source_preview(preview)
+        if not preview["ready"]:
+            print("The new selection is saved, but its preview did not accept every input. Review the conflict before restarting an owner.")
+            raise SystemExit(1)
     selected_argument = shlex.quote(str(selected))
-    print("\nPreview ingestion: python3 -m monitoring_ai sources preview --sources " + selected_argument)
+    ledger_argument = shlex.quote(str(db)) if db is not None else ".monitoring-ai/events.sqlite"
+    if db is None:
+        print("\nPreview ingestion: python3 -m monitoring_ai sources preview --sources " + selected_argument)
     print("Start or deliberately restart the local owner with: python3 -m monitoring_ai serve --sources "
-          + selected_argument + " --db .monitoring-ai/events.sqlite")
+          + selected_argument + " --db " + ledger_argument)
     print("A running owner keeps its prior selection until restarted. The dashboard and Deep read the same qualified source coverage.")
