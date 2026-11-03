@@ -59,7 +59,7 @@ class SourceObserverTests(unittest.TestCase):
 
     def test_independent_sources_replay_and_frozen_source_list(self):
         first = FakeSource("source-a", [event("source-a", "a1")], format="normalized", project=None)
-        second = FakeSource("source-b", [event("source-b", "b1")], format="normalized")
+        second = FakeSource("source-b", [event("source-b", "b1")], format="codex")
         configured = [first, second]
         observer = SourceObserver(configured)
         configured.append(FakeSource("later", [event("later", "x")]))

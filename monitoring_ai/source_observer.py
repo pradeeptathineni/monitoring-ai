@@ -6,6 +6,7 @@ from .claude_follow import ClaudeFollower
 from .codex_follow import CodexFollower
 from .metrics import now_iso
 from .source_coverage import source_coverage, source_summary
+from .sources import Source as SelectedSource
 
 
 class SourceObserver:
@@ -37,7 +38,9 @@ class SourceObserver:
         self._followers = {
             source_id: (ClaudeFollower if format_name == "claude" else CodexFollower)(source.path, source_id, project)
             for source, source_id, format_name, project in configured
-            if format_name in ("claude", "codex")
+            # Programmatic sources supply their own load method; only validated
+            # manifest selections use the native incremental file cursor.
+            if isinstance(source, SelectedSource) and format_name in ("claude", "codex")
         }
 
     @staticmethod
