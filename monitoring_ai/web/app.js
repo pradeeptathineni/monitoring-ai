@@ -1294,6 +1294,37 @@ function renderProcessHistory(root, sample) {
   root.append(box);
 }
 
+function renderProcessSourceCoverage(root, sample, current) {
+  if (!current) return;
+  const families = [["claude", "Claude"], ["codex", "Codex"]];
+  const coverage = data?.source_coverage?.schema === "monitoring.source-coverage.v1" &&
+    Array.isArray(data.source_coverage.inputs) ? data.source_coverage : null;
+  const comparison = node("div", null, "process-source-coverage");
+  let shown = false;
+  for (const [family, label] of families) {
+    const count = sample.processes.filter((row) => String(row.executable).toLowerCase() === family).length;
+    if (!count) continue;
+    shown = true;
+    const inputs = coverage ? coverage.inputs.filter((row) => row?.format === family) : [];
+    let evidence;
+    if (!coverage) evidence = "Selected native input coverage is unavailable from this owner.";
+    else if (!inputs.length) evidence = `No ${label} session file is selected in this owner.`;
+    else {
+      const dated = inputs.filter((row) => Number.isFinite(Date.parse(row.latest_event_at)));
+      const latest = dated.sort((a, b) => Date.parse(b.latest_event_at) - Date.parse(a.latest_event_at))[0];
+      const unavailable = inputs.filter((row) => row.read_state === "unavailable").length;
+      evidence = `${number.format(inputs.length)} selected ${label} input${inputs.length === 1 ? "" : "s"}; ${latest ? eventAgeText(latest) : "no accepted event time"}${unavailable ? `; ${number.format(unavailable)} input${unavailable === 1 ? "" : "s"} unavailable` : ""}.`;
+    }
+    comparison.append(node("p", `${label} executable observed in a recent OS sample (${sample.truncated ? "at least " : ""}${number.format(count)}). ${evidence} No process-to-file or process-to-session link is known.`, "confidence-note"));
+  }
+  if (shown) {
+    const action = node("a", "Review source setup ↗", "process-coverage-action");
+    action.href = "#settings/sources";
+    comparison.append(action);
+    root.append(comparison);
+  }
+}
+
 function renderOsProcesses() {
   const panel = $("#os-process-panel"), status = $("#os-process-status"), target = $("#os-process-table");
   const sample = data?.os_processes?.schema === "monitoring.os-processes.v1" ? data.os_processes : null;
@@ -1312,6 +1343,7 @@ function renderOsProcesses() {
     const names = [...counts].sort(([a], [b]) => a.localeCompare(b)).map(([name, count]) => `${name}: ${number.format(count)}`).join(" · ");
     overviewBody.append(node("p", `${number.format(sample.processes.length)} matching executables in ${current ? "recent" : "last"} OS sample ${sample.sampled_at} · ${interval}. ${current ? "" : "Current presence is unknown. "}No process is linked to a recorded session or worker.`, "confidence-note"));
     if (names) overviewBody.append(node("p", names, "confidence-note"));
+    renderProcessSourceCoverage(overviewBody, sample, current);
   } else {
     overviewBody.append(node("p", sample.state === "unavailable" ? "OS process read unavailable. Current process presence is unknown." : "Waiting for the first OS process sample.", "confidence-note"));
   }

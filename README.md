@@ -4,7 +4,7 @@ Local monitoring for AI sessions, agents, workers, tokens and costs. Use it in y
 
 **Experimental alpha.** It observes explicitly supplied sources. Personal source compatibility, additional collectors and full-vision acceptance remain incomplete. [Version policy and v1.0.0 requirements](docs/release-readiness.md) keep maturity separate from version numbers.
 
-Current checked version: **v0.8.26**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
+Current checked version: **v0.8.27**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
 
 ![Monitoring AI dashboard with fictional sessions and costs](docs/observatory.png)
 
@@ -48,7 +48,7 @@ An optional [selected CodeBurn session-cache view](docs/codeburn-session-cache.m
 - A detailed Report view with UTC period presets, adjacent equal-length comparisons, project/model/day breakdowns, and a daily tool-category chart over the selected records. Unknown timing and unsupported workflow measures stay explicit.
 - An explicit multi-file manifest with independent input health, replay counts and retained history when one source fails. Input aliases and event-source filters remain distinct.
 - [Entity history](docs/session-history.md) with chronological pages scoped to its source and session. Pages retain one ledger revision, with an explicit restart when history changes.
-- Opt-in [macOS process samples](docs/os-processes.md) with executable name, PID/parent PID, CPU, resident memory, start time and bounded aggregate trends. These remain separate from session and worker status.
+- Opt-in [macOS process samples](docs/os-processes.md) with executable name, PID/parent PID, CPU, resident memory, start time and bounded aggregate trends. Overview compares recent Claude/Codex executable observations with selected native-file freshness without linking their identities. These remain separate from session and worker status.
 - Metadata-only Codex turn start/completion markers in Sessions when an explicitly selected Codex JSONL file supplies them. The markers and source-reported timing are separate from session lifecycle and OS process observations.
 - Completed Codex command, MCP and file-change item observations in Events and Report when the selected file supplies them. Commands, arguments, results and changed file paths are discarded; unknown outcomes stay unknown.
 

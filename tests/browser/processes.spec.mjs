@@ -13,7 +13,19 @@ test("optional OS samples remain separate from session state and stale reads", a
       { sampled_at: sampled, segment: 1, count: 1, cpu_percent: 7.5, rss_bytes: 5242880 },
     ],
     no_longer_observed: [], processes: [{ pid: 401, parent_pid: 10, executable: "codex",
-      cpu_percent: 12.5, rss_bytes: 4194304, started_at: sampled, session: null, worker: null }],
+      cpu_percent: 12.5, rss_bytes: 4194304, started_at: sampled, session: null, worker: null },
+      { pid: 402, parent_pid: 1, executable: "Claude", cpu_percent: 0.2,
+        rss_bytes: 2097152, started_at: sampled, session: null, worker: null }],
+  };
+  base.source_coverage = {
+    schema: "monitoring.source-coverage.v1", observed_at: sampled,
+    scope: "latest-accepted-input-reads", complete_coverage: false,
+    inputs: [{ id: "historical-codex", format: "codex", project: "demo",
+      capabilities: { usage: "native-reconstruction", lifecycle: "unsupported", tools: "completed-items" },
+      sampled_at: sampled, records: { total: 3, usage: 2, status: 0, tool: 1, sessions: 1, entities: 1, event_sources: 1 },
+      latest_event_at: new Date(Date.now() - 7200000).toISOString(), latest_usage_at: new Date(Date.now() - 7200000).toISOString(),
+      latest_status_at: null, latest_tool_at: null,
+      read_state: "following", retained: false, event_age_seconds: 7200, event_freshness: "stale" }],
   };
   await page.route("**/api/v1/snapshot?**", (route) => route.fulfill({ json: base }));
   await page.goto("/");
@@ -27,6 +39,15 @@ test("optional OS samples remain separate from session state and stale reads", a
   await expect(page.locator("#os-process-overview .process-trend-row")).toHaveCount(3);
   await expect(page.locator("#os-process-overview polyline")).toHaveCount(3);
   await expect(page.locator("#os-process-overview circle")).toHaveCount(3);
+  await expect(page.locator("#os-process-overview .process-source-coverage")).toContainText("Codex executable observed in a recent OS sample");
+  await expect(page.locator("#os-process-overview .process-source-coverage")).toContainText("1 selected Codex input; Stale");
+  await expect(page.locator("#os-process-overview .process-source-coverage")).toContainText("No Claude session file is selected in this owner");
+  await expect(page.locator("#os-process-overview .process-source-coverage")).toContainText("No process-to-file or process-to-session link is known");
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+  await page.locator("#os-process-overview .process-coverage-action").click();
+  await expect(page.locator("#settings")).toBeVisible();
+  await expect(page).toHaveURL(/#settings\/sources$/);
   await page.locator('#primary-navigation [data-view="sessions"]').click();
   await expect(page.locator("#os-process-panel")).toBeVisible();
   await expect(page.locator("#os-process-status")).toContainText("Session and worker mappings are unknown");
@@ -36,6 +57,7 @@ test("optional OS samples remain separate from session state and stale reads", a
   await expect(page.locator("#entity-table")).not.toContainText("401 / 10");
   await page.locator("#pause").click();
   await expect(page.locator("#os-process-status")).toContainText("current process presence is unknown");
+  await expect(page.locator("#os-process-overview .process-source-coverage")).toHaveCount(0);
 
   base.os_processes = { ...base.os_processes, state: "unavailable", sampled_at: null, processes: [] };
   await page.reload();
