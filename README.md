@@ -4,7 +4,7 @@ Local monitoring for AI sessions, agents, workers, tokens and costs. Use it in y
 
 **Experimental alpha.** It observes explicitly supplied sources. Personal source compatibility, additional collectors and full-vision acceptance remain incomplete. [Version policy and v1.0.0 requirements](docs/release-readiness.md) keep maturity separate from version numbers.
 
-Current checked version: **v0.8.30**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
+Current checked version: **v0.8.31**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
 
 ![Monitoring AI dashboard with fictional sessions and costs](docs/observatory.png)
 
@@ -79,6 +79,8 @@ python3 -m monitoring_ai serve --file /path/to/authorized-events.jsonl --db /tmp
 Two native transcript adapters are included. Only use files you own or are authorized to read. Select one explicit Claude Code JSONL file for [bounded live following](docs/claude-native.md), or a complete [Codex session JSONL file](docs/codex-native.md). There is no home-directory scan, credential reader, hook installation or account connection.
 
 For a Claude CLI invocation you explicitly run with structured stdout, [capture its live start and reported end](docs/claude-cli-stream.md) into a private normalized event file. This supplies invocation lifecycle without reading saved transcripts or assuming that the whole conversation closed. It records no tokens or cost, so it does not duplicate the separate native usage ledger.
+
+An optional second sanitized result file records cumulative per-model tokens and a client cost estimate at receipt time. Select it as `claude-results` and avoid counting the same work again through another source.
 
 Use [terminal `top --sources`](docs/terminal-top.md) to follow those selected files in one command without a web server. On macOS, `--processes` adds a separate opt-in OS sample. A process name is not joined to a recorded session or worker.
 

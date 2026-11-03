@@ -2,11 +2,15 @@
 
 from datetime import datetime, timedelta, timezone
 import json
+import os
+from pathlib import Path
 
 from .adapters import reject_constant, safe_label, unique_keys
+from .claude_results import capture_result
 from .events import label
 from .metrics import now_iso
 from .producer import EventWriter, session_alias, status_event
+from .result_capture import ResultPublicationUncertain, write_result_frame
 from .store import stable_id
 
 MAX_LINE = 4 * 1024 * 1024
@@ -26,14 +30,32 @@ def _after(previous, current):
     return value.astimezone(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
-def capture_stream(stream, output, *, source, project, clock=now_iso, forward=None):
+def capture_stream(stream, output, *, source, project, clock=now_iso, forward=None,
+                   result_output=None):
     """Read one native JSONL invocation and save only observed start/end states.
 
     The CLI stream's init/result frames describe this invocation, not a native
     conversation close, process PID, accepted task or provider worker roster.
     """
     source, project = label(source, "source"), label(project, "project")
+    if result_output is not None:
+        try:
+            status_target = Path(output).absolute()
+            status_target = status_target.parent.resolve(strict=True) / status_target.name
+        except (OSError, RuntimeError):
+            raise ValueError("Status output needs an existing directory") from None
+        try:
+            result_target = Path(result_output).absolute()
+            result_target = result_target.parent.resolve(strict=True) / result_target.name
+        except (OSError, RuntimeError):
+            raise ValueError("Result summary needs an existing directory") from None
+        if (result_target == status_target or
+                (result_target.parent == status_target.parent and
+                 result_target.name.casefold() == status_target.name.casefold()) or
+                os.path.lexists(result_target)):
+            raise ValueError("Result summary needs a separate new file")
     started = ended = None
+    result_summary = "unavailable" if result_output is not None else "not-requested"
     with EventWriter(output) as writer:
         try:
             for line in _lines(stream):
@@ -82,6 +104,14 @@ def capture_stream(stream, output, *, source, project, clock=now_iso, forward=No
                         timestamp=at, provider="anthropic", model=started["model"],
                         surface="claude-cli-stream"))
                     ended = state
+                    if result_output is not None:
+                        try:
+                            write_result_frame(result_output, capture_result(row, at))
+                            result_summary = "captured"
+                        except ResultPublicationUncertain:
+                            result_summary = "uncertain"
+                        except (ValueError, OSError, RecursionError):
+                            result_summary = "failed"
         except (ValueError, OSError):
             if started is not None and ended is None:
                 _unknown(writer, source, project, started, clock())
@@ -89,7 +119,11 @@ def capture_stream(stream, output, *, source, project, clock=now_iso, forward=No
         if started is not None and ended is None:
             _unknown(writer, source, project, started, clock())
             ended = "unknown"
-    return {"observed_invocations": int(started is not None), "terminal_state": ended or "unobserved"}
+    receipt = {"observed_invocations": int(started is not None),
+               "terminal_state": ended or "unobserved"}
+    if result_output is not None:
+        receipt["result_summary"] = result_summary
+    return receipt
 
 
 def _unknown(writer, source, project, started, at):

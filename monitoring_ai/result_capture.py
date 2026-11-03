@@ -8,6 +8,10 @@ import tempfile
 from .adapters import read_source, reject_constant, unique_keys
 
 
+class ResultPublicationUncertain(OSError):
+    """The target was linked, but directory durability was not confirmed."""
+
+
 def capture_cli_result(source, output, *, captured_at):
     """Create one private metadata frame without overwriting any output."""
     from .claude_results import capture_result
@@ -19,6 +23,17 @@ def capture_cli_result(source, output, *, captured_at):
         frame = capture_result(raw, captured_at)
     except (ValueError, RecursionError):
         raise ValueError("Selected file is not a supported completed Claude result") from None
+    write_result_frame(output, frame)
+    return frame
+
+
+def write_result_frame(output, frame):
+    """Publish one sanitized result frame as a new private file."""
+    from .claude_results import FRAME_SCHEMA, capture_result
+
+    if not isinstance(frame, dict) or frame.get("schema") != FRAME_SCHEMA:
+        raise ValueError("Invalid sanitized result frame")
+    frame = capture_result(frame, frame.get("captured_at"))
     selected = Path(output).absolute()
     target = selected.parent.resolve(strict=True) / selected.name
     descriptor, temporary = tempfile.mkstemp(prefix=".monitoring-result-", suffix=".tmp", dir=target.parent)
@@ -28,6 +43,13 @@ def capture_cli_result(source, output, *, captured_at):
             stream.flush()
             os.fsync(stream.fileno())
         os.link(temporary, target, follow_symlinks=False)
-        return frame
+        try:
+            parent_fd = os.open(target.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+            try:
+                os.fsync(parent_fd)
+            finally:
+                os.close(parent_fd)
+        except OSError:
+            raise ResultPublicationUncertain from None
     finally:
         Path(temporary).unlink(missing_ok=True)
