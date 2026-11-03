@@ -108,3 +108,5 @@ The v0.8.35 CLI tool projection is original code using Monitoring's existing `mo
 The v0.8.36 repeatable CLI capture is original code built on Monitoring's existing private event writer and cumulative result adapter. It uses Python's standard-library file locks, no external collector or copied upstream code. Two previously authorized Claude CLI streams qualified multi-invocation replay into one selected history. No new model call, hook, account access or network receiver was added.
 
 The v0.8.37 selected quota refresh is original code built on Monitoring's existing Claude CLI rate-limit projection, quota validator and private atomic-file publication. It imports no upstream code or runtime package. Two previously authorized CLI streams qualified repeatable window refresh without contacting a provider or viewing raw account identifiers.
+
+The local v0.8.38 ledger event verification is original code using Monitoring's existing normalized event validator and Python's standard-library SQLite and JSON modules. It adds no upstream code or runtime dependency.

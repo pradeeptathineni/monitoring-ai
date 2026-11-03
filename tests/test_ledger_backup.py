@@ -8,6 +8,7 @@ import tempfile
 import unittest
 
 from monitoring_ai.ledger_backup import backup_ledger, inspect_ledger
+from monitoring_ai.events import validate
 from monitoring_ai.store import Store
 
 
@@ -22,7 +23,11 @@ class LedgerBackupTests(unittest.TestCase):
         Store(source)
         writer = sqlite3.connect(source)
         try:
-            row = {"id": "one", "source": "fixture", "timestamp": "2026-11-03T00:00:00Z"}
+            row = validate(dict(schema="monitoring.event.v1", id="one", source="fixture",
+                                session="session", entity="session", parent=None,
+                                entity_type="session", kind="usage", timestamp="2026-11-03T00:00:00Z",
+                                provider="example", model="fictional", surface="export",
+                                project="fictional", tokens={"input": 1}))
             writer.execute("INSERT INTO events(source,event_id,timestamp,payload) VALUES(?,?,?,?)",
                            ("fixture", "one", row["timestamp"], json.dumps(row)))
             writer.execute("INSERT INTO native_usage_versions(source,event_id,record_at,tokens) VALUES(?,?,?,?)",
@@ -48,6 +53,32 @@ class LedgerBackupTests(unittest.TestCase):
             self.assertEqual(inspect_ledger(output), receipt)
         finally:
             writer.close()
+
+    def test_semantically_invalid_events_refuse_verification_and_backup(self):
+        source, output = self.root / "source.sqlite", self.root / "backup.sqlite"
+        Store(source)
+        row = validate(dict(schema="monitoring.event.v1", id="one", source="fixture",
+                            session="session", entity="session", parent=None,
+                            entity_type="session", kind="usage", timestamp="2026-11-03T00:00:00Z",
+                            provider="example", model="fictional", surface="export",
+                            project="fictional", tokens={"input": 1}))
+        with sqlite3.connect(source) as db:
+            db.execute("INSERT INTO events(source,event_id,timestamp,payload) VALUES(?,?,?,?)",
+                       ("fixture", "one", row["timestamp"], json.dumps(row)))
+        self.assertEqual(inspect_ledger(source)["events"], 1)
+        for payload in ('{"schema":', json.dumps({**row, "tokens": {"input": -1}}),
+                        json.dumps({**row, "id": "another"}),
+                        json.dumps({**row, "timestamp": "2026-11-04T00:00:00Z"})):
+            with self.subTest(payload=payload[:20]):
+                with sqlite3.connect(source) as db:
+                    db.execute("UPDATE events SET payload=? WHERE source=? AND event_id=?",
+                               (payload, "fixture", "one"))
+                with self.assertRaisesRegex(ValueError, "Ledger event"):
+                    inspect_ledger(source)
+                with self.assertRaisesRegex(ValueError, "Ledger event"):
+                    backup_ledger(source, output)
+                self.assertFalse(output.exists())
+        self.assertFalse(list(self.root.glob(".backup.sqlite.*.tmp*")))
 
     def test_existing_output_and_invalid_source_leave_no_partial_backup(self):
         source, output = self.root / "source.sqlite", self.root / "existing.sqlite"

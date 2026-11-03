@@ -1,12 +1,14 @@
 """Save and inspect a consistent private copy of an existing ledger."""
 
 from contextlib import closing
+import json
 import os
 from pathlib import Path
 import secrets
 import sqlite3
 
 from .ledger_preview import _copy_source, _resolve_source
+from .events import validate
 
 
 def inspect_ledger(path):
@@ -17,7 +19,17 @@ def inspect_ledger(path):
             db.execute("BEGIN")
             if db.execute("PRAGMA quick_check").fetchone() != ("ok",):
                 raise ValueError("Ledger integrity check failed")
-            events = db.execute("SELECT COUNT(*) FROM events").fetchone()[0]
+            events = 0
+            for source, event_id, recorded_at, payload in db.execute(
+                    "SELECT source,event_id,timestamp,payload FROM events"):
+                try:
+                    event = validate(json.loads(payload))
+                except (TypeError, ValueError):
+                    raise ValueError("Ledger event payload failed validation") from None
+                if (event["source"], event["id"], event["timestamp"]) != (
+                        source, event_id, recorded_at):
+                    raise ValueError("Ledger event identity does not match its index")
+                events += 1
             sequence = db.execute("SELECT COALESCE(MAX(sequence),0) FROM events").fetchone()[0]
             corrections = db.execute("SELECT COUNT(*) FROM corrections").fetchone()[0]
             versions = db.execute("SELECT COUNT(*) FROM native_usage_versions").fetchone()[0]

@@ -4,7 +4,7 @@ Local monitoring for AI sessions, agents, workers, tokens and costs. Use it in y
 
 **Experimental alpha.** It observes explicitly supplied sources. Personal source compatibility, additional collectors and full-vision acceptance remain incomplete. [Version policy and v1.0.0 requirements](docs/release-readiness.md) keep maturity separate from version numbers.
 
-Current checked version: **v0.8.37**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
+Current checked version: **v0.8.38**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
 
 ![Monitoring AI dashboard with fictional sessions and costs](docs/observatory.png)
 
@@ -164,7 +164,7 @@ python3 -m monitoring_ai ledger backup --db /path/to/events.sqlite --output /pat
 python3 -m monitoring_ai ledger verify --db /path/to/new-private-backup.sqlite
 ```
 
-The receipt reports event, correction and native-version counts, revision and file size; `verify` checks SQLite integrity without changing accepted history. Keep the backup and any source manifest private. To use a backup as the active ledger, stop the owner first and deliberately select the backup with `serve --db`; this command never swaps a running owner. The current backup limit is 512 MiB and five seconds. It does not prune history or lift the 100,000-event view limit.
+The receipt reports event, correction and native-version counts, revision and file size. `verify` checks SQLite integrity, validates every stored normalized event and compares its source, ID and timestamp with the indexed row, without changing accepted history. It counts correction and native-version rows but does not validate their audit chains. Keep the backup and any source manifest private. To use a backup as the active ledger, stop the owner first and deliberately select the backup with `serve --db`; this command never swaps a running owner. The current backup limit is 512 MiB and five seconds. It does not prune history or lift the 100,000-event view limit.
 
 The manifest is loaded once at startup and admits at most 32 files. Restart deliberately to change that selection. File paths stay in the private configuration; the read API and dashboard show only aliases, format, project and read outcomes. Native inputs require a project alias. Normalized inputs retain their supplied source and project dimensions, so a managed input alias is not necessarily an event-source filter.
 
