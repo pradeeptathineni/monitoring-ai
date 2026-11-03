@@ -42,7 +42,7 @@ def read_source(path):
     return content
 
 
-def read_jsonl(path, *, live=False, strict=False):
+def read_jsonl(path, *, live=False, strict=False, shape=None):
     content = read_source(path)
     lines = content.splitlines(keepends=True)
     if live and lines and not lines[-1].endswith(b"\n"):
@@ -58,10 +58,45 @@ def read_jsonl(path, *, live=False, strict=False):
             raise ValueError(f"Invalid JSON at line {index}") from None
         if not isinstance(row, dict):
             raise ValueError(f"Expected an object at line {index}")
-        rows.append(row)
+        rows.append(shape(row) if shape else row)
         if len(rows) > 50000:
             raise ValueError("Source exceeds 50,000 records")
     return rows
+
+
+CLAUDE_FIELDS = ("sessionId", "timestamp")
+CLAUDE_USAGE = ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens", "output_tokens")
+
+
+def claude_block(block):
+    if block["type"] == "tool_use":
+        return {"type": "tool_use", **{key: block[key] for key in ("id", "name") if isinstance(block.get(key), str)}}
+    kept = {"type": "tool_result"}
+    if isinstance(block.get("tool_use_id"), str):
+        kept["tool_use_id"] = block["tool_use_id"]
+    if "is_error" in block:
+        kept["is_error"] = block["is_error"]
+    return kept
+
+
+def claude_row(row):
+    # Keep only what claude() and claude_tool_events() read so prompts, text, tool inputs and results never accumulate.
+    # Non-string labels already read as absent there, so omitting them keeps output identical
+    kept = {key: row[key] for key in CLAUDE_FIELDS if key in row}
+    if isinstance(row.get("type"), str):
+        kept["type"] = row["type"]
+    message = row.get("message")
+    if isinstance(message, dict):
+        slim = {key: message[key] for key in ("role", "model") if isinstance(message.get(key), str)}
+        if "id" in message:
+            slim["id"] = message["id"]
+        if isinstance(message.get("usage"), dict):
+            slim["usage"] = {key: message["usage"][key] for key in CLAUDE_USAGE if key in message["usage"]}
+        if isinstance(message.get("content"), list):
+            slim["content"] = [claude_block(block) for block in message["content"]
+                               if isinstance(block, dict) and block.get("type") in ("tool_use", "tool_result")]
+        kept["message"] = slim
+    return kept
 
 
 def safe_label(value, fallback="unknown"):
@@ -110,10 +145,14 @@ def claude(rows, source, project):
             "cache_write": count(usage.get("cache_creation_input_tokens", 0)),
             "output": count(usage.get("output_tokens", 0)),
         }
-        # Streaming copies commonly repeat a message. Identical usage is replay, conflicting usage refuses
+        # Repeated rows for one native message can carry later row timestamps even when usage is unchanged.
         previous = events.get(event["id"])
-        if previous and previous != event:
-            raise ValueError("Claude message usage changed. Export final messages before importing")
+        if previous:
+            earlier = {key: value for key, value in previous.items() if key != "timestamp"}
+            current = {key: value for key, value in event.items() if key != "timestamp"}
+            if earlier != current:
+                raise ValueError("Claude message usage changed. Export final messages before importing")
+            continue
         events[event["id"]] = event
     from .claude_tools import claude_tool_events
 
@@ -166,7 +205,8 @@ def codex(rows, source, project):
 
 
 def load(path, format="normalized", source=None, project=None, live=False):
-    rows = read_jsonl(path, live=live, strict=format == "claude-results")
+    shape = claude_row if format == "claude" else None
+    rows = read_jsonl(path, live=live, strict=format == "claude-results", shape=shape)
     if format == "normalized":
         return [validate(row) for row in rows]
     if not source or not project:

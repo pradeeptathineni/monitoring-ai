@@ -175,7 +175,7 @@
         "ccusage/ccusage",
         "Helicone/helicone"
       ],
-      "decision": "Implemented normalized and Claude/Codex usage imports plus metadata-only completed Claude tool pairs. Replay identities remain stable. Explicit multi-source configuration is implemented. More native tools and a correction protocol remain planned. Completed Claude CLI result snapshots now supply per-model cumulative deltas and client-side estimates without private transcript discovery. Actual qualification uses an authorized project review receipt. Interactive transcript compatibility remains fixture-only.",
+      "decision": "Implemented normalized and Claude/Codex usage imports plus metadata-only completed Claude tool pairs. Replay identities remain stable. Explicit multi-source configuration is implemented. More native tools and a correction protocol remain planned. Completed Claude CLI result snapshots supply per-model cumulative deltas and client-side estimates without private transcript discovery. One task-owned Claude Code 2.1.308 native JSONL source now has actual first-message, resumed append, metadata projection, disjoint-token, API-revision and private dashboard proof. Repeated identical usage with different row timestamps keeps the first source event time. Changed accepted usage refuses. Native Codex, broader Claude formats, rotations and general lifecycle remain unqualified.",
       "evidence": [
         "tests/test_monitoring.py",
         "monitoring_ai/adapters.py",
@@ -186,7 +186,9 @@
         "monitoring_ai/result_capture.py",
         "tests/test_claude_results.py",
         "tests/test_result_capture.py",
-        "docs/claude-results.md"
+        "docs/claude-results.md",
+        "docs/claude-native.md",
+        "tests/test_claude_projection.py"
       ]
     },
     {

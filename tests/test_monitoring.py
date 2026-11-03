@@ -110,6 +110,33 @@ class MonitoringTests(unittest.TestCase):
         self.assertNotIn("private", json.dumps(events))
         self.assertNotIn("secret", json.dumps(events))
 
+    def test_claude_message_replay_keeps_first_timestamp_but_refuses_changed_usage(self):
+        row = dict(type="assistant", timestamp=NOW, sessionId="session", cwd="/discarded",
+                   message=dict(role="assistant", id="stable-message", model="demo-model", stop_reason="end_turn",
+                                usage=dict(input_tokens=10, cache_read_input_tokens=2,
+                                           cache_creation_input_tokens=1, output_tokens=7)))
+        replay = json.loads(json.dumps(row))
+        replay["timestamp"] = "2026-11-02T20:00:01Z"
+        path = self.write("claude-timestamp-replay.jsonl", json.dumps(row) + "\n" + json.dumps(replay))
+
+        events = load(path, "claude", "chosen-source", "alias")
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["timestamp"], NOW)
+        self.assertEqual(events[0]["tokens"], {"input": 10, "cache_read": 2, "cache_write": 1, "output": 7})
+
+        for changes in ({"input_tokens": 11}, {"cache_read_input_tokens": 3}):
+            changed = json.loads(json.dumps(replay))
+            changed["message"]["usage"].update(changes)
+            changed_path = self.write("claude-changed-usage.jsonl", json.dumps(row) + "\n" + json.dumps(changed))
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                load(changed_path, "claude", "chosen-source", "alias")
+
+        changed_model = json.loads(json.dumps(replay))
+        changed_model["message"]["model"] = "other-model"
+        changed_path = self.write("claude-changed-model.jsonl", json.dumps(row) + "\n" + json.dumps(changed_model))
+        with self.assertRaises(ValueError):
+            load(changed_path, "claude", "chosen-source", "alias")
+
     def test_unknown_cost_is_not_zero_and_billed_is_not_estimated(self):
         rows = [event(), dict(event(), id="two", cost=dict(amount="1.20", currency="USD", basis="billed", provenance="invoice")),
                 dict(event(), id="three", cost=dict(amount="0.25", currency="EUR", basis="estimated", provenance="estimate"))]
@@ -233,6 +260,57 @@ class MonitoringTests(unittest.TestCase):
             self.assertEqual(retained["source_status"]["state"], "unavailable")
             self.assertEqual(retained["summary"]["calls"], 2)
             self.assertEqual(retained["revision"], second["revision"])
+        finally:
+            process.terminate()
+            process.communicate(timeout=5)
+
+    def test_standalone_claude_source_accepts_new_messages_but_not_replays_or_partial_lines(self):
+        def message(identity, at, tokens):
+            return json.dumps(dict(type="assistant", timestamp=at, sessionId="fictional-session", cwd="/discarded",
+                                   message=dict(role="assistant", id=identity, model="demo-model",
+                                                content=[{"type": "text", "text": "discarded"}],
+                                                usage=dict(input_tokens=tokens, output_tokens=1)))) + "\n"
+
+        source = self.write("claude-stream.jsonl", message("message-one", NOW, 10))
+        process = subprocess.Popen([
+            sys.executable, "-m", "monitoring_ai", "serve", "--file", str(source), "--format", "claude",
+            "--source-id", "fictional-source", "--project", "fictional-app",
+            "--db", str(self.root / "claude.sqlite"), "--port", "0",
+        ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        try:
+            origin = process.stdout.readline().strip().split("→ ")[1]
+
+            def read(path="/api/v1/snapshot"):
+                with urlopen(origin + path, timeout=3) as response:
+                    return json.load(response)
+
+            def until(calls):
+                deadline = time.monotonic() + 7
+                while time.monotonic() < deadline:
+                    value = read()
+                    if value["summary"]["calls"] == calls:
+                        break
+                    time.sleep(.1)
+                return value
+
+            first = until(1)
+            self.assertEqual(first["summary"]["total_tokens"], 11)
+            [original] = read("/api/v1/events")["events"]
+            third = message("message-three", "2026-11-02T20:00:03Z", 30)
+            with source.open("a") as stream:
+                stream.write(message("message-two", "2026-11-02T20:00:02Z", 20))
+                stream.write(message("message-one", "2026-11-02T20:00:04Z", 10))
+                stream.write(third[:len(third) // 2])
+            second = until(2)
+            self.assertEqual(second["source_status"]["state"], "following")
+            self.assertEqual(second["summary"]["total_tokens"], 32)
+            self.assertNotEqual(second["revision"], first["revision"])
+            events = {row["id"]: row for row in read("/api/v1/events")["events"]}
+            self.assertEqual(len(events), 2)
+            self.assertEqual(events[original["id"]]["timestamp"], original["timestamp"])
+            with source.open("a") as stream:
+                stream.write(third[len(third) // 2:])
+            self.assertEqual(until(3)["summary"]["total_tokens"], 63)
         finally:
             process.terminate()
             process.communicate(timeout=5)
