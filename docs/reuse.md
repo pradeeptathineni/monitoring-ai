@@ -134,3 +134,5 @@ The on-screen reserve watch is original browser code over Monitoring's existing 
 Bounded app-history browsing extends the existing owned supported-tool bridge, private metadata projection and paged DOM table. No provider SDK, source directory parser or upstream product code is added. It uses the existing shared theme controls; model/worker/account authority is not inferred from task metadata.
 
 The bounded app-change list is original browser code over that same sanitized source contract. It reuses the owned table helper and freshness rules. It imports no upstream code, account client or runtime dependency and retains no history outside the tab. Existing licensed theme bytes remain unchanged.
+
+Terminal app-source recovery reuses the same owned dated-read projection as the HTTP owner. Its filtered, bounded text view uses existing normalized metadata and standard-library sorting. It copies no upstream code and adds no collector, account client or runtime dependency.

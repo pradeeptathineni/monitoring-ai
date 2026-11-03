@@ -20,6 +20,45 @@ def event(ident):
 
 
 class TopSourcesTests(unittest.TestCase):
+    def test_app_rows_are_bounded_and_filters_use_current_status(self):
+        value = snapshot(0, [], now="2026-11-03T09:00:00Z")
+        value["app_threads"] = {"source": "codex-app-task-history", "freshness": "recent",
+            "captured_at": "2026-11-03T09:00:00Z", "read_state": "following",
+            "threads": [{"alias": f"task-fixture-{i:02}", "kind": "codex", "status": "active" if i == 29 else "idle",
+                "updated_at": "2026-11-03T09:00:00Z"} for i in range(30)]}
+        rendered = terminal(value)
+        self.assertIn("Codex app tasks: following read", rendered)
+        self.assertIn("30 supplied rows · 30 match app filters · showing 20", rendered)
+        self.assertEqual(rendered.count(" · app status "), 20)
+        self.assertLess(rendered.index("task-fixture-29"), rendered.index("task-fixture-00"))
+        self.assertIn("10 matching app rows omitted", rendered)
+        self.assertEqual(terminal(value, app_kind="codex", app_status="active").count(" · app status "), 1)
+        self.assertEqual(terminal(value, app_alias="FIXTURE-29", app_limit=1).count(" · app status "), 1)
+        value["app_threads"]["read_state"] = "unavailable"
+        self.assertEqual(terminal(value, app_status="active").count(" · app status "), 0)
+        retained = terminal(value, app_status="unknown", app_limit=1)
+        self.assertIn("Current app status unknown", retained)
+        self.assertIn("previously idle; current unknown", retained)
+        self.assertEqual(value["summary"]["active"], 0)
+
+    def test_top_missing_app_source_reports_unknown_without_stopping_ledger_read(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            command = [sys.executable, "-m", "monitoring_ai", "top", "--db", str(root / "ledger.sqlite"),
+                       "--app-threads", str(root / "missing.json")]
+            value = json.loads(subprocess.run(command + ["--json"], capture_output=True, text=True, check=True).stdout)
+            self.assertEqual(value["app_threads"]["read_state"], "unavailable")
+            self.assertEqual(value["summary"]["active"], 0)
+            self.assertEqual(value["revision"], 0)
+            rendered = subprocess.run(command + ["--app-status", "active", "--app-limit", "5"],
+                                      capture_output=True, text=True, check=True).stdout
+            self.assertIn("Current app status unknown", rendered)
+            self.assertNotIn(str(root), rendered)
+            bad = subprocess.run(command + ["--app-limit", "0"], capture_output=True, text=True)
+            self.assertNotEqual(bad.returncode, 0)
+            incompatible = subprocess.run(command + ["--json", "--app-status", "active"], capture_output=True, text=True)
+            self.assertNotEqual(incompatible.returncode, 0)
+
     def test_watch_change_summary_keeps_source_and_observation_times_distinct(self):
         first, second = event("first"), event("second")
         baseline = snapshot(1, [first], now="2026-11-03T09:00:01Z")

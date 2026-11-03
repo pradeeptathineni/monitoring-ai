@@ -45,3 +45,17 @@ Expand **App status changes** to see up to 24 metadata changes observed in the o
 Pause, stale data, failed reads and capture gaps longer than 30 seconds break comparison continuity. The next fresh capture establishes another baseline without claiming changes across that gap. Older observations remain explicitly historical. Changing owner/source/scope or removing the app source clears the list. **Clear app observations** empties it while retaining the current baseline. Reloading or closing the tab discards everything. Nothing is written to local storage or the ledger, and this control adds no source access or refresh capability.
 
 A finite real supported Codex capture trial observed a reported app-status change through the normal owner refresh and this list. Pause changed current visibility to unknown. No model call, ledger lifecycle, persistent access or managed Deep change was involved. This qualifies bounded observation of app-reported changes, not complete live coverage or unattended acquisition.
+
+## Follow selected app metadata in the terminal
+
+```sh
+python3 -m monitoring_ai top --watch --db /private/ledger.sqlite \
+  --app-threads /private/codex-app-history.json \
+  --app-kind codex --app-status active --app-limit 5
+```
+
+The interactive terminal rereads the explicitly selected export every two seconds. A missing, malformed or unreadable export leaves current app status unknown while ledger and other configured observations continue. The next valid read recovers without restarting. Prior rows retain their original capture time and continue aging during read failure. Waiting for a file does not create a collector or refresh the file.
+
+The human-readable view shows at most 20 app rows by default, with reported-active rows first, then newest source update time. `--app-limit` accepts 1 through 100. `--app-kind`, `--app-status` and case-insensitive `--app-alias` affect only app rows. A stale or failed source has no currently active matches, even if retained rows were previously active. The header separates supplied, matched and displayed row counts and discloses incomplete coverage. Ledger filters do not filter the app inventory. Reported app status supplies no model inference, worker lifecycle, tokens or billing.
+
+These view controls require `--app-threads` and human-readable output. `top --json` keeps the full supplied app block and its explicit read state, without view filtering. A finite actual supported-source terminal trial qualified initial missing-file waiting, fresh filtered rows, loss-to-unknown and restoration with unchanged capture bytes/time. The trial used no model call, persistent bridge or managed owner change.

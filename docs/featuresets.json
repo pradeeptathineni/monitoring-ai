@@ -227,6 +227,7 @@
         "private importable session history export",
         "separate metadata-only app task observations with capture freshness",
         "bounded app-status change inspection with explicit capture gaps",
+        "terminal app-source recovery and app-only filters",
         "tool outcomes",
         "live refresh",
         "read-loss handling",

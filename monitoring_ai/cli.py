@@ -68,6 +68,10 @@ def parser():
         if name == "top":
             command.add_argument("--json", action="store_true")
             command.add_argument("--watch", action="store_true", help="Refresh every two seconds in this terminal")
+            command.add_argument("--app-kind", choices=["codex", "chatgpt"], help="Filter human-readable app rows only")
+            command.add_argument("--app-status", choices=["active", "idle", "unknown"], help="Filter current reported app status only")
+            command.add_argument("--app-alias", help="Case-insensitive substring of a private app alias")
+            command.add_argument("--app-limit", type=int, help="Human-readable app row limit, 1–100 (default 20)")
             command.add_argument("--sources", type=Path, help="Follow explicitly selected files in this terminal")
             command.add_argument("--processes", action="store_true",
                                  help="Sample matching macOS executable names; separate from session identity")
@@ -195,7 +199,7 @@ def money(value):
     return "unknown" if value is None else f"{float(value):,.4f}"
 
 
-def terminal(value):
+def terminal(value, *, app_kind=None, app_status=None, app_alias=None, app_limit=20):
     summary = value["summary"]
     lines = [f"MONITORING AI  {value['observed_at']}  •  {value['currency']}",
              f"{summary['sessions']} sessions  {summary['active']} running  {summary['attention']} need attention  {summary['total_tokens']:,} tokens",
@@ -219,11 +223,26 @@ def terminal(value):
             lines.append(f"  {len(rows) - 8} more selected inputs; inspect --json for all read states.")
     app = value.get("app_threads")
     if app:
-        source_label = "Codex runtime metadata" if app.get("source") == "codex-local-app-server" else "App task inventory"
-        lines.append(f"{source_label}: {app.get('freshness', 'unknown')} capture · selected page only; reported status is not worker lifecycle.")
-        for row in app.get("threads", []):
-            status = row["status"] if app.get("freshness") == "recent" and app.get("read_state") == "following" else f"previously {row['status']}; current unknown"
-            lines.append(f"  {row['alias']} · {row['kind']} · app status {status} · updated {row['updated_at']}")
+        from .metrics import seconds
+        source_label = {"codex-local-app-server": "Codex runtime metadata", "codex-app-task-history": "Codex app tasks"}.get(app.get("source"), "App task inventory")
+        current = app.get("freshness") == "recent" and app.get("read_state") == "following"
+        status = lambda row: row["status"] if current else "unknown"
+        supplied = app.get("threads", [])
+        rank = {"active": 0, "idle": 1, "unknown": 2}
+        matching = sorted((row for row in supplied if (not app_kind or row["kind"] == app_kind)
+            and (not app_status or status(row) == app_status)
+            and (not app_alias or app_alias.casefold() in row["alias"].casefold())),
+            key=lambda row: (rank[status(row)], -seconds(row["updated_at"]), row["alias"]))
+        lines.append(f"{source_label}: {app.get('read_state', 'unknown')} read · {app.get('freshness', 'unknown')} capture {app.get('captured_at', 'unavailable')}")
+        lines.append(f"  {len(supplied)} supplied rows · {len(matching)} match app filters · showing {min(app_limit, len(matching))}. Incomplete coverage; ledger filters do not apply.")
+        if not current:
+            lines.append("  Current app status unknown. Retained rows are previous observations, not current activity.")
+        for row in matching[:app_limit]:
+            reported = status(row) if current else f"previously {row['status']}; current unknown"
+            lines.append(f"  {row['alias']} · {row['kind']} · app status {reported} · updated {row['updated_at']}")
+        if len(matching) > app_limit:
+            lines.append(f"  {len(matching) - app_limit} matching app rows omitted; narrow --app-kind, --app-status or --app-alias, or increase --app-limit.")
+        lines.append("  Reported app status is not model inference, worker lifecycle, token usage or billing.")
     processes = value.get("os_processes")
     if processes:
         if processes["state"] != "following":
@@ -622,6 +641,11 @@ def run(args):
     else:
         if args.watch and (args.json or not sys.stdout.isatty()):
             raise ValueError("--watch needs an interactive terminal and cannot combine with --json")
+        app_controls = any(value is not None for value in (args.app_kind, args.app_status, args.app_alias, args.app_limit))
+        if app_controls and (not args.app_threads or args.json):
+            raise ValueError("App view controls require --app-threads and human-readable output")
+        if args.app_limit is not None and not 1 <= args.app_limit <= 100:
+            raise ValueError("--app-limit must be between 1 and 100")
         if args.process_interval is not None and not args.processes:
             raise ValueError("--process-interval requires --processes")
         source_observer = None
@@ -642,6 +666,7 @@ def run(args):
         quota_error = False
         prior_watch = None
         recent_changes = []
+        app_capture = None
         while True:
             if source_observer is not None:
                 inputs = source_observer.refresh(store)
@@ -658,8 +683,9 @@ def run(args):
             revision, rows = store.read()
             value = snapshot(revision, rows, query, pricing, fx, quota_book=book)
             if args.app_threads:
-                from .app_threads import read_app_threads
-                value["app_threads"] = dict(read_app_threads(args.app_threads), read_state="following")
+                from .app_threads import app_threads_snapshot, read_app_threads
+                app_capture = app_threads_snapshot(lambda: read_app_threads(args.app_threads), app_capture, value["observed_at"])
+                value["app_threads"] = app_capture
             if source_observer is not None:
                 value["inputs"] = inputs
                 value["source_coverage"] = source_observer.coverage(now=value["observed_at"])
@@ -679,7 +705,9 @@ def run(args):
                 recent_changes = (changes + recent_changes)[:5]
                 prior_watch = {"revision": value["revision"], "events": value["events"]}
                 print("\033[2J\033[H", end="")
-            print(json.dumps(value, indent=2) if args.json else terminal(value), flush=True)
+            print(json.dumps(value, indent=2) if args.json else terminal(value,
+                app_kind=args.app_kind, app_status=args.app_status, app_alias=args.app_alias,
+                app_limit=args.app_limit if args.app_limit is not None else 20), flush=True)
             if args.watch:
                 print("\nLedger changes in this terminal · latest five visible observations")
                 print(change_note)

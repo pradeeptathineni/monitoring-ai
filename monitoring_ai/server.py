@@ -45,7 +45,6 @@ class Observatory:
         self.process_observer = process_observer
         self.app_threads_loader = app_threads_loader
         self.app_threads = None
-        self.app_threads_error = False
         if token_threshold is not None:
             from .token_threshold import validate_limit
             validate_limit(token_threshold)
@@ -59,19 +58,9 @@ class Observatory:
     def _include_app_threads(self, value):
         if self.app_threads_loader is None:
             return
-        try:
-            self.app_threads = self.app_threads_loader()
-            self.app_threads_error = False
-        except (OSError, ValueError, TypeError):
-            self.app_threads_error = True
-        if self.app_threads is not None:
-            from .metrics import seconds
-            age = seconds(value["observed_at"]) - seconds(self.app_threads["captured_at"])
-            value["app_threads"] = dict(self.app_threads, age_seconds=age,
-                freshness="future" if age < -5 else "recent" if age <= 30 else "stale",
-                read_state="unavailable" if self.app_threads_error else "following")
-        else:
-            value["app_threads"] = {"schema": "monitoring.app-threads.v1", "read_state": "unavailable", "threads": []}
+        from .app_threads import app_threads_snapshot
+        self.app_threads = app_threads_snapshot(self.app_threads_loader, self.app_threads, value["observed_at"])
+        value["app_threads"] = self.app_threads
 
     def refresh_codeburn_activity(self):
         if self.codeburn_activity_loader is None:
