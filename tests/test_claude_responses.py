@@ -18,6 +18,21 @@ def row(kind, at, **fields):
 
 
 class ClaudeResponseTest(unittest.TestCase):
+    def test_temporal_mismatch_and_malformed_optional_rows_stay_unpaired(self):
+        projected = [
+            None,
+            dict(row("user", "2026-11-03T04:00:00Z"), prompt_observed=True, row_id=[]),
+            dict(row("assistant", "2026-11-03T03:59:59Z"), response_end_observed=True, message="bad"),
+            dict(row("system", "2026-11-03T04:00:01Z"), stop_hook_observed=True),
+            dict(row("assistant", "2026-11-03T04:00:02Z"), response_end_observed=True, message={"id": "m1"}),
+            dict(row("system", "2026-11-03T04:00:03Z"), stop_hook_observed=True),
+            dict(row("assistant", "2026-11-03T04:00:04Z"), response_end_observed=True, message={"id": "m2"}),
+        ]
+        [span] = response_spans(projected, "chosen", "project")["rows"]
+        self.assertEqual(span["response_end_at"], "2026-11-03T04:00:02.000Z")
+        self.assertEqual(span["stop_hook_at"], "2026-11-03T04:00:03.000Z")
+        self.assertEqual(span["evidence"], "stop_hook_observed")
+
     def test_new_prompt_does_not_merge_failed_attempt_and_duplicate_response(self):
         native = [
             row("user", "2026-11-03T04:00:00Z", uuid="u1", message={"content": "private prompt"}),
