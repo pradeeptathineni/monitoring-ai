@@ -5,6 +5,7 @@ import unittest
 
 from monitoring_ai.adapters import load
 from monitoring_ai.openai_receipt import capture_response, response_event
+from monitoring_ai.source_setup import create_selection, check_selection
 from monitoring_ai.store import Store
 
 
@@ -47,3 +48,46 @@ class OpenAiReceiptTests(unittest.TestCase):
         for raw in cases:
             with self.assertRaises(ValueError):
                 response_event(raw, source="fixture", project="project", session="group")
+
+    def test_explicit_append_replay_conflict_and_selected_source(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder); source = root / "raw.json"; output = root / "metadata.jsonl"
+            options = dict(source="api-fixture", project="project", session="application-group")
+            first = response(); source.write_text(json.dumps(first))
+            self.assertEqual(capture_response(source, output, **options)["events"], 1)
+            original = output.read_bytes()
+            replay = capture_response(source, output, append=True, **options)
+            self.assertEqual((replay["events"], replay["replayed"]), (0, 1))
+            self.assertEqual(output.read_bytes(), original)
+            for changed in ({**options, "source": "another-source"}, {**options, "session": "another-group"}):
+                with self.assertRaisesRegex(ValueError, "conflicts"):
+                    capture_response(source, output, append=True, **changed)
+                self.assertEqual(output.read_bytes(), original)
+            changed = response(); changed["usage"]["output_tokens"] += 1; changed["usage"]["total_tokens"] += 1
+            source.write_text(json.dumps(changed))
+            with self.assertRaisesRegex(ValueError, "conflicts"):
+                capture_response(source, output, append=True, **options)
+            self.assertEqual(output.read_bytes(), original)
+            second = response(); second.update(id="second-private-id", completed_at=1793732403)
+            source.write_text(json.dumps(second))
+            self.assertEqual(capture_response(source, output, append=True, **options)["events"], 1)
+            manifest = root / "selection.json"
+            create_selection(manifest, file=output, id="api-input")
+            self.assertEqual(check_selection(manifest)["checks"][0]["state"], "readable")
+            store = Store(root / "ledger.sqlite")
+            self.assertEqual(store.ingest(load(output, "normalized"))["added"], 2)
+            self.assertEqual(store.ingest(load(output, "normalized"))["added"], 0)
+
+    def test_append_refuses_missing_public_or_partial_file_without_changing_it(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder); source = root / "raw.json"; output = root / "metadata.jsonl"
+            source.write_text(json.dumps(response()))
+            options = dict(source="fixture", project="project", session="group", append=True)
+            with self.assertRaises(ValueError):
+                capture_response(source, output, **options)
+            self.assertFalse(output.exists())
+            for content, mode in ((b"", 0o644), (b'{"partial":', 0o600)):
+                output.write_bytes(content); output.chmod(mode)
+                with self.assertRaises(ValueError):
+                    capture_response(source, output, **options)
+                self.assertEqual(output.read_bytes(), content)

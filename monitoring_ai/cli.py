@@ -128,7 +128,8 @@ def parser():
     actions = sources.add_subparsers(dest="source_action", required=True)
     api_receipt = actions.add_parser("capture-openai-response", help="Extract only metadata from one selected completed API response")
     api_receipt.add_argument("--file", type=Path, required=True)
-    api_receipt.add_argument("--output", type=Path, required=True, help="New private normalized JSONL file")
+    api_receipt.add_argument("--output", type=Path, required=True, help="Private normalized JSONL file")
+    api_receipt.add_argument("--append", action="store_true", help="Append to an existing owned 0600 file, replaying identical receipts once")
     api_receipt.add_argument("--source-id", required=True)
     api_receipt.add_argument("--project", required=True)
     api_receipt.add_argument("--session", required=True, help="Application grouping alias, not an inferred provider conversation")
@@ -402,9 +403,14 @@ def run(args):
     if args.command == "sources":
         if args.source_action == "capture-openai-response":
             from .openai_receipt import capture_response
+            from .producer import EventWriteError
             from .result_capture import ResultPublicationUncertain
             try:
-                receipt = capture_response(args.file, args.output, source=args.source_id, project=args.project, session=args.session)
+                receipt = capture_response(args.file, args.output, source=args.source_id, project=args.project,
+                                           session=args.session, append=args.append)
+            except EventWriteError:
+                print("Receipt append outcome is unknown. Preserve the file and inspect it before retrying.", file=sys.stderr)
+                raise SystemExit(2) from None
             except ResultPublicationUncertain:
                 print("Capture file exists, but publication durability is uncertain. Verify it before retrying.", file=sys.stderr)
                 raise SystemExit(2) from None

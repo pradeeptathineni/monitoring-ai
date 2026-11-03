@@ -5,6 +5,7 @@ import json
 
 from .adapters import read_source, unique_keys, reject_constant
 from .events import validate
+from .producer import EventWriter
 from .result_capture import publish_private_json
 from .store import stable_id
 
@@ -45,9 +46,20 @@ def response_event(raw, *, source, project, session):
         duration_ms=(completed - created) * 1000))
 
 
-def capture_response(source_file, output, *, source, project, session):
+def capture_response(source_file, output, *, source, project, session, append=False):
     raw = json.loads(read_source(source_file), object_pairs_hook=unique_keys, parse_constant=reject_constant)
     event = response_event(raw, source=source, project=project, session=session)
-    publish_private_json(output, event)
-    return dict(schema="monitoring.openai-receipt-capture.v1", events=1,
+    replayed = False
+    if append:
+        # Match the response hash across aliases to catch accidental regrouping
+        with EventWriter(output, append=True) as writer:
+            matching = [row for row in writer.existing if row["id"] == event["id"]]
+            if any(row != event for row in matching):
+                raise ValueError("Response identity conflicts with an existing receipt; output is unchanged")
+            replayed = bool(matching)
+            if not replayed:
+                writer.write(event)
+    else:
+        publish_private_json(output, event)
+    return dict(schema="monitoring.openai-receipt-capture.v1", events=int(not replayed), replayed=int(replayed),
                 timestamp=event["timestamp"], tokens=event["tokens"], cost="unreported")
