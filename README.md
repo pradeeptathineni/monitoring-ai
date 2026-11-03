@@ -4,7 +4,7 @@ Local monitoring for AI sessions, agents, workers, tokens and costs. Use it in y
 
 **Experimental alpha.** It observes explicitly supplied sources. Personal source compatibility, additional collectors and full-vision acceptance remain incomplete. [Version policy and v1.0.0 requirements](docs/release-readiness.md) keep maturity separate from version numbers.
 
-Current checked version: **v0.8.38**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
+Current checked version: **v0.8.39**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
 
 ![Monitoring AI dashboard with fictional sessions and costs](docs/observatory.png)
 
@@ -213,6 +213,8 @@ Quota evidence becomes stale after five minutes. Future timestamps and passed re
 Open **Report** or press **5**. Choose Today, 7 days, 30 days, This month, 6 months or All recorded, then filter by provider, model, surface, project, source or session. Date controls use UTC. Six months rolls back six calendar months to the same day, clamping month ends. Custom date bounds remain available.
 
 **Download displayed report JSON** saves the report currently shown in your browser, including its normalized filters, ledger revision, observation time, aggregates and coverage limits. The control is disabled until a report loads and when the displayed report belongs to earlier filters. If a read fails or refresh is paused, you can still save the retained report under its original filters; the file does not claim to be current. The download stays local and contains private usage aggregates and aliases, so keep it out of public repositories. It does not export raw event rows, transcripts, CodeBurn cache views, quota snapshots or OS samples. The CLI `report --json` below emits the same report schema.
+
+**Download summary CSV** saves the same displayed filter scope as a spreadsheet-ready table with summary, project, model and UTC-day rows. It includes observation time, ledger revision, cost-coverage counts and truncation flags. Estimated and billed amounts are separate, and unknown amounts are blank. The CSV omits tool detail and comparisons; use the JSON download for the full report. Spreadsheet formula-like aliases are escaped. The CSV is private and can be retained after a failed refresh under its original filters.
 
 Projects show usage, observed sessions and qualified costs. Models add recorded cache-read share and timing from explicitly timed records. Daily rows retain chronology. Tool panels group supplied core/MCP/shell/skill/agent aliases, errors and reported durations. These are invocation observations, not a worker roster. Untagged tools stay unclassified.
 

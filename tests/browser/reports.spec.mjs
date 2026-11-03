@@ -124,6 +124,7 @@ test("a failed filtered read retains the last report with a qualification", asyn
   await expect(page.locator("#report-status")).toContainText("last successful report observed at 2026-11-02T12:00:00Z remains visible");
   await expect(page.locator("#report-projects")).toContainText("demo-app");
   await expect(page.locator("#download-report")).toBeDisabled();
+  await expect(page.locator("#download-report-csv")).toBeDisabled();
 });
 
 test("download saves the displayed bounded report with its filters and coverage", async ({ page }) => {
@@ -144,6 +145,33 @@ test("download saves the displayed bounded report with its filters and coverage"
   expect(saved.summary).toBeTruthy();
   expect(saved.events).toBeUndefined();
   expect(saved.observed_at).toBeTruthy();
+});
+
+test("CSV download keeps displayed scope, separate cost bases and unknown amounts", async ({ page }) => {
+  await page.route("**/api/v1/report?**", (route) => {
+    const value = reportFor(route.request().url());
+    value.revision = 12;
+    value.filters = { project: "demo-app" };
+    value.breakdowns.projects.rows[0].key = "=1+1";
+    value.breakdowns.projects.rows[0].metrics.costs.billed.amount = null;
+    route.fulfill({ json: value });
+  });
+  await page.goto("/");
+  await page.locator('.nav[data-view="report"]').click();
+  await expect(page.locator("#download-report-csv")).toBeEnabled();
+  const downloadPromise = page.waitForEvent("download");
+  await page.locator("#download-report-csv").click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/^monitoring-report-.*\.csv$/);
+  const saved = await readFile(await download.path(), "utf8");
+  expect(saved.startsWith("\uFEFF")).toBeTruthy();
+  expect(saved).toContain('"section","key","observed_at_utc","ledger_revision"');
+  expect(saved).toContain('"summary","all","2026-11-02T12:00:00Z","12"');
+  expect(saved).toContain('"projects","\'=1+1"');
+  expect(saved).toContain('"0.01","1","","1"');
+  expect(saved).toContain('"filters_json"');
+  expect(saved).toContain('"coverage_scope"');
+  expect(saved).not.toContain('"events"');
 });
 
 test("six-month period clamps to the same UTC day in the target month", async ({ page }) => {

@@ -121,21 +121,67 @@ function cancelReport() {
 
 function updateReportDownload() {
   // A retained report can be saved only under the filters that produced it.
-  $("#download-report").disabled = !reportData || reportDataQuery !== query().toString();
+  const disabled = !reportData || reportDataQuery !== query().toString();
+  $("#download-report").disabled = disabled;
+  $("#download-report-csv").disabled = disabled;
+}
+
+function saveDisplayedReport(content, extension, type) {
+  updateReportDownload();
+  if ($("#download-report").disabled) return;
+  const stamp = String(reportData.observed_at || "").replace(/[^0-9TZ.-]/g, "").slice(0, 32) || "unknown-time";
+  const url = URL.createObjectURL(new Blob([content], { type }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `monitoring-report-${stamp}.${extension}`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function downloadDisplayedReport() {
   updateReportDownload();
   if ($("#download-report").disabled) return;
-  const stamp = String(reportData.observed_at || "").replace(/[^0-9TZ.-]/g, "").slice(0, 32) || "unknown-time";
-  const url = URL.createObjectURL(new Blob([`${JSON.stringify(reportData, null, 2)}\n`], { type: "application/json" }));
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `monitoring-report-${stamp}.json`;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  saveDisplayedReport(`${JSON.stringify(reportData, null, 2)}\n`, "json", "application/json");
+}
+
+function csvCell(value) {
+  let text = value === null || value === undefined ? "" : String(value);
+  // Spreadsheet applications may evaluate a leading identifier as a formula.
+  if (/^[\s]*[=+@-]/.test(text)) text = `'${text}`;
+  return `"${text.replaceAll('"', '""')}"`;
+}
+
+function reportCsv(report) {
+  const headers = ["section", "key", "observed_at_utc", "ledger_revision", "period_from_utc", "period_until_utc",
+    "filters_json", "currency", "calls", "observed_sessions", "input_tokens", "cache_read_tokens", "cache_write_tokens",
+    "output_tokens", "estimated_amount", "estimated_cost_events", "billed_amount", "billed_cost_events",
+    "unknown_cost_events", "unconverted_cost_events", "section_truncated", "coverage_scope",
+    "ledger_events", "future_events_excluded", "receipt_time_summary_records"];
+  const rows = [headers];
+  const add = (section, key, metrics, sessions, truncated) => {
+    const costs = metrics?.costs || {}, tokens = metrics?.tokens || {};
+    rows.push([section, key, report.observed_at, report.revision, report.range?.from, report.range?.until,
+      JSON.stringify(report.filters || {}), report.currency, metrics?.calls, sessions,
+      tokens.input, tokens.cache_read, tokens.cache_write, tokens.output,
+      costs.estimated?.amount, costs.estimated?.events, costs.billed?.amount, costs.billed?.events,
+      metrics?.unknown_cost_events, metrics?.unconverted_cost_events, truncated,
+      report.coverage?.scope, report.coverage?.ledger_events, report.coverage?.future_events_excluded,
+      report.coverage?.receipt_time_summary_records]);
+  };
+  add("summary", "all", report.summary, report.summary?.observed_sessions, false);
+  for (const section of ["projects", "models", "daily"]) {
+    const group = report.breakdowns?.[section];
+    for (const row of group?.rows || []) add(section, row.key, row.metrics, row.observed_sessions, Boolean(group.truncated));
+  }
+  return `\uFEFF${rows.map((row) => row.map(csvCell).join(",")).join("\r\n")}\r\n`;
+}
+
+function downloadDisplayedReportCsv() {
+  updateReportDownload();
+  if ($("#download-report-csv").disabled) return;
+  saveDisplayedReport(reportCsv(reportData), "csv", "text/csv;charset=utf-8");
 }
 
 function reportCurrency(value, currency = reportData?.currency || data?.currency || "USD") {
@@ -1650,6 +1696,7 @@ $("#filters").addEventListener("submit", (event) => event.preventDefault());
 $("#filters").addEventListener("reset", () => { markEntityHistoryFiltersChanged(true); $("#state-filter").value = ""; setTimeout(() => { $("#report-period").value = "custom"; refresh(); if (view === "report") loadReport(); }, 0); });
 $("#report-period").addEventListener("change", () => applyReportPeriod($("#report-period").value));
 $("#download-report").addEventListener("click", downloadDisplayedReport);
+$("#download-report-csv").addEventListener("click", downloadDisplayedReportCsv);
 $("#state-filter").addEventListener("change", () => { refresh(); if (view === "report") loadReport(); });
 $("#group").addEventListener("change", () => { if (data) renderUsage(); });
 $("#codeburn-cache-range").addEventListener("change", () => {

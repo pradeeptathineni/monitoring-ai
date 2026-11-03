@@ -110,3 +110,5 @@ The v0.8.36 repeatable CLI capture is original code built on Monitoring's existi
 The v0.8.37 selected quota refresh is original code built on Monitoring's existing Claude CLI rate-limit projection, quota validator and private atomic-file publication. It imports no upstream code or runtime package. Two previously authorized CLI streams qualified repeatable window refresh without contacting a provider or viewing raw account identifiers.
 
 The local v0.8.38 ledger event verification is original code using Monitoring's existing normalized event validator and Python's standard-library SQLite and JSON modules. It adds no upstream code or runtime dependency.
+
+The local v0.8.39 report CSV is original browser code over Monitoring's existing detailed-report response, using built-in Blob and download APIs. It imports no upstream code or runtime package.
