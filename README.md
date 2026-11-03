@@ -4,7 +4,7 @@ Local monitoring for AI sessions, agents, workers, tokens and costs. Use it in y
 
 **Experimental alpha.** It observes explicitly supplied sources. Personal source compatibility, additional collectors and full-vision acceptance remain incomplete. [Version policy and v1.0.0 requirements](docs/release-readiness.md) keep maturity separate from version numbers.
 
-Current checked version: **v0.8.8**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
+Current checked version: **v0.8.9**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
 
 ![Monitoring AI dashboard with fictional sessions and costs](docs/observatory.png)
 
@@ -62,7 +62,7 @@ python3 -m monitoring_ai top --db /tmp/my-observatory.sqlite --provider openai -
 python3 -m monitoring_ai serve --file /path/to/authorized-events.jsonl --db /tmp/my-observatory.sqlite
 ```
 
-Two native transcript adapters are included. Only use files you own or are authorized to read. Select one explicit Claude Code JSONL file for [bounded live following](docs/claude-native.md), or a complete Codex session JSONL file. There is no home-directory scan, credential reader, hook installation or account connection.
+Two native transcript adapters are included. Only use files you own or are authorized to read. Select one explicit Claude Code JSONL file for [bounded live following](docs/claude-native.md), or a complete [Codex session JSONL file](docs/codex-native.md). There is no home-directory scan, credential reader, hook installation or account connection.
 
 ```sh
 python3 -m monitoring_ai import --file /path/to/authorized-session.jsonl \
@@ -72,7 +72,7 @@ python3 -m monitoring_ai import --file /path/to/authorized-session.jsonl \
   --format claude --source-id my-claude-session --project my-app
 ```
 
-Use the same source ID and project alias when replaying or following a file. Different aliases create different observations and can double-count the same activity. One source must not be imported through two formats. The native adapters discard conversation content, tool arguments and filesystem paths, and hash session IDs. They reconstruct usage, **not live process state**. Missing model names stay `unknown`. The Claude follower reads only newly completed lines after its initial scan. Identical Claude message usage with a later record timestamp is replay, including after file rotation. A later token revision for the same stable Claude message identity updates the current usage with an audit row and a new ledger revision; an ambiguous same-time or older change refuses. Codex counter decreases still refuse. One owned Claude Code 2.1.308 file is qualified through a real append, API and dashboard; changed-token correction is fixture-qualified. General native sessions and Codex JSONL remain unqualified.
+Use the same source ID and project alias when replaying or following a file. Different aliases create different observations and can double-count the same activity. One source must not be imported through two formats. The native adapters discard conversation content, tool arguments and filesystem paths, and hash session IDs. They reconstruct usage, **not live process state**. Missing model names stay `unknown`. The Claude follower reads only newly completed lines after its initial scan. Identical Claude message usage with a later record timestamp is replay, including after file rotation. A later token revision for the same stable Claude message identity updates the current usage with an audit row and a new ledger revision; an ambiguous same-time or older change refuses. Codex counter decreases and unqualified nonzero cache-write counters refuse. One owned Claude Code 2.1.308 file is qualified through a real append; changed-token correction is fixture-qualified. One historical Codex `0.162.0-alpha.17.2` JSONL file is qualified through parser, ledger, API and private dashboard. General provider versions and live Codex append remain unqualified.
 
 Claude imports also retain metadata from complete structured tool-use/result pairs: tool aliases, error outcomes and recognized native categories. Incomplete pairs are uncounted. Inputs, result text and shell arguments are discarded. A `Bash` or `Skill` record identifies that invocation, not its private command or skill arguments. The adapter never infers duration from gaps between messages.
 

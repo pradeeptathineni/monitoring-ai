@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 import stat
 
-from .events import SCHEMA, validate
+from .events import SCHEMA, timestamp, validate
 from .store import stable_id
 
 MAX_BYTES = 32 * 1024 * 1024
@@ -70,6 +70,7 @@ def parse_jsonl(content, *, live=False, strict=False, shape=None):
 
 CLAUDE_FIELDS = ("sessionId", "timestamp")
 CLAUDE_USAGE = ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens", "output_tokens")
+CODEX_TOTAL = ("input_tokens", "cached_input_tokens", "cache_write_input_tokens", "output_tokens")
 
 
 def claude_block(block):
@@ -101,6 +102,30 @@ def claude_row(row):
                                if isinstance(block, dict) and block.get("type") in ("tool_use", "tool_result")]
         kept["message"] = slim
     return kept
+
+
+def codex_row(row):
+    """Keep only fields consumed by cumulative Codex usage reconstruction."""
+    kind, payload = row.get("type"), row.get("payload")
+    if not isinstance(payload, dict):
+        return {}
+    if kind == "session_meta":
+        identity = payload.get("id")
+        return {"type": kind, "payload": {"id": identity}} if isinstance(identity, str) and 0 < len(identity) <= 1000 else {"type": kind}
+    if kind == "turn_context":
+        model = payload.get("model")
+        return {"type": kind, "payload": {"model": safe_label(model)}}
+    if kind == "event_msg" and payload.get("type") == "token_count":
+        info = payload.get("info")
+        total = info.get("total_token_usage") if isinstance(info, dict) else None
+        slim = {key: total[key] for key in CODEX_TOTAL if key in total} if isinstance(total, dict) else None
+        kept = {"type": kind, "payload": {"type": "token_count", "info": {"total_token_usage": slim}}}
+        if slim is not None:
+            value = row.get("timestamp")
+            timestamp(value)  # Reject arbitrary content before retaining this source field.
+            kept["timestamp"] = value
+        return kept
+    return {}
 
 
 def safe_label(value, fallback="unknown"):
@@ -193,6 +218,8 @@ def codex(rows, source, project):
             current = {key: count(total.get(key, 0)) for key in (
                 "input_tokens", "cached_input_tokens", "output_tokens"
             )}
+            if count(total.get("cache_write_input_tokens", 0)):
+                raise ValueError("Codex cache-write accounting needs a qualified source interpretation")
             if previous == current:
                 continue
             delta = {key: value - (previous or {}).get(key, 0) for key, value in current.items()}
@@ -214,7 +241,7 @@ def codex(rows, source, project):
 
 
 def load(path, format="normalized", source=None, project=None, live=False):
-    shape = claude_row if format == "claude" else None
+    shape = claude_row if format == "claude" else codex_row if format == "codex" else None
     rows = read_jsonl(path, live=live, strict=format == "claude-results", shape=shape)
     if format == "normalized":
         return [validate(row) for row in rows]

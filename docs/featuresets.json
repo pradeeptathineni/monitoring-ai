@@ -175,7 +175,7 @@
         "ccusage/ccusage",
         "Helicone/helicone"
       ],
-      "decision": "Implemented normalized and Claude/Codex usage imports plus metadata-only completed Claude tool pairs. Replay identities remain stable. Explicit multi-source configuration is implemented. More native tools and a correction protocol remain planned. Completed Claude CLI result snapshots supply per-model cumulative deltas and client-side estimates without private transcript discovery. One task-owned Claude Code 2.1.308 native JSONL source now has actual first-message, resumed append, metadata projection, disjoint-token, API-revision and private dashboard proof. Repeated identical usage with different row timestamps keeps the first source event time. Changed accepted usage refuses. An in-memory Claude follower now reads complete appended lines incrementally, detects replacement/truncation, and keeps first accepted time for timestamp-only replay; actual owned-source idle/restart checks and fictional rotation/partial-line checks pass. A same-message later token version now atomically revises current usage with a private prior/next audit and a new ledger revision. Actual owned-source migration/replay produced no correction; changed-token behavior is qualified by fictional tests only. Native Codex, provider-driven rotation, larger histories and general lifecycle remain unqualified.",
+      "decision": "Implemented normalized and Claude/Codex usage imports plus metadata-only completed Claude tool pairs. Replay identities remain stable. Explicit multi-source configuration is implemented. More native tools and a correction protocol remain planned. Completed Claude CLI result snapshots supply per-model cumulative deltas and client-side estimates without private transcript discovery. One task-owned Claude Code 2.1.308 native JSONL source now has actual first-message, resumed append, metadata projection, disjoint-token, API-revision and private dashboard proof. Repeated identical usage with different row timestamps keeps the first source event time. Changed accepted usage refuses. An in-memory Claude follower now reads complete appended lines incrementally, detects replacement/truncation, and keeps first accepted time for timestamp-only replay; actual owned-source idle/restart checks and fictional rotation/partial-line checks pass. A same-message later token version now atomically revises current usage with a private prior/next audit and a new ledger revision. Actual owned-source migration/replay produced no correction; changed-token behavior is qualified by fictional tests only. One historical Codex `0.162.0-alpha.17.2` JSONL source now has projected parser, cumulative-bucket, ledger replay, API and private dashboard proof. Separate per-response rows are excluded because their sum did not match final cumulative counts. Fresh Codex following, nonzero cache-write meaning, provider-driven rotation, larger histories and general lifecycle remain unqualified.",
       "evidence": [
         "tests/test_monitoring.py",
         "monitoring_ai/adapters.py",
@@ -191,7 +191,9 @@
         "tests/test_claude_projection.py",
         "monitoring_ai/claude_follow.py",
         "tests/test_claude_follow.py",
-        "monitoring_ai/store.py"
+        "monitoring_ai/store.py",
+        "docs/codex-native.md",
+        "tests/test_codex_projection.py"
       ]
     },
     {
