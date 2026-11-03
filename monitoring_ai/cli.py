@@ -83,6 +83,13 @@ def parser():
     report.add_argument("--json", action="store_true")
     for key in (*DIMENSIONS, "since", "until", "state"):
         report.add_argument("--" + key)
+    ledger = sub.add_parser("ledger", help="Back up or check an explicitly selected private ledger")
+    ledger_actions = ledger.add_subparsers(dest="ledger_action", required=True)
+    backup = ledger_actions.add_parser("backup", help="Save committed history to a new private SQLite file")
+    backup.add_argument("--db", type=Path, required=True, help="Existing source ledger")
+    backup.add_argument("--output", type=Path, required=True, help="New backup file; existing output refuses")
+    verify = ledger_actions.add_parser("verify", help="Read-only integrity and revision check")
+    verify.add_argument("--db", type=Path, required=True, help="Existing ledger or backup")
     setup = sub.add_parser("setup", help="Choose one authorized local file with guided prompts")
     setup.add_argument("--output", type=Path, help="New private selection file; default user config directory")
     setup.add_argument("--from-selection", type=Path, help="Existing selection to add to; left unchanged")
@@ -179,6 +186,12 @@ def _print_source_check(value):
 
 
 def run(args):
+    if args.command == "ledger":
+        from .ledger_backup import backup_ledger, inspect_ledger
+        result = (backup_ledger(args.db, args.output) if args.ledger_action == "backup"
+                  else inspect_ledger(args.db))
+        print(json.dumps(result, indent=2))
+        return
     if args.command == "setup":
         from .guided_setup import run_setup
         run_setup(args.output, args.from_selection)

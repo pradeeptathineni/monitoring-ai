@@ -4,7 +4,7 @@ Local monitoring for AI sessions, agents, workers, tokens and costs. Use it in y
 
 **Experimental alpha.** It observes explicitly supplied sources. Personal source compatibility, additional collectors and full-vision acceptance remain incomplete. [Version policy and v1.0.0 requirements](docs/release-readiness.md) keep maturity separate from version numbers.
 
-Current checked version: **v0.8.27**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
+Current checked version: **v0.8.28**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
 
 ![Monitoring AI dashboard with fictional sessions and costs](docs/observatory.png)
 
@@ -141,6 +141,15 @@ python3 -m monitoring_ai sources preview --sources /path/to/private-sources.json
 Omit `--db` to preview an empty base. With `--db`, the ledger must already exist: the command reads a consistent SQLite copy, including committed WAL records, and changes only a private temporary database. It uses the same immutable identity and hierarchy rules as ingestion, reports proposed additions/replays per input and continues after an input fails. Failed batches leave the preview unchanged. The original accepted history is preserved. Missing or malformed bases refuse rather than creating a ledger.
 
 Readiness includes the current 100,000-event view limit. A ready result describes the copied base and the explicitly selected files read during that preview. Files can change before following begins. It does not establish worker liveness or prevent future conflicts. The preview refuses repeated native session/kind/event identities across selected files of the same Claude or Codex format; other cross-source overlap remains unresolved. Preview returns 0 when all inputs fit, 1 for unavailable/rejected inputs and 2 when configuration or the base cannot be inspected. The temporary copy is removed after success or failure. Base copying is bounded to 512 MiB and a five-second backup deadline.
+
+Back up accepted history before changing a source selection or owner version. This reads a consistent committed SQLite snapshot, including its WAL, and creates a new private file. It includes the native usage-version and correction audit tables. An existing output refuses; the running owner and source ledger remain unchanged.
+
+```sh
+python3 -m monitoring_ai ledger backup --db /path/to/events.sqlite --output /path/to/new-private-backup.sqlite
+python3 -m monitoring_ai ledger verify --db /path/to/new-private-backup.sqlite
+```
+
+The receipt reports event, correction and native-version counts, revision and file size; `verify` checks SQLite integrity without writing. Keep the backup and any source manifest private. To use a backup as the active ledger, stop the owner first and deliberately select the backup with `serve --db`; this command never swaps a running owner. The current backup limit is 512 MiB and five seconds. It does not prune history or lift the 100,000-event view limit.
 
 The manifest is loaded once at startup and admits at most 32 files. Restart deliberately to change that selection. File paths stay in the private configuration; the read API and dashboard show only aliases, format, project and read outcomes. Native inputs require a project alias. Normalized inputs retain their supplied source and project dimensions, so a managed input alias is not necessarily an event-source filter.
 
