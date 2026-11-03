@@ -23,6 +23,8 @@ test("Settings owns appearance and source setup while analytics stay in their vi
   await page.locator("#appearance-settings summary").click();
   await expect(page.locator("#appearance-preset")).toBeVisible();
   await expect(page.locator("#coverage-setup")).toBeVisible();
+  await expect(page.locator('#settings [data-settings-category="sources"]')).toContainText("python3 -m monitoring_ai setup");
+  await expect(page.locator('#settings [data-settings-category="sources"]')).toContainText("unknown coverage, not idle workers");
   if (!(await page.locator("#coverage-setup").evaluate((element) => element.open))) await page.locator("#coverage-setup summary").click();
   await expect(page.locator("#coverage-setup")).toContainText("sources create");
   await expect(page.locator("#coverage-setup")).toContainText("sources add");

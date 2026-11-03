@@ -77,6 +77,9 @@ def parser():
     report.add_argument("--json", action="store_true")
     for key in (*DIMENSIONS, "since", "until", "state"):
         report.add_argument("--" + key)
+    setup = sub.add_parser("setup", help="Choose one authorized local file with guided prompts")
+    setup.add_argument("--output", type=Path, help="New private selection file; default user config directory")
+    setup.add_argument("--from-selection", type=Path, help="Existing selection to add to; left unchanged")
     sources = sub.add_parser("sources", help="Select explicit inputs and check their supplied evidence")
     actions = sources.add_subparsers(dest="source_action", required=True)
     create = actions.add_parser("create", help="Create one private selection without overwriting a file")
@@ -139,7 +142,34 @@ def quota_loader(args):
     return None
 
 
+def _print_source_check(value):
+    print("MONITORING AI INPUT CHECK · explicit selected files only")
+    for row in value["checks"]:
+        print(f"\n{row['id']} · {row['format']} · {row['state']}")
+        if row["error"]:
+            print(row["error"])
+            continue
+        summary = row["summary"]
+        counts = summary["records"]
+        print(f"{counts['usage']} usage · {counts['status']} lifecycle · {counts['tool']} tool records · {counts['sessions']} observed sessions")
+        print(f"Latest supplied event: {summary['latest_event_at'] or 'none'} · checked: {summary['sampled_at']}")
+        if summary["capabilities"]["lifecycle"] == "unsupported":
+            print("Usage reconstruction only. This adapter supplies no live worker lifecycle.")
+        elif not counts["status"]:
+            print("No lifecycle events supplied. A producer must explicitly export status evidence.")
+        else:
+            print("Producer-supplied lifecycle observations. Evidence ages independently of file reads.")
+        if not counts["total"]:
+            print("No complete supported records yet. Check the selected format and producer output.")
+    print("\n" + value["note"])
+    print("A recent file read does not prove a live session. Missing evidence means coverage is unknown, not idle.")
+
+
 def run(args):
+    if args.command == "setup":
+        from .guided_setup import run_setup
+        run_setup(args.output, args.from_selection)
+        return
     if args.command == "sources":
         from .source_setup import add_selection, create_selection, check_selection
         from .sources import SourceManifestError
@@ -195,24 +225,7 @@ def run(args):
         if args.json:
             print(json.dumps(value, indent=2))
         else:
-            print("MONITORING AI INPUT CHECK · explicit selected files only")
-            for row in value["checks"]:
-                print(f"\n{row['id']} · {row['format']} · {row['state']}")
-                if row["error"]:
-                    print(row["error"])
-                    continue
-                summary = row["summary"]
-                counts = summary["records"]
-                print(f"{counts['usage']} usage · {counts['status']} lifecycle · {counts['tool']} tool records · {counts['sessions']} observed sessions")
-                if summary["capabilities"]["lifecycle"] == "unsupported":
-                    print("Usage reconstruction only. This adapter supplies no live worker lifecycle.")
-                elif not counts["status"]:
-                    print("No lifecycle events supplied. A producer must explicitly export status evidence.")
-                else:
-                    print("Producer-supplied lifecycle observations. Evidence ages independently of file reads.")
-                if not counts["total"]:
-                    print("No complete supported records yet. Check the selected format and producer output.")
-            print("\n" + value["note"])
+            _print_source_check(value)
         if not value["all_readable"]:
             raise SystemExit(1)
         return

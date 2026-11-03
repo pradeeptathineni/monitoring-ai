@@ -138,6 +138,62 @@ class SourceSetupTests(unittest.TestCase):
                          ["selected-input", "second"])
         self.assertEqual(len(json.loads(self.manifest.read_text())["sources"]), 1)
 
+    def test_guided_setup_creates_private_selection_and_reports_coverage(self):
+        self.file.write_text(json.dumps(event("first")) + "\n")
+        project = str(Path(__file__).resolve().parents[1])
+        result = subprocess.run([sys.executable, "-m", "monitoring_ai", "setup"],
+                                input=f"{self.file}\nnormalized\nmy-input\n", cwd=self.root,
+                                env=dict(os.environ, PYTHONPATH=project,
+                                         XDG_CONFIG_HOME=str(self.root / "config")), capture_output=True,
+                                text=True, timeout=5)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        saved = self.root / "config" / "monitoring-ai" / "sources.json"
+        self.assertEqual(stat.S_IMODE(saved.stat().st_mode), 0o600)
+        self.assertEqual(stat.S_IMODE(saved.parent.stat().st_mode), 0o700)
+        self.assertEqual(json.loads(saved.read_text())["sources"][0]["path"], str(self.file))
+        self.assertIn("No lifecycle events supplied", result.stdout)
+        self.assertIn("Missing evidence means coverage is unknown", result.stdout)
+        self.assertFalse((self.root / ".monitoring-ai" / "events.sqlite").exists())
+        original = saved.read_bytes()
+        repeated = subprocess.run([sys.executable, "-m", "monitoring_ai", "setup"],
+                                  input=f"{self.file}\nnormalized\nother\n", cwd=self.root,
+                                  env=dict(os.environ, PYTHONPATH=project,
+                                           XDG_CONFIG_HOME=str(self.root / "config")), capture_output=True,
+                                  text=True, timeout=5)
+        self.assertEqual(repeated.returncode, 2)
+        self.assertEqual(saved.read_bytes(), original)
+
+    def test_guided_setup_adds_to_existing_selection_without_replacing_it(self):
+        self.file.write_text(json.dumps(event("first")) + "\n")
+        self.create()
+        before = self.manifest.read_bytes()
+        second = self.root / "second.jsonl"
+        second.write_text(json.dumps(event("second")) + "\n")
+        project = str(Path(__file__).resolve().parents[1])
+        result = subprocess.run([sys.executable, "-m", "monitoring_ai", "setup",
+                                 "--from-selection", str(self.manifest)],
+                                input=f"{second}\nnormalized\nsecond\n", cwd=self.root,
+                                env=dict(os.environ, PYTHONPATH=project,
+                                         XDG_CONFIG_HOME=str(self.root / "config")), capture_output=True,
+                                text=True, timeout=5)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        saved = self.root / "config" / "monitoring-ai" / "sources-next.json"
+        self.assertEqual(len(json.loads(saved.read_text())["sources"]), 2)
+        self.assertEqual(self.manifest.read_bytes(), before)
+        self.assertNotIn(str(second), result.stdout)
+
+    def test_guided_setup_quotes_private_output_in_suggested_commands(self):
+        self.file.write_text(json.dumps(event("first")) + "\n")
+        output = self.root / "private selection.json"
+        project = str(Path(__file__).resolve().parents[1])
+        result = subprocess.run([sys.executable, "-m", "monitoring_ai", "setup", "--output", str(output)],
+                                input=f"{self.file}\nnormalized\nfirst\n", cwd=self.root,
+                                env=dict(os.environ, PYTHONPATH=project), capture_output=True,
+                                text=True, timeout=5)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("--sources '" + str(output) + "'", result.stdout)
+        self.assertEqual(stat.S_IMODE(output.stat().st_mode), 0o600)
+
 
 if __name__ == "__main__":
     unittest.main()

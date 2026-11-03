@@ -4,7 +4,7 @@ Local monitoring for AI sessions, agents, workers, tokens and costs. Use it in y
 
 **Experimental alpha.** It observes explicitly supplied sources. Personal source compatibility, additional collectors and full-vision acceptance remain incomplete. [Version policy and v1.0.0 requirements](docs/release-readiness.md) keep maturity separate from version numbers.
 
-Current checked version: **v0.8.16**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
+Current checked version: **v0.8.17**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
 
 ![Monitoring AI dashboard with fictional sessions and costs](docs/observatory.png)
 
@@ -80,6 +80,8 @@ Use the same source ID and project alias when replaying or following a file. Dif
 Claude imports also retain metadata from complete structured tool-use/result pairs: tool aliases, error outcomes and recognized native categories. Incomplete pairs are uncounted. Inputs, result text and shell arguments are discarded. A `Bash` or `Skill` record identifies that invocation, not its private command or skill arguments. The adapter never infers duration from gaps between messages.
 
 ### Follow several selected files
+
+For a first source, run `python3 -m monitoring_ai setup`. The terminal asks for one absolute file path that you explicitly choose, its format and safe aliases. It saves a private selection under the user's config directory (`$XDG_CONFIG_HOME/monitoring-ai` or `~/.config/monitoring-ai`), checks the selected file and prints preview and start commands. This keeps the selection outside the current project. Setup does not discover files, run providers, import a ledger or change a running service. A recent check proves only that a selected file was readable; the reported latest event timestamp can be stale, and native usage formats do not establish live workers. To add a file, run `python3 -m monitoring_ai setup --from-selection ~/.config/monitoring-ai/sources.json` (adjust for `$XDG_CONFIG_HOME`); the new selection is `sources-next.json` in the same default config directory. An existing output is never overwritten. Use `--output /path/to/new-private-selection.json` to choose another path. Restart a running owner deliberately with the new selection after previewing it. Deep consumes the same read-only source coverage once its configured owner has restarted.
 
 Create a first selection without hand-writing JSON. Use a new output path in an existing private directory:
 

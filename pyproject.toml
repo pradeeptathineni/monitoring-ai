@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "monitoring-ai"
-version = "0.8.16"
+version = "0.8.17"
 description = "Local AI session and usage monitoring with a reusable read contract"
 readme = "README.md"
 requires-python = ">=3.11"
