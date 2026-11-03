@@ -30,7 +30,7 @@
       <button class="nav nav-item" data-view="report" title="Report" aria-label="Report"><span class="nav-icon" aria-hidden="true">▤</span><span class="navigation-label">Report <kbd>5</kbd></span></button>
       <button class="nav nav-item" data-view="settings" title="Settings" aria-label="Settings"><span class="nav-icon" aria-hidden="true">⚙</span><span class="navigation-label">Settings <kbd>6</kbd></span></button>
     </nav>
-    <div class="rail-bottom sidebar-foot"><span class="small-dot" aria-hidden="true"></span><div class="navigation-label">Read-only dashboard<a href="https://github.com/pradeeptathineni/monitoring-ai" target="_blank" rel="noreferrer">Source & documentation ↗</a><small>EXPERIMENTAL · v0.8.33</small></div></div>
+    <div class="rail-bottom sidebar-foot"><span class="small-dot" aria-hidden="true"></span><div class="navigation-label">Read-only dashboard<a href="https://github.com/pradeeptathineni/monitoring-ai" target="_blank" rel="noreferrer">Source & documentation ↗</a><small>EXPERIMENTAL · v0.8.34</small></div></div>
   </aside>
   <aside id="section-navigation" class="section-navigation" aria-label="Settings sections" hidden>
     <h2>Settings</h2>
@@ -117,6 +117,7 @@
           <p class="prose">Run guided setup in a terminal to select one authorized local file, check its records and save a private source selection:</p>
           <pre><code>python3 -m monitoring_ai setup</code></pre>
           <p class="prose">To add another file, run <code>python3 -m monitoring_ai setup --from-selection /path/to/private-sources.json</code>. The terminal prints preview and start commands. An existing service keeps its previous inputs until you deliberately restart it. The browser cannot read or choose local files.</p>
+          <p class="prose">For one explicitly piped Claude CLI invocation, <code>sources select-claude-stream</code> creates a linked private status/result selection. It checks existing files before publication and permits missing capture outputs until they arrive. See the <a href="https://github.com/pradeeptathineni/monitoring-ai/blob/main/docs/claude-cli-stream.md" target="_blank" rel="noreferrer">Claude stream guide</a>. Select a quota file separately with <code>--quota-file</code>.</p>
           <p class="prose">The source panel separates the last successful read from the latest event timestamp. A recent read of an old file does not mean a session is active. Native usage files do not provide worker lifecycle; absent lifecycle evidence means unknown coverage, not idle workers.</p>
           <p class="prose">An authorized Maestro campaign can export normalized event JSONL. Select its explicit output file with <code>setup</code> and choose <code>normalized</code>. The <a href="https://github.com/pradeeptathineni/monitoring-ai/blob/main/docs/maestro-passive-export.md" target="_blank" rel="noreferrer">Maestro export instructions</a> explain checkpoint and coverage limits. A process exit does not prove task acceptance.</p>
           <details id="coverage-setup" class="coverage-setup navigation-disclosure"><summary>Manual source commands</summary>

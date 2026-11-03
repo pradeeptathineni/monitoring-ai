@@ -1,6 +1,6 @@
 # Versions and release readiness
 
-Public versions use `vX.Y.Z`. Python package metadata and the read API use `X.Y.Z`, without the display prefix. The current checked version is `v0.8.33`. Its maturity is **Experimental alpha**. The number is not a fraction of the work completed.
+Public versions use `vX.Y.Z`. Python package metadata and the read API use `X.Y.Z`, without the display prefix. The current checked version is `v0.8.34`. Its maturity is **Experimental alpha**. The number is not a fraction of the work completed.
 
 Earlier source declarations such as `0.8.0a1` remain in published history. They have not been renamed or retagged. No Git tags existed when this policy was reconciled on 2026-11-03. Minor numbers will not advance for each development checkpoint. Version selection follows the scope of an accepted change, with compatibility and maturity stated separately.
 
@@ -25,3 +25,5 @@ At v0.8.31, a separate live, task-owned Claude Code 2.1.308 review produced an o
 At v0.8.32, another task-owned Claude Code 2.1.308 review supplied two CLI-reported rate-limit windows with original receipt and reset times. A separate private quota file and terminal view kept them apart from the same invocation's status and estimated-cost usage. This is event-driven source evidence, not a complete subscription balance or permission to spend. The undocumented nested window fields and other CLI versions need further qualification.
 
 At v0.8.33, a private task-owned Claude Code 2.1.308 result ledger supported an observed estimated-cost threshold through the actual terminal command. The receipt landed in the UTC day of capture and a deliberately lower private limit produced an observed-reached state. There was no billed record, so billed spending remained unknown. Missing sources, prices, exchange rates, notifications and enforcement remain release gaps.
+
+At v0.8.34, one explicit selection command reduces the steps required to observe a Claude CLI status and result together. A real task-owned prior capture replayed through selection check and terminal ingestion with the expected session and cost provenance. This is setup reliability for an already supported producer, not additional provider coverage, a fresh invocation or general worker discovery.

@@ -7,7 +7,7 @@ import sys
 import tempfile
 import unittest
 
-from monitoring_ai.source_setup import add_selection, create_selection, check_selection
+from monitoring_ai.source_setup import add_selection, create_selection, check_selection, select_claude_stream
 from test_multi_sources import event
 
 
@@ -95,6 +95,64 @@ class SourceSetupTests(unittest.TestCase):
         self.assertNotIn(str(self.root), ready.stdout)
         self.assertFalse((self.root / ".monitoring-ai").exists())
 
+    def test_claude_stream_selection_plans_missing_outputs_then_checks_matching_capture(self):
+        from monitoring_ai.claude_stream import capture_stream
+        from test_claude_stream import INIT, SUCCESS, stream
+        status = self.root / "status.jsonl"
+        result = self.root / "result.jsonl"
+        selected = select_claude_stream(self.manifest, status_file=status, result_file=result,
+                                        source_id="owned-cli", project="example")
+        self.assertEqual([row.format for row in selected], ["normalized", "claude-results"])
+        self.assertEqual([row.id for row in selected], ["owned-cli-status", "owned-cli"])
+        self.assertFalse(check_selection(self.manifest)["all_readable"])
+        receipt = {**SUCCESS, "modelUsage": {"claude-example": {
+            "inputTokens": 7, "cacheReadInputTokens": 2,
+            "cacheCreationInputTokens": 1, "outputTokens": 3,
+            "costUSD": 0.04, "provider": "firstParty"}}}
+        capture_stream(stream(INIT, receipt), status, source="owned-cli", project="example",
+                       clock=lambda: "2026-11-03T09:00:00.000Z", result_output=result)
+        checked = check_selection(self.manifest)
+        self.assertTrue(checked["all_readable"])
+        self.assertEqual([row["summary"]["records"]["total"] for row in checked["checks"]], [2, 1])
+        self.assertNotIn(str(self.root), json.dumps(checked))
+        self.assertEqual(stat.S_IMODE(self.manifest.stat().st_mode), 0o600)
+
+    def test_claude_stream_selection_refuses_mismatched_existing_content_before_publication(self):
+        from monitoring_ai.claude_stream import capture_stream
+        from test_claude_stream import INIT, SUCCESS, stream
+        status = self.root / "status.jsonl"
+        result = self.root / "result.jsonl"
+        receipt = {**SUCCESS, "modelUsage": {"claude-example": {
+            "inputTokens": 7, "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0, "outputTokens": 3,
+            "costUSD": 0.04, "provider": "firstParty"}}}
+        capture_stream(stream(INIT, receipt), status, source="actual-alias", project="example",
+                       clock=lambda: "2026-11-03T09:00:00.000Z", result_output=result)
+        with self.assertRaisesRegex(ValueError, "does not match"):
+            select_claude_stream(self.manifest, status_file=status, result_file=result,
+                                 source_id="wrong-alias", project="example")
+        self.assertFalse(self.manifest.exists())
+        with self.assertRaisesRegex(ValueError, "must differ"):
+            select_claude_stream(status, status_file=status, result_file=result,
+                                 source_id="actual-alias", project="example")
+
+    def test_planned_claude_selection_detects_later_alias_mismatch(self):
+        from monitoring_ai.claude_stream import capture_stream
+        from test_claude_stream import INIT, SUCCESS, stream
+        status = self.root / "status.jsonl"
+        result = self.root / "result.jsonl"
+        select_claude_stream(self.manifest, status_file=status, result_file=result,
+                             source_id="planned-alias", project="example")
+        receipt = {**SUCCESS, "modelUsage": {"claude-example": {
+            "inputTokens": 7, "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0, "outputTokens": 3,
+            "costUSD": 0.04, "provider": "firstParty"}}}
+        capture_stream(stream(INIT, receipt), status, source="different-alias", project="example",
+                       clock=lambda: "2026-11-03T09:00:00.000Z", result_output=result)
+        checked = check_selection(self.manifest)
+        self.assertFalse(checked["all_readable"])
+        self.assertEqual([row["state"] for row in checked["checks"]], ["invalid", "readable"])
+        self.assertNotIn(str(self.root), json.dumps(checked))
     def test_add_creates_a_private_new_manifest_without_reading_or_replacing_sources(self):
         self.file.write_text("private malformed content\n")
         self.create()

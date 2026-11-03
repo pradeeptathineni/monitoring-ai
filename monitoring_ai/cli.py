@@ -117,6 +117,12 @@ def parser():
     add.add_argument("--id", required=True)
     add.add_argument("--format", choices=["normalized", "claude", "codex", "claude-results", "otlp-jsonl"], default="normalized")
     add.add_argument("--project", help="Required project alias for native inputs")
+    selected_stream = actions.add_parser("select-claude-stream", help="Create a private selection for one Claude CLI status and result capture")
+    selected_stream.add_argument("--output", type=Path, required=True, help="New private source manifest; existing files refuse")
+    selected_stream.add_argument("--status-file", type=Path, required=True, help="Normalized status output of capture-claude-stream")
+    selected_stream.add_argument("--result-file", type=Path, required=True, help="Sanitized result output of the same capture")
+    selected_stream.add_argument("--source-id", required=True, help="Must match capture-claude-stream --source-id")
+    selected_stream.add_argument("--project", required=True, help="Must match capture-claude-stream --project")
     capture = actions.add_parser("capture-claude", help="Extract metadata from one selected completed Claude CLI JSON result")
     capture.add_argument("--file", type=Path, required=True)
     capture.add_argument("--captured-at", required=True, help="Original receipt time, with timezone. Never inferred from a reread")
@@ -244,7 +250,7 @@ def run(args):
         run_setup(args.output, args.from_selection)
         return
     if args.command == "sources":
-        from .source_setup import add_selection, create_selection, check_selection
+        from .source_setup import add_selection, create_selection, check_selection, select_claude_stream
         from .sources import SourceManifestError
         try:
             if args.source_action == "inspect-cache":
@@ -280,6 +286,12 @@ def run(args):
                 add_selection(args.sources, args.output, file=args.file, id=args.id,
                               format=args.format, project=args.project)
                 print("Created a new private source selection. The prior manifest is unchanged. Run sources check or preview, then restart serve with the new manifest.")
+                return
+            if args.source_action == "select-claude-stream":
+                select_claude_stream(args.output, status_file=args.status_file,
+                                     result_file=args.result_file, source_id=args.source_id,
+                                     project=args.project)
+                print("Created a private Claude status/result selection. Run sources check after capture. A quota file, if supplied, is selected separately with --quota-file.")
                 return
             if args.source_action == "preview":
                 from .source_readiness import preview_selection
