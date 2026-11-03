@@ -34,7 +34,8 @@ def day(date="2026-11-02", **extra):
         "outputTokens": 20,
         "cacheReadTokens": 30,
         "cacheWriteTokens": 40,
-        "models": {"private-model": {"cost": 1}},
+        "models": {"/private/model": {"calls": 3, "cost": 1, "inputTokens": 10,
+            "outputTokens": 20, "cacheReadTokens": 30, "cacheWriteTokens": 40}},
         "projects": {"/private/path": {"cost": 1}},
     }
     value.update(extra)
@@ -67,12 +68,14 @@ class CodeBurnCacheTests(unittest.TestCase):
         self.assertTrue(result["watermark_trusted"])
         self.assertEqual(result["last_computed_date"], "2026-11-02")
         self.assertEqual([entry["date"] for entry in result["days"]], ["2026-11-01", "2026-11-02"])
-        self.assertEqual(result["days"][1], {
+        self.assertEqual({key: value for key, value in result["days"][1].items() if key != "breakdowns"}, {
             "date": "2026-11-02", "source_cost_usd": "1.25", "calls": 3, "sessions": 2,
             "tokens": {"input": 10, "output": 20, "cache_read": 30, "cache_write": 40}, "carried": True,
         })
         self.assertNotIn("savings", json.dumps(result))
-        self.assertNotIn("private-model", json.dumps(result))
+        self.assertNotIn("/private/model", json.dumps(result))
+        self.assertTrue(result["days"][1]["breakdowns"]["models"][0]["id"].startswith("opaque-"))
+        self.assertIsNone(result["days"][1]["breakdowns"]["providers"])
         self.assertNotIn("/private/path", json.dumps(result))
         self.assertLessEqual(result["file_age_seconds"], 1)
         self.assertTrue(result["file_modified_at"].endswith("Z"))
@@ -137,6 +140,12 @@ class CodeBurnCacheTests(unittest.TestCase):
         self.assertLess(result["file_age_seconds"], 0)
         for key in ("sampled_at", "file_modified_at"):
             self.assertTrue(result[key].endswith("Z"))
+
+    def test_breakdown_output_is_bounded_across_the_whole_cache(self):
+        self.write(cache([day("2026-11-01"), day("2026-11-02")]))
+        with patch("monitoring_ai.codeburn_cache.MAX_BREAKDOWN_ROWS", 1):
+            with self.assertRaises(ValueError):
+                read_codeburn_cache(self.path)
 
 
 if __name__ == "__main__":

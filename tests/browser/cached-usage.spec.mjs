@@ -108,6 +108,7 @@ test("an empty CodeBurn cache does not imply provider idleness", async ({ page }
     },
   }));
   await page.goto("/#usage");
+  await expect(page.locator("#codeburn-cache-status")).toContainText("Selected CodeBurn cache is readable");
   await expect(page.locator("#codeburn-cache-table")).toContainText("No cached daily rows are available");
   await expect(page.locator("#codeburn-cache-table")).toContainText("does not establish provider idleness");
 });
@@ -135,4 +136,72 @@ test("retained cache file age advances across repeated unavailable-read snapshot
   await page.clock.runFor(70_000);
   await expect.poll(() => reads).toBeGreaterThan(1);
   await expect(page.locator("#codeburn-cache-status")).toContainText("2m since file modification");
+});
+
+test("provider and model marginal rollups keep unknown and empty maps distinct", async ({ page }) => {
+  const response = await page.request.get("/api/v1/snapshot");
+  const snapshot = await response.json();
+  const totals = (date, providers, models) => ({
+    date, source_cost_usd: "2.00", calls: 4, sessions: 2,
+    tokens: { input: 20, output: 8, cache_read: 3, cache_write: 1 }, carried: false,
+    breakdowns: { providers, models },
+  });
+  const row = (id, calls, cost, sessions, tokens) => ({ id, calls, source_cost_usd: cost, sessions, tokens });
+  const days = [
+    totals("2026-10-20", [row("provider-a", 4, "1.25", null, { input: 12, output: 4, cache_read: 2, cache_write: 1 })], [row("model-a", 4, "1.25", null, { input: 12, output: 4, cache_read: 2, cache_write: 1 })]),
+    totals("2026-10-19", null, []),
+    totals("2026-10-18", [], [row("model-b", 1, "0.75", 1, { input: 8, output: 4, cache_read: 1, cache_write: 0 })]),
+  ];
+  await page.route("**/api/v1/snapshot?**", async (route) => route.fulfill({ json: {
+    ...snapshot,
+    cached_usage_status: { state: "unavailable", last_success_at: "2026-10-20T08:00:00Z", error: "not rendered" },
+    cached_usage: {
+      schema: "monitoring.cached-usage.v1", source: "codeburn-daily-cache", format_version: 74,
+      sampled_at: "2026-10-20T08:00:00Z", file_modified_at: "2026-10-20T07:59:00Z", file_age_seconds: 60,
+      date_basis: "codeburn-local-calendar", complete: false, watermark_trusted: null,
+      last_computed_date: "2026-10-19", days, retained: true,
+    },
+  } }));
+  await page.goto("/#usage");
+  const panel = page.locator("#codeburn-cache-panel");
+  const rows = panel.locator("#codeburn-cache-table tbody tr");
+  await expect(panel).toContainText("Selected CodeBurn cache is unavailable");
+  await expect(panel).toContainText("prior cached snapshot");
+
+  await page.selectOption("#codeburn-cache-view", "providers");
+  await expect(panel).toContainText("Provider breakdown maps represented for 2 of 3 selected cached days");
+  await expect(panel).toContainText("1 empty maps · 1 unknown or unavailable maps");
+  await expect(panel).toContainText("does not cross-filter the other dimension");
+  await expect(rows).toHaveCount(2);
+  await expect(panel.locator("#codeburn-cache-table")).toContainText("Unknown provider breakdown");
+  await expect(rows.nth(0).locator("td").nth(1)).toContainText("provider-a");
+  await expect(rows.nth(0).locator("td").nth(7)).toContainText("Unknown");
+  await expect(panel.locator("#codeburn-cache-table thead")).not.toContainText("Total tokens");
+
+  await page.selectOption("#codeburn-provider-filter", "provider-a");
+  await expect(rows).toHaveCount(1);
+  await expect(panel.locator("#codeburn-cache-table")).toContainText("provider-a");
+  await expect(panel.locator("#codeburn-cache-table")).not.toContainText("model-a");
+
+  await page.selectOption("#codeburn-cache-view", "models");
+  await expect(rows).toHaveCount(2);
+  await expect(panel.locator("#codeburn-cache-table")).toContainText("model-a");
+  await expect(panel.locator("#codeburn-cache-table")).toContainText("model-b");
+  await expect(panel.locator("#codeburn-cache-table thead")).not.toContainText("Provider");
+  await page.selectOption("#codeburn-model-filter", "model-a");
+  await expect(rows).toHaveCount(1);
+  await expect(panel.locator("#codeburn-cache-table")).not.toContainText("provider-a");
+  await expect(rows.first().locator("td").nth(7)).toContainText("Unknown");
+
+  await page.selectOption("#codeburn-cache-range", "date");
+  await page.locator("#codeburn-cache-date").fill("2026-10-19");
+  await page.locator("#codeburn-cache-date").dispatchEvent("change");
+  await page.selectOption("#codeburn-cache-view", "providers");
+  await expect(panel).toContainText("Provider breakdown maps represented for 0 of 1 selected cached days");
+  await expect(panel).toContainText("unknown or unavailable maps");
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first().locator("td").nth(1)).toContainText("Unknown provider breakdown");
+  for (const cell of await rows.first().locator("td").all().then((cells) => cells.slice(2))) {
+    await expect(cell).toHaveText("Unknown");
+  }
 });

@@ -282,7 +282,7 @@
         "langfuse/langfuse",
         "Helicone/helicone"
       ],
-      "decision": "Implemented detailed UTC period reports and qualified comparisons, project/model/day breakdowns, timed-record statistics and categorized tool activity. Unsupported workflow quality remains unavailable. Richer charts and configurable views remain planned. An explicitly selected CodeBurn v74 daily cache supplies separate replaceable local-calendar aggregates, with source-reported USD of unknown billing basis and independent read/file ages. No sessions or ledger events are invented.",
+      "decision": "Implemented detailed UTC period reports and qualified comparisons, project/model/day breakdowns, timed-record statistics and categorized tool activity. Unsupported workflow quality remains unavailable. Richer charts and configurable views remain planned. An explicitly selected CodeBurn v74 daily cache supplies separate replaceable local-calendar aggregates, with source-reported USD of unknown billing basis and independent read/file ages. No sessions or ledger events are invented. Separate daily provider/model views preserve absent attribution and legacy unknown counters without cross-filtering marginals or summing across days.",
       "evidence": [
         "monitoring_ai/metrics.py",
         "tests/test_monitoring.py",
@@ -294,7 +294,9 @@
         "monitoring_ai/codeburn_cache.py",
         "docs/codeburn-cache.md",
         "tests/test_cached_usage_observation.py",
-        "tests/browser/cached-usage.spec.mjs"
+        "tests/browser/cached-usage.spec.mjs",
+        "monitoring_ai/codeburn_breakdowns.py",
+        "tests/test_codeburn_breakdowns.py"
       ]
     },
     {

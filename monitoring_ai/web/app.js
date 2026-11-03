@@ -19,7 +19,8 @@ let collapsedHierarchyKeys = new Set();
 let lastSuccess = 0;
 let snapshotReadUnavailable = false;
 let reportController = null, reportRequestId = 0, reportData = null;
-let cachedRange = "all", cachedExactDate = "";
+let cachedRange = "all", cachedExactDate = "", cachedView = "daily";
+let cachedDimensionFilters = { providers: "", models: "" };
 let cachedUsageReceivedAt = 0, cachedFileAgeAtReceipt = null;
 let cachedUsageIdentity = null, cachedUsageSampledAt = null, cachedUsageFileModifiedAt = null;
 
@@ -1070,8 +1071,9 @@ function renderCodeburnCache() {
   panel.hidden = !book && !readStatus;
   if (panel.hidden) return;
   status.replaceChildren(); target.replaceChildren();
+  $("#codeburn-cache-breakdown-controls").hidden = !book;
   const state = readStatus?.state || "unknown";
-  const labels = { following: "Selected CodeBurn cache read is following", unavailable: "Selected CodeBurn cache is unavailable", unread: "Selected CodeBurn cache has not been read yet" };
+  const labels = { following: "Selected CodeBurn cache is readable", unavailable: "Selected CodeBurn cache is unavailable", unread: "Selected CodeBurn cache has not been read yet" };
   status.append(node("p", labels[state] || "CodeBurn cache read status is unknown.", state === "unavailable" ? "codeburn-cache-read unavailable" : "codeburn-cache-read"));
   if (!book) {
     status.append(node("p", state === "unavailable"
@@ -1099,6 +1101,12 @@ function renderCodeburnCache() {
   else if (book.watermark_trusted === null || book.watermark_trusted === undefined) status.append(node("p", "Cache watermark trust is unknown.", "confidence-note"));
   if (book.last_computed_date) status.append(node("p", `Last computed date ${book.last_computed_date} · source cache marker, not a live activity time.`, "confidence-note"));
 
+  const viewSelect = $("#codeburn-cache-view");
+  viewSelect.value = cachedView;
+  const dimension = cachedView === "providers" ? "providers" : cachedView === "models" ? "models" : null;
+  $("#codeburn-provider-filter-wrap").hidden = dimension !== "providers";
+  $("#codeburn-model-filter-wrap").hidden = dimension !== "models";
+
   const allDays = Array.isArray(book.days) ? [...book.days].filter((day) => /^\d{4}-\d{2}-\d{2}$/.test(day?.date || "")).sort((a, b) => b.date.localeCompare(a.date)) : [];
   const range = $("#codeburn-cache-range"), dateWrap = $("#codeburn-cache-date-wrap"), date = $("#codeburn-cache-date");
   range.value = cachedRange;
@@ -1112,13 +1120,59 @@ function renderCodeburnCache() {
     return;
   }
   const buckets = ["input", "output", "cache_read", "cache_write"];
-  table("#codeburn-cache-table", ["Date · CodeBurn local calendar", ...buckets.map((key) => bucketNames[key]), "Calls", "Sessions", "Source-reported USD"], days.map((day) => {
+  const makeDateCell = (day) => {
     const dateCell = node("span", day.date);
     if (day.carried === true) dateCell.append(node("small", "Carried summary", "codeburn-carried"));
-    const tokens = day.tokens || {};
-    const bucketValues = buckets.map((key) => cachedCount(tokens[key]));
-    return [dateCell, ...bucketValues, cachedCount(day.calls), cachedCount(day.sessions), cachedUsd(day.source_cost_usd)];
-  }));
+    return dateCell;
+  };
+  const columns = ["Date · CodeBurn local calendar", ...buckets.map((key) => bucketNames[key]), "Calls", "Sessions", "Source-reported USD"];
+  if (cachedView === "daily") {
+    table("#codeburn-cache-table", columns, days.map((day) => {
+      const tokens = day.tokens || {};
+      return [makeDateCell(day), ...buckets.map((key) => cachedCount(tokens[key])), cachedCount(day.calls), cachedCount(day.sessions), cachedUsd(day.source_cost_usd)];
+    }));
+    return;
+  }
+
+  const noun = dimension === "providers" ? "provider" : "model";
+  const filterSelect = dimension === "providers" ? $("#codeburn-provider-filter") : $("#codeburn-model-filter");
+  const represented = days.map((day) => day.breakdowns?.[dimension]);
+  const mapped = represented.filter(Array.isArray);
+  const emptyMaps = mapped.filter((items) => items.length === 0).length;
+  const unknownMaps = days.length - mapped.length;
+  const aliases = [...new Set(mapped.flatMap((items) => items
+    .map((item) => item?.id)
+    .filter((id) => typeof id === "string" && id.length > 0)))].sort((a, b) => a.localeCompare(b));
+  filterSelect.replaceChildren(node("option", `All ${noun}s`));
+  filterSelect.options[0].value = "";
+  for (const alias of aliases) {
+    const option = node("option", alias);
+    option.value = alias;
+    filterSelect.append(option);
+  }
+  if (!aliases.includes(cachedDimensionFilters[dimension])) cachedDimensionFilters[dimension] = "";
+  filterSelect.value = cachedDimensionFilters[dimension];
+  status.append(node("p", `${noun[0].toUpperCase()}${noun.slice(1)} breakdown maps represented for ${number.format(mapped.length)} of ${number.format(days.length)} selected cached days · ${number.format(emptyMaps)} empty maps · ${number.format(unknownMaps)} unknown or unavailable maps. Empty arrays mean no rows are represented; they do not establish completeness or zero usage. This view is a marginal ${noun} rollup; it does not cross-filter the other dimension or intersect Monitoring event filters.`, "codeburn-cache-meta"));
+  const selectedAlias = cachedDimensionFilters[dimension];
+  const rows = [];
+  for (const day of days) {
+    const entries = day.breakdowns?.[dimension];
+    if (!Array.isArray(entries)) {
+      if (!selectedAlias) rows.push([makeDateCell(day), `Unknown ${noun} breakdown`, "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown", "Unknown"]);
+      continue;
+    }
+    for (const item of entries) {
+      const id = typeof item?.id === "string" && item.id.length ? item.id : `Unknown ${noun} identifier`;
+      if (selectedAlias && id !== selectedAlias) continue;
+      const tokens = item?.tokens || {};
+      rows.push([makeDateCell(day), id, ...buckets.map((key) => cachedCount(tokens[key])), cachedCount(item?.calls), cachedCount(item?.sessions), cachedUsd(item?.source_cost_usd)]);
+    }
+  }
+  if (!rows.length) {
+    target.append(node("p", "No breakdown rows are represented for this selection. This does not establish zero activity.", "empty"));
+    return;
+  }
+  table("#codeburn-cache-table", [columns[0], noun[0].toUpperCase() + noun.slice(1), ...columns.slice(1)], rows);
 }
 
 function retainInsights(reason) {
@@ -1230,6 +1284,18 @@ $("#codeburn-cache-range").addEventListener("change", () => {
 });
 $("#codeburn-cache-date").addEventListener("change", () => {
   cachedExactDate = $("#codeburn-cache-date").value;
+  if (data) renderCodeburnCache();
+});
+$("#codeburn-cache-view").addEventListener("change", () => {
+  cachedView = $("#codeburn-cache-view").value;
+  if (data) renderCodeburnCache();
+});
+$("#codeburn-provider-filter").addEventListener("change", () => {
+  cachedDimensionFilters.providers = $("#codeburn-provider-filter").value;
+  if (data) renderCodeburnCache();
+});
+$("#codeburn-model-filter").addEventListener("change", () => {
+  cachedDimensionFilters.models = $("#codeburn-model-filter").value;
   if (data) renderCodeburnCache();
 });
 $("#pause").addEventListener("click", () => {

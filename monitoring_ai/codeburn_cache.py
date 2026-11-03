@@ -6,9 +6,11 @@ import os
 import stat
 
 from .events import amount
+from .codeburn_breakdowns import project_breakdowns
 
 MAX_BYTES = 32 * 1024 * 1024
 MAX_DAYS = 3650
+MAX_BREAKDOWN_ROWS = 2048
 FORMAT_VERSION = 74
 READ_ERROR = "CodeBurn daily cache could not be read or validated"
 
@@ -93,6 +95,7 @@ def read_codeburn_cache(path):
         last_computed = _calendar_date(raw.get("lastComputedDate"), nullable=True)
 
         days = []
+        breakdown_rows = 0
         seen_dates = set()
         for item in days_raw:
             if not isinstance(item, dict):
@@ -110,6 +113,10 @@ def read_codeburn_cache(path):
                 "cache_read": _count(item.get("cacheReadTokens")),
                 "cache_write": _count(item.get("cacheWriteTokens")),
             }
+            breakdowns = project_breakdowns(item)
+            breakdown_rows += sum(len(rows) for rows in breakdowns.values() if rows is not None)
+            if breakdown_rows > MAX_BREAKDOWN_ROWS:
+                raise ValueError(READ_ERROR)
             days.append({
                 "date": day,
                 "source_cost_usd": _cost(item.get("cost")),
@@ -117,6 +124,7 @@ def read_codeburn_cache(path):
                 "sessions": _count(item.get("sessions")),
                 "tokens": tokens,
                 "carried": carried,
+                "breakdowns": breakdowns,
             })
         days.sort(key=lambda entry: entry["date"])
 
