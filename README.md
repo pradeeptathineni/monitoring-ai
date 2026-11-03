@@ -57,6 +57,8 @@ An existing CodeBurn 0.9.27 menubar status file can be selected through the [opt
 
 For completed headless Claude results, use the [explicit capture and check workflow](docs/claude-results.md). It imports cumulative model-level summaries with declared receipt times and estimated costs. It does not infer live worker states or individual call chronology.
 
+For an existing authorized Maestro campaign, [receive its passive event export](docs/maestro-passive-export.md) as a selected normalized JSONL input. The fixture-tested receiving path retains Maestro's original event timestamps and source identity. No actual Maestro run feed was available for qualification here; this is not a live-worker claim or a runtime dependency on Maestro.
+
 Prefer metadata-only [normalized events](docs/contract.md). You can import once or follow an explicitly selected append-only JSONL file:
 
 ```sh
