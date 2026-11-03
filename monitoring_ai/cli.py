@@ -43,6 +43,7 @@ def parser():
             command.add_argument("--source-id", help="Stable alias for this native input, reused across replay")
             command.add_argument("--project", help="Public-safe project alias for native input")
         if name in ("serve", "top"):
+            command.add_argument("--app-threads", type=Path, help="Explicit metadata-only app task inventory export")
             command.add_argument("--token-threshold", type=int,
                                  help="Optional observed-token threshold for the current UTC day; not provider quota")
             command.add_argument("--estimated-cost-threshold",
@@ -117,6 +118,10 @@ def parser():
     setup.add_argument("--db", type=Path, help="Preview selected inputs against this existing ledger before suggesting a restart")
     sources = sub.add_parser("sources", help="Select explicit inputs and check their supplied evidence")
     actions = sources.add_subparsers(dest="source_action", required=True)
+    app_capture = actions.add_parser("capture-app-threads", help="Capture only selected app inventory metadata from stdin")
+    app_capture.add_argument("--output", type=Path, required=True)
+    app_capture.add_argument("--captured-at", required=True, help="Original supported inventory observation time")
+    app_capture.add_argument("--replace", action="store_true", help="Refresh an existing owned 0600 inventory export")
     create = actions.add_parser("create", help="Create one private selection without overwriting a file")
     create.add_argument("--output", type=Path, required=True)
     create.add_argument("--file", type=Path, required=True)
@@ -191,6 +196,12 @@ def terminal(value):
             lines.append(f"  {row['id']} ({row['format']}): {row['read_state']} · {count} records · {evidence}{retained}")
         if len(rows) > 8:
             lines.append(f"  {len(rows) - 8} more selected inputs; inspect --json for all read states.")
+    app = value.get("app_threads")
+    if app:
+        lines.append(f"App task inventory: {app.get('freshness', 'unknown')} capture · recent page only; app status is not worker lifecycle.")
+        for row in app.get("threads", []):
+            status = row["status"] if app.get("freshness") == "recent" and app.get("read_state") == "following" else f"previously {row['status']}; current unknown"
+            lines.append(f"  {row['alias']} · {row['kind']} · app status {status} · updated {row['updated_at']}")
     processes = value.get("os_processes")
     if processes:
         if processes["state"] != "following":
@@ -363,6 +374,10 @@ def run(args):
         run_setup(args.output, args.from_selection, args.db)
         return
     if args.command == "sources":
+        if args.source_action == "capture-app-threads":
+            from .app_threads import capture_app_threads
+            print(json.dumps(capture_app_threads(sys.stdin.buffer, args.output, args.captured_at, replace=args.replace)))
+            return
         from .source_setup import add_selection, create_selection, check_selection, select_claude_stream
         from .sources import SourceManifestError
         try:
@@ -539,8 +554,10 @@ def run(args):
                 raise ValueError("OS process sampling currently supports macOS")
             from .process_observer import ProcessObserver
             process_observer = ProcessObserver(interval_seconds=args.process_interval if args.process_interval is not None else 5)
+        from .app_threads import read_app_threads
         serve(Observatory(store, pricing, fx, loader, quota_loader=quota_loader(args),
                           source_observer=observer,
+                          app_threads_loader=(lambda: read_app_threads(args.app_threads)) if args.app_threads else None,
                           cached_usage_loader=cache_loader,
                           codeburn_activity_loader=activity_loader,
                           session_cache_loader=session_cache_loader,
@@ -586,6 +603,9 @@ def run(args):
                 last_quota_read = time.monotonic()
             revision, rows = store.read()
             value = snapshot(revision, rows, query, pricing, fx, quota_book=book)
+            if args.app_threads:
+                from .app_threads import read_app_threads
+                value["app_threads"] = dict(read_app_threads(args.app_threads), read_state="following")
             if source_observer is not None:
                 value["inputs"] = inputs
                 value["source_coverage"] = source_observer.coverage(now=value["observed_at"])

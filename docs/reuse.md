@@ -118,3 +118,5 @@ The local v0.8.40 guided preview reuses Monitoring's own disposable source-readi
 The local v0.8.41 browser and terminal change lists are original code over Monitoring's existing read-only snapshot and normalized event schema. It imports no upstream code or runtime package.
 
 The local session comparison is original browser code over Monitoring's existing report API. It reuses owned report aggregation and formatting without adding a runtime dependency or copying an upstream implementation.
+
+App task observations are original schema/capture/view code using an explicitly supplied projection of the supported app task inventory. Existing private JSON publication helpers are reused. No upstream product, credential reader or native session-directory implementation is imported.

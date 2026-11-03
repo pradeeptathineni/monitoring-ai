@@ -1552,6 +1552,17 @@ function renderProcessSourceCoverage(root, sample, current) {
   }
 }
 
+function renderAppThreads() {
+  const book = data?.app_threads, panel = $("#app-threads-panel");
+  panel.hidden = !book;
+  if (!book) return;
+  const age = (Date.now() - Date.parse(book.captured_at)) / 1000;
+  const recent = Number.isFinite(age) && age >= -5 && age <= 30 && !paused && !snapshotReadUnavailable && book.read_state === "following";
+  $("#app-thread-status").textContent = `Capture ${book.captured_at || "unavailable"} · ${recent ? "recent app inventory" : "current app status unknown; capture stale, unreadable or refresh paused"}. ${(book.threads || []).length} reported task rows; source coverage is incomplete.`;
+  table("#app-thread-table", ["Task alias", "App kind", "Reported app status", "Thread updated · UTC", "Host class"],
+    (book.threads || []).map((row) => [row.alias, row.kind, recent ? row.status : `Previously ${row.status} · current unknown`, row.updated_at, row.host]));
+}
+
 function renderOsProcesses() {
   const panel = $("#os-process-panel"), status = $("#os-process-status"), target = $("#os-process-table");
   const sample = data?.os_processes?.schema === "monitoring.os-processes.v1" ? data.os_processes : null;
@@ -1798,6 +1809,7 @@ function render() {
   renderOsProcesses();
   renderCodeburnActivity();
   renderUsage(); renderEvents();
+  renderAppThreads();
   renderSessionComparison();
   const info = $("#currency-info"); info.replaceChildren();
   info.append(node("p", `Display currency: ${data.currency}. ${data.fx ? `USD-based conversion as of ${data.fx.as_of}, provenance ${data.fx.provenance}. This is a display conversion, not an invoice exchange rate.` : "No conversion rates supplied. Amounts in other currencies stay unconverted."}`));
@@ -1990,6 +2002,7 @@ showView(location.hash.slice(1) || "overview");
 refresh();
 setInterval(() => {
   if (data) updateLifecycleEvidenceAges();
+  if (data) renderAppThreads();
   if (paused && data) {
     retainInsights("Dashboard refresh is paused. Showing previously recorded quota observations.");
     renderInsights();

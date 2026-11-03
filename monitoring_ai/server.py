@@ -22,7 +22,7 @@ WEB = Path(__file__).with_name("web")
 class Observatory:
     def __init__(self, store, pricing, fx, loader=None, quota_loader=None, quota_book=None, source_observer=None,
                  cached_usage_loader=None, codeburn_activity_loader=None, session_cache_loader=None, process_observer=None,
-                 token_threshold=None, cost_thresholds=None):
+                 token_threshold=None, cost_thresholds=None, app_threads_loader=None):
         if loader is not None and source_observer is not None:
             raise ValueError("Choose one input configuration")
         self.store, self.pricing, self.fx, self.loader = store, pricing, fx, loader
@@ -43,6 +43,9 @@ class Observatory:
         self.session_cache = None
         self.session_cache_status = dict(state="unread", last_success_at=None, error=None)
         self.process_observer = process_observer
+        self.app_threads_loader = app_threads_loader
+        self.app_threads = None
+        self.app_threads_error = False
         if token_threshold is not None:
             from .token_threshold import validate_limit
             validate_limit(token_threshold)
@@ -52,6 +55,23 @@ class Observatory:
             self.cost_thresholds = validate_limits(cost_thresholds)
         else:
             self.cost_thresholds = None
+
+    def _include_app_threads(self, value):
+        if self.app_threads_loader is None:
+            return
+        try:
+            self.app_threads = self.app_threads_loader()
+            self.app_threads_error = False
+        except (OSError, ValueError, TypeError):
+            self.app_threads_error = True
+        if self.app_threads is not None:
+            from .metrics import seconds
+            age = seconds(value["observed_at"]) - seconds(self.app_threads["captured_at"])
+            value["app_threads"] = dict(self.app_threads, age_seconds=age,
+                freshness="future" if age < -5 else "recent" if age <= 30 else "stale",
+                read_state="unavailable" if self.app_threads_error else "following")
+        else:
+            value["app_threads"] = {"schema": "monitoring.app-threads.v1", "read_state": "unavailable", "threads": []}
 
     def refresh_codeburn_activity(self):
         if self.codeburn_activity_loader is None:
@@ -209,6 +229,7 @@ class Observatory:
             inputs = self.input_status()
             revision, events = self.store.read()
             value = snapshot(revision, events, query, self.pricing, self.fx, quota_book=self.quota_book)
+            self._include_app_threads(value)
             if self.token_threshold is not None:
                 from .token_threshold import evaluate_token_threshold
                 value["token_threshold"] = evaluate_token_threshold(events, limit=self.token_threshold,
@@ -306,6 +327,8 @@ def handler(observatory):
                         session_filters=["provider", "model", "surface", "project", "source", "session", "since", "until"],
                         limits={"read_events": 100000, "snapshot_entities": 500, "event_page": 500},
                     )
+                    if observatory.app_threads_loader is not None:
+                        capabilities["app_threads"] = "monitoring.app-threads.v1"
                     if observatory.process_observer is not None:
                         capabilities["os_processes"] = "monitoring.os-processes.v1"
                     if observatory.session_cache_loader is not None:
