@@ -1,6 +1,6 @@
 # Versions and release readiness
 
-Public versions use `vX.Y.Z`. Python package metadata and the read API use `X.Y.Z`, without the display prefix. The current checked version is `v0.8.15`. Its maturity is **Experimental alpha**. The number is not a fraction of the work completed.
+Public versions use `vX.Y.Z`. Python package metadata and the read API use `X.Y.Z`, without the display prefix. The current checked version is `v0.8.16`. Its maturity is **Experimental alpha**. The number is not a fraction of the work completed.
 
 Earlier source declarations such as `0.8.0a1` remain in published history. They have not been renamed or retagged. No Git tags existed when this policy was reconciled on 2026-11-03. Minor numbers will not advance for each development checkpoint. Version selection follows the scope of an accepted change, with compatibility and maturity stated separately.
 

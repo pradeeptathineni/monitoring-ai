@@ -25,9 +25,11 @@ test("Settings owns appearance and source setup while analytics stay in their vi
   await expect(page.locator("#coverage-setup")).toBeVisible();
   if (!(await page.locator("#coverage-setup").evaluate((element) => element.open))) await page.locator("#coverage-setup summary").click();
   await expect(page.locator("#coverage-setup")).toContainText("sources create");
+  await expect(page.locator("#coverage-setup")).toContainText("sources add");
   await expect(page.locator("#coverage-setup")).toContainText("sources check");
   await expect(page.locator("#coverage-setup")).toContainText("serve --sources");
   await expect(page.locator("#coverage-setup")).toContainText("never scans for files");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
 
   await page.selectOption("#appearance-preset", "forest-light");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "forest-light");

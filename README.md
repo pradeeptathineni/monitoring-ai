@@ -4,7 +4,7 @@ Local monitoring for AI sessions, agents, workers, tokens and costs. Use it in y
 
 **Experimental alpha.** It observes explicitly supplied sources. Personal source compatibility, additional collectors and full-vision acceptance remain incomplete. [Version policy and v1.0.0 requirements](docs/release-readiness.md) keep maturity separate from version numbers.
 
-Current checked version: **v0.8.15**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
+Current checked version: **v0.8.16**. The example image below uses fictional data from the earlier `0.8.0a1` checkpoint.
 
 ![Monitoring AI dashboard with fictional sessions and costs](docs/observatory.png)
 
@@ -86,11 +86,14 @@ Create a first selection without hand-writing JSON. Use a new output path in an 
 ```sh
 python3 -m monitoring_ai sources create --output /path/to/private-sources.json \
   --file /absolute/path/to/authorized-events.jsonl --id my-export --format normalized
-python3 -m monitoring_ai sources check --sources /path/to/private-sources.json
-python3 -m monitoring_ai serve --sources /path/to/private-sources.json --db /tmp/my-observatory.sqlite
+python3 -m monitoring_ai sources add --sources /path/to/private-sources.json \
+  --output /path/to/new-private-sources.json --file /absolute/path/to/authorized-session.jsonl \
+  --id my-claude --format claude --project my-app
+python3 -m monitoring_ai sources check --sources /path/to/new-private-sources.json
+python3 -m monitoring_ai serve --sources /path/to/new-private-sources.json --db /tmp/my-observatory.sqlite
 ```
 
-For a native export, select `--format claude` or `--format codex` and add `--project my-app`. Creation validates the selection without reading source content, writes the manifest with private file permissions and refuses existing outputs, including symlinks. It never scans for files. A missing selected file can be configured, then becomes readable when that exact path exists.
+For a native export, select `--format claude` or `--format codex` and add `--project my-app`. `sources add` makes a new manifest with one more explicitly named file; it leaves the previous manifest untouched. Both create and add validate file metadata without reading source content, write private file permissions and refuse existing outputs, including symlinks. Neither scans for files. A missing selected file can be configured, then becomes readable when that exact path exists. After adding an input, restart `serve` with the new manifest; a running owner retains its original selection.
 
 `sources check` reads only those selected inputs and reports parsing, observed record kinds and adapter limitations. Use `sources check --sources /path/to/private-sources.json --json` for path-free machine output. A failed input returns exit code 1 after reporting the other inputs. Invalid selection or creation returns 2. The check creates no ledger, imports no history and makes no provider request. It does not prove that a later import will reconcile existing event conflicts or overlapping collectors.
 

@@ -7,7 +7,7 @@ import sys
 import tempfile
 import unittest
 
-from monitoring_ai.source_setup import create_selection, check_selection
+from monitoring_ai.source_setup import add_selection, create_selection, check_selection
 from test_multi_sources import event
 
 
@@ -94,6 +94,49 @@ class SourceSetupTests(unittest.TestCase):
         self.assertIn("No lifecycle events supplied", ready.stdout)
         self.assertNotIn(str(self.root), ready.stdout)
         self.assertFalse((self.root / ".monitoring-ai").exists())
+
+    def test_add_creates_a_private_new_manifest_without_reading_or_replacing_sources(self):
+        self.file.write_text("private malformed content\n")
+        self.create()
+        before = self.manifest.read_bytes()
+        second = self.root / "second.jsonl"
+        second.write_text("another private malformed source\n")
+        output = self.root / "two-sources.json"
+        entries = add_selection(self.manifest, output, file=second, id="second", format="claude", project="project")
+        self.assertEqual([row.id for row in entries], ["selected-input", "second"])
+        self.assertEqual(stat.S_IMODE(output.stat().st_mode), 0o600)
+        self.assertEqual(self.manifest.read_bytes(), before)
+        self.assertFalse(check_selection(output)["all_readable"])
+        retained = output.read_bytes()
+        with self.assertRaises(FileExistsError):
+            add_selection(self.manifest, output, file=second, id="different")
+        self.assertEqual(output.read_bytes(), retained)
+        with self.assertRaises(ValueError):
+            add_selection(self.manifest, self.root / "duplicate.json", file=self.file, id="other")
+        with self.assertRaises(ValueError):
+            add_selection(self.manifest, self.root / "duplicate.json", file=second, id="selected-input")
+        self.assertFalse((self.root / "duplicate.json").exists())
+
+    def test_cli_add_then_check_uses_only_explicit_files(self):
+        self.file.write_text(json.dumps(event("first")) + "\n")
+        second = self.root / "second.jsonl"
+        second.write_text(json.dumps(event("second")) + "\n")
+        self.create()
+        output = self.root / "two-sources.json"
+        project = str(Path(__file__).resolve().parents[1])
+        environment = dict(os.environ, PYTHONPATH=project)
+        def invoke(*args):
+            return subprocess.run([sys.executable, "-m", "monitoring_ai", "sources", *args],
+                                  cwd=self.root, env=environment, capture_output=True, text=True, timeout=5)
+        added = invoke("add", "--sources", str(self.manifest), "--output", str(output),
+                       "--file", str(second), "--id", "second")
+        self.assertEqual(added.returncode, 0)
+        self.assertNotIn(str(self.root), added.stdout)
+        checked = invoke("check", "--sources", str(output), "--json")
+        self.assertEqual(checked.returncode, 0)
+        self.assertEqual([row["id"] for row in json.loads(checked.stdout)["checks"]],
+                         ["selected-input", "second"])
+        self.assertEqual(len(json.loads(self.manifest.read_text())["sources"]), 1)
 
 
 if __name__ == "__main__":

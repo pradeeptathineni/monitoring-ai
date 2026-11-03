@@ -12,15 +12,32 @@ from .source_coverage import source_summary
 
 def create_selection(output, *, file, id, format="normalized", project=None):
     """Write one validated selection privately and refuse any existing target."""
-    selected = Path(output).absolute()
-    target = selected.parent.resolve(strict=True) / selected.name
+    return _write_selection(output, [_entry(file=file, id=id, format=format, project=project)])
+
+
+def add_selection(sources, output, *, file, id, format="normalized", project=None):
+    """Create a new private manifest with one additional explicit source."""
+    existing = load_sources(sources)  # Closed schema and file metadata only.
+    entries = [_entry(file=source.path, id=source.id, format=source.format, project=source.project)
+               for source in existing]
+    entries.append(_entry(file=file, id=id, format=format, project=project))
+    return _write_selection(output, entries)
+
+
+def _entry(*, file, id, format, project):
     entry = dict(id=id, format=format, path=str(file))
     if project is not None:
         entry["project"] = project
+    return entry
+
+
+def _write_selection(output, entries):
+    selected = Path(output).absolute()
+    target = selected.parent.resolve(strict=True) / selected.name
     descriptor, temporary = tempfile.mkstemp(prefix=".monitoring-sources-", suffix=".tmp", dir=target.parent)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
-            json.dump(dict(schema="monitoring.sources.v1", sources=[entry]), stream, indent=2)
+            json.dump(dict(schema="monitoring.sources.v1", sources=entries), stream, indent=2)
             stream.write("\n")
             stream.flush()
             os.fsync(stream.fileno())
