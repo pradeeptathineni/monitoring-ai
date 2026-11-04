@@ -156,6 +156,12 @@ def parser():
     replay_export = sub.add_parser("export-codex-family", help="Reconcile selected complete Codex parent histories into new private usage JSONL")
     replay_export.add_argument("--sources", type=Path, required=True, help="Explicit Codex-only selection containing every declared parent")
     replay_export.add_argument("--output", type=Path, required=True, help="New private normalized usage file; existing targets refuse")
+    family_follow = sub.add_parser("follow-codex-family", help="Follow a fixed selected Codex family for a bounded explicit interval")
+    family_follow.add_argument("--sources", type=Path, required=True)
+    family_follow.add_argument("--output", type=Path, required=True, help="Private normalized usage JSONL")
+    family_follow.add_argument("--seconds", type=int, default=30, help="Stop after 1–3600 seconds; default 30")
+    family_follow.add_argument("--interval", type=float, default=2, help="Metadata poll interval, 1–60 seconds")
+    family_follow.add_argument("--append", action="store_true", help="Explicitly resume an existing owned 0600 event file")
     session_export = sub.add_parser("export-session", help="Export one exact recorded session as new private normalized JSONL")
     session_export.add_argument("--db", type=Path, required=True)
     session_export.add_argument("--output", type=Path, required=True, help="New 0600 file; existing paths refuse")
@@ -542,6 +548,19 @@ def run(args):
                 print(f"  Before conversion: {native['amount'] + ' ' + native['currency'] + ' · ' + native['basis'] + ' · ' + native['provenance'] if native is not None else 'Unknown'}")
                 print(f"  {cost['amount'] + ' ' + cost['currency'] if cost is not None else 'Unknown display cost'} · {row['cost_state']} · {row['explanation']}")
             print(f"Next offset: {value['next_offset']}. Accepted recorded usage only; incomplete coverage, no live activity or invoice inference.")
+        return
+    if args.command == "follow-codex-family":
+        from .family_follow import follow_family
+        from .producer import EventWriteError
+        try:
+            for result in follow_family(args.sources, args.output, seconds=args.seconds,
+                                        interval=args.interval, append=args.append):
+                print(json.dumps(result), flush=True)
+        except EventWriteError:
+            print("Output append outcome is unknown. Collection stopped. Inspect the file before any explicit retry.", file=sys.stderr)
+            raise SystemExit(2) from None
+        if result["last_source_state"] == "unavailable":
+            raise SystemExit(2)
         return
     if args.command == "export-codex-family":
         from .codex_replay_export import export_codex_family

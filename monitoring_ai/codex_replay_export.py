@@ -70,11 +70,10 @@ def _read(source):
             events, len(rows), sum(row.get("ignored_response_record", False) for row in rows), len(content))
 
 
-def export_codex_family(manifest, output):
-    """Publish only proven independent usage; refuse incomplete or changing families."""
+def reconcile_sources(sources):
+    """Project one fixed selection without publishing or mutating its inputs."""
     from .codex_replay import prefix_lengths
 
-    sources = load_sources(manifest)
     if any(source.format != "codex" for source in sources):
         raise ValueError("Replay export requires a selection containing only Codex files")
     before = [_signature(source.path) for source in sources]
@@ -99,6 +98,12 @@ def export_codex_family(manifest, output):
         summaries.append(dict(source=source.id, copied_usage_records=copied,
                               exported_usage_records=len(novel), ignored_response_records=ignored))
     exported.sort(key=lambda row: (row["timestamp"], row["source"], row["id"]))
+    return exported, summaries
+
+
+def export_codex_family(manifest, output):
+    """Publish only proven independent usage; refuse incomplete or changing families."""
+    exported, summaries = reconcile_sources(load_sources(manifest))
     publication = publish_events(output, exported)
     return dict(schema="monitoring.codex-replay-export.v1", observed_at=now_iso(),
                 **publication, sources=summaries, complete_coverage=False,

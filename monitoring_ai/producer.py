@@ -72,9 +72,10 @@ class EventWriter:
                 info = os.fstat(fd)
                 if not stat.S_ISREG(info.st_mode):
                     raise OSError("not a regular file")
+                # New writers and resumed writers own the same advisory lock
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 if append:
                     from .adapters import parse_jsonl
-                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
                     if stat.S_IMODE(info.st_mode) != 0o600 or info.st_uid != os.getuid() or info.st_size > MAX_BYTES:
                         raise ValueError("Append target must be an owned private event file")
                     os.lseek(fd, 0, os.SEEK_SET)
