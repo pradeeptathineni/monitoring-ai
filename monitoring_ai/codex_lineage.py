@@ -5,10 +5,27 @@ MESSAGE = (
     "Declared Codex parent history requires replay reconciliation. "
     "This input was not imported; accepted history is retained."
 )
+UNQUALIFIED_MESSAGE = (
+    "Declared Codex history metadata requires separate accounting qualification. "
+    "This input was not imported; accepted history is retained."
+)
 
 
 class CodexLineageError(ValueError):
     """Report an unsupported history without retaining its parent identity."""
+
+
+class UnsupportedHistoryError(ValueError):
+    """Report unqualified history metadata without exposing supplied values."""
+
+
+def unqualified_history(payload):
+    """Recognize boundaries the complete-prefix reconciler cannot qualify."""
+    return (payload.get("history_unqualified") is True
+            or any(payload.get(key) is not None for key in (
+                "history_base", "parent_thread_id", "subagent_history_start_ordinal",
+                "forked_from_ordinal_exclusive"))
+            or payload.get("history_mode") not in (None, "legacy"))
 
 
 def declared_parent(payload):
@@ -23,5 +40,7 @@ def declared_parent(payload):
 
 def require_independent(payload):
     """Keep declared forks out of independent cumulative-counter accounting."""
+    if unqualified_history(payload):
+        raise UnsupportedHistoryError(UNQUALIFIED_MESSAGE)
     if declared_parent(payload):
         raise CodexLineageError(MESSAGE)

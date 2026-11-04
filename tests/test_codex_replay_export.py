@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 from monitoring_ai.adapters import load
 from monitoring_ai import codex_replay_export
+from monitoring_ai.codex_lineage import UnsupportedHistoryError, UNQUALIFIED_MESSAGE
 from monitoring_ai.codex_replay_export import export_codex_family
 from monitoring_ai.source_setup import check_selection, create_selection
 from monitoring_ai.store import Store
@@ -83,6 +84,35 @@ class ReplayExportTests(unittest.TestCase):
         with self.assertRaises(FileExistsError):
             export_codex_family(self.manifest, self.output)
         self.assertEqual(load(self.output), rows)
+
+    def test_unqualified_metadata_refuses_even_with_proven_prefix(self):
+        """Known copied counters cannot qualify separately declared history boundaries."""
+        for key, value in (("history_base", {"thread_id": "private-rollout", "end_ordinal_exclusive": 2,
+                                             "end_byte_offset": 100}),
+                           ("parent_thread_id", "raw-private-parent"),
+                           ("subagent_history_start_ordinal", 0),
+                           ("forked_from_ordinal_exclusive", 0),
+                           ("history_mode", "paginated")):
+            with self.subTest(key=key):
+                for rows in (self.parent, self.child):
+                    rows[0]["payload"][key] = value
+                    self.select()
+                    before = {p: p.read_bytes() for p in self.root.glob("*.json*")}
+                    with self.assertRaises(UnsupportedHistoryError) as error:
+                        export_codex_family(self.manifest, self.output)
+                    self.assertEqual(str(error.exception), UNQUALIFIED_MESSAGE)
+                    self.assertFalse(self.output.exists())
+                    self.assertFalse(list(self.root.glob(".monitoring-export-*")))
+                    self.assertEqual(before, {p: p.read_bytes() for p in before})
+                    del rows[0]["payload"][key]
+        # Null new fields and the legacy mode keep the existing exact-prefix route.
+        for rows in (self.parent, self.child):
+            rows[0]["payload"].update(history_base=None, parent_thread_id=None,
+                                      subagent_history_start_ordinal=None,
+                                      forked_from_ordinal_exclusive=None, history_mode="legacy")
+        self.select()
+        export_codex_family(self.manifest, self.output)
+        self.assertEqual(sum(sum(row["tokens"].values()) for row in load(self.output)), 193)
 
     def test_parent_later_activity_is_not_subtracted_from_child(self):
         """An equal later parent counter represents distinct post-fork work."""

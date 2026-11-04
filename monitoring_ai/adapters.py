@@ -121,12 +121,14 @@ def codex_row(row):
     if not isinstance(payload, dict):
         return {}
     if kind == "session_meta":
-        from .codex_lineage import declared_parent
+        from .codex_lineage import declared_parent, unqualified_history
         identity = payload.get("id")
         # Retain only the accounting constraint, never the raw parent identity
         kept = {"id": identity} if isinstance(identity, str) and 0 < len(identity) <= 1000 else {}
         if declared_parent(payload):
             kept["lineage_declared"] = True
+        if unqualified_history(payload):
+            kept["history_unqualified"] = True
         return {"type": kind, "payload": kept}
     if kind == "turn_context":
         model = payload.get("model")

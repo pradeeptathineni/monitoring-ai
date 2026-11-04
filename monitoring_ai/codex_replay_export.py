@@ -3,6 +3,7 @@
 import stat
 
 from .adapters import MAX_BYTES, codex, codex_row, parse_jsonl, read_source
+from .codex_lineage import UnsupportedHistoryError, UNQUALIFIED_MESSAGE, unqualified_history
 from .event_export import MAX_EXPORT_EVENTS, publish_events
 from .events import timestamp, validate
 from .metrics import now_iso
@@ -26,6 +27,8 @@ def _project(row):
     if kind == "token_usage_record":
         return {"ignored_response_record": True}
     if kind == "session_meta" and isinstance(payload, dict):
+        if unqualified_history(payload):
+            raise UnsupportedHistoryError(UNQUALIFIED_MESSAGE)
         identity = payload.get("id")
         if not isinstance(identity, str) or not 0 < len(identity) <= 1000:
             raise ValueError("Replay export requires valid session metadata")

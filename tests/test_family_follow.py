@@ -91,6 +91,32 @@ class FamilyFollowTests(unittest.TestCase):
         self.assertEqual(self.output.read_bytes(), initial)
         self.assertEqual(self.tokens(), 193)
 
+    def test_unqualified_parent_metadata_retains_output_until_restore(self):
+        """A new parent history base invalidates the entire selected family."""
+        initial = None
+
+        def advance(seconds):
+            nonlocal initial
+            self.tick += seconds
+            if self.tick == 1:
+                initial = self.output.read_bytes()
+                self.parent_rows[0]["payload"]["history_base"] = {
+                    "thread_id": "private-immutable-rollout", "end_ordinal_exclusive": 2,
+                    "end_byte_offset": 100}
+                self.write(self.parent, self.parent_rows)
+            elif self.tick == 2:
+                self.assertEqual(self.output.read_bytes(), initial)
+                del self.parent_rows[0]["payload"]["history_base"]
+                self.write(self.parent, self.parent_rows)
+
+        results = list(follow_family(self.manifest, self.output, seconds=2, interval=1,
+                                    clock=lambda: self.tick, sleep=advance))
+        self.assertEqual([row["state"] for row in results[:-1]],
+                         ["following", "unavailable", "following"])
+        self.assertEqual(self.output.read_bytes(), initial)
+        self.assertEqual(self.tokens(), 193)
+        self.assertNotIn("private-immutable-rollout", json.dumps(results))
+
     def test_explicit_resume_and_uncertain_output_stop(self):
         """Resume replays nothing; an uncertain sink write stops without automatic retry."""
         collecting = follow_family(self.manifest, self.output, seconds=1, interval=1,

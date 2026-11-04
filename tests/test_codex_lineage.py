@@ -12,7 +12,8 @@ from pathlib import Path
 
 from monitoring_ai import adapters
 from monitoring_ai.codex_follow import CodexFollower
-from monitoring_ai.codex_lineage import MESSAGE, CodexLineageError
+from monitoring_ai.codex_lineage import (MESSAGE, CodexLineageError,
+                                         UnsupportedHistoryError, UNQUALIFIED_MESSAGE)
 from monitoring_ai.source_observer import SourceObserver
 from monitoring_ai.source_readiness import preview_selection
 from monitoring_ai.source_setup import check_selection
@@ -114,6 +115,10 @@ class MetadataProjectionTests(LineageFixture):
         # Ordinary and explicit-null declarations are not lineage.
         ordinary = [meta(),
                     meta(forked_from_id=None),
+                    meta(history_base=None, parent_thread_id=None,
+                         subagent_history_start_ordinal=None,
+                         forked_from_ordinal_exclusive=None, history_mode=None),
+                    meta(history_mode="legacy"),
                     meta(source={"subagent": {"thread_spawn":
                                               {"parent_thread_id": None}}})]
         for row in ordinary:
@@ -159,6 +164,59 @@ class MetadataProjectionTests(LineageFixture):
         with self.assertRaises(CodexLineageError) as ctx:
             adapters.load(child, "codex", "selected", "fixture")
         self.assert_safe_error(str(ctx.exception), child)
+
+
+class UnqualifiedHistoryTests(LineageFixture):
+    def test_projection_check_and_follower_retention(self):
+        """New boundaries refuse before import, retain accepted usage, and leak no values."""
+        cases = [(key, value) for key in (
+            "history_base", "parent_thread_id", "subagent_history_start_ordinal",
+            "forked_from_ordinal_exclusive")
+            for value in (PARENT_SECRET, "", 0, False, [], {},
+                          {"thread_id": PARENT_SECRET, "end_ordinal_exclusive": 2,
+                           "end_byte_offset": 123})]
+        cases += [("history_mode", value) for value in ("paginated", "future", "", False, {})]
+        for index, (key, value) in enumerate(cases):
+            with self.subTest(key=key, value=value):
+                path = self.root / f"selected-{index}.jsonl"
+                write_jsonl(path, parent_rows())
+                follower = CodexFollower(path, "selected", "fixture")
+                store = Store(self.root / f"ledger-{index}.sqlite")
+                store.ingest(follower())
+                follower.commit()
+                revision = store.read()[0]
+                cursor = (follower._offset, copy.deepcopy(follower._rows))
+                row = meta(instructions=BODY_SECRET, **{key: value})
+                projected = adapters.codex_row(row)
+                self.assertEqual(projected["payload"],
+                                 {"id": "fixture-parent", "history_unqualified": True})
+                for records in ([row] + parent_rows()[1:],
+                                [projected] + [adapters.codex_row(r) for r in parent_rows()[1:]]):
+                    with self.assertRaises(UnsupportedHistoryError) as error:
+                        adapters.codex(records, "selected", "fixture")
+                    self.assertEqual(str(error.exception), UNQUALIFIED_MESSAGE)
+                write_jsonl(path, [row] + extension_rows(), mode="a")
+                for _ in range(2):
+                    with self.assertRaises(UnsupportedHistoryError):
+                        follower()
+                    follower.discard()
+                    self.assertEqual((follower._offset, follower._rows), cursor)
+                    self.assertEqual(store.read()[0], revision)
+                    self.assertEqual(total_tokens(store.read()[1]), 165)
+                manifest = self.root / "selected.json"
+                manifest.write_text(json.dumps(dict(schema="monitoring.sources.v1", sources=[
+                    dict(id="selected", format="codex", path=str(path), project="fixture")])))
+                self.assertEqual(check_selection(manifest)["checks"][0]["error"], UNQUALIFIED_MESSAGE)
+                self.assertEqual(preview_selection(manifest)["inputs"][0]["error"], UNQUALIFIED_MESSAGE)
+                observed = SourceObserver([Source("selected", "codex", str(path), "fixture")]).refresh(store)
+                self.assertEqual(observed["inputs"][0]["error"], UNQUALIFIED_MESSAGE)
+                for blob in (json.dumps(observed), repr(vars(follower)), json.dumps(projected)):
+                    self.assertNotIn(PARENT_SECRET, blob)
+                    self.assertNotIn(BODY_SECRET, blob)
+                write_jsonl(path, parent_rows() + extension_rows())
+                store.ingest(follower())
+                follower.commit()
+                self.assertEqual(total_tokens(store.read()[1]), 193)
 
 
 class SelectionWorkflowTests(LineageFixture):

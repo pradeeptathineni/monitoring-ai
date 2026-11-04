@@ -32,7 +32,7 @@ A fictional parent/child workflow exports 193 distinct tokens from input histori
 
 ## Remaining limits
 
-Top-level `compacted` records currently refuse. Separate `token_usage_record` rows are counted as ignored and never added to cumulative counters. Per-response compaction accounting remains unqualified. Undeclared copied histories cannot be recognized. No missing-parent heuristic, directory discovery or timing-only identity match is used.
+Non-null `history_base`, top-level `parent_thread_id`, `subagent_history_start_ordinal` and `forked_from_ordinal_exclusive` metadata refuse, as does a non-null `history_mode` other than `legacy`. The same refusal applies during family following. Absent/null fields keep the existing behavior. These declarations need separate accounting qualification; a matching cumulative prefix does not qualify rollout offsets or inherited context boundaries. See the [pinned producer inspection and limits](codex-native.md#declared-parent-histories). Top-level `compacted` records currently refuse. Separate `token_usage_record` rows are counted as ignored and never added to cumulative counters. Per-response compaction accounting remains unqualified. Undeclared copied histories cannot be recognized. No missing-parent heuristic, directory discovery or timing-only identity match is used.
 
 This is a finite export of usage only. It omits native tools, turn markers and lifecycle. It does not supply a live family follower, repair old ledger rows or link forks to runtime workers. The ordinary native adapter continues to refuse declared parent histories. Apply dashboard date filters after reconciliation so an excluded parent period cannot hide the accounting evidence.
 
