@@ -315,6 +315,7 @@ def handler(observatory):
                         identity=observatory.identity, read_only=True,
                         snapshot="/api/v1/snapshot", events="/api/v1/events",
                         sessions="/api/v1/sessions",
+                        usage_records="/api/v1/usage-records",
                         report="/api/v1/report", event_features=["tool-categories.v1"],
                         input_observations="monitoring.inputs.v1",
                         source_coverage="monitoring.source-coverage.v1",
@@ -324,7 +325,8 @@ def handler(observatory):
                         filters=["provider", "model", "surface", "project", "source", "session", "since", "until", "state"],
                         event_filters=["provider", "model", "surface", "project", "source", "session", "since", "until", "entity"],
                         session_filters=["provider", "model", "surface", "project", "source", "session", "since", "until"],
-                        limits={"read_events": 100000, "snapshot_entities": 500, "event_page": 500},
+                        usage_filters=["provider", "model", "surface", "project", "source", "session", "since", "until"],
+                        limits={"read_events": 100000, "snapshot_entities": 500, "event_page": 500, "usage_page": 200},
                     )
                     if observatory.app_threads_loader is not None:
                         capabilities["app_threads"] = "monitoring.app-threads.v1"
@@ -351,6 +353,21 @@ def handler(observatory):
                     self.send(200, observatory.read(query))
                 elif parsed.path == "/api/v1/report":
                     self.send(200, observatory.report(query))
+                elif parsed.path == "/api/v1/usage-records":
+                    from .usage_records import usage_page
+                    limit, after = int(query.pop("limit", "50")), int(query.pop("after", "0"))
+                    expected, identity = query.pop("expected_revision", None), query.pop("expected_identity", None)
+                    cost_state = query.pop("cost_state", "")
+                    if after and (expected is None or identity is None):
+                        raise ValueError("Later usage pages require the first revision and owner identity")
+                    with observatory.lock:
+                        revision, events = observatory.store.read()
+                        if (identity is not None and identity != observatory.identity) or (expected is not None and int(expected) != revision):
+                            self.send(409, {"error": "Owner or ledger changed. Reload usage records", "revision": revision})
+                            return
+                        page = usage_page(revision, events, query, observatory.pricing, observatory.fx,
+                                          limit=limit, after=after, cost_state=cost_state)
+                        self.send(200, dict(page, identity=observatory.identity))
                 elif parsed.path == "/api/v1/sessions":
                     limit = int(query.pop("limit", "100"))
                     after = int(query.pop("after", "0"))

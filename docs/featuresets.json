@@ -318,7 +318,8 @@
         "recorded cache-read share",
         "reported-duration statistics",
         "explicit tool categories",
-        "download displayed aggregate report with filters and coverage"
+        "download displayed aggregate report with filters and coverage",
+        "revision-pinned record-level token and cost provenance inspection"
       ],
       "dependencies": [
         "local-usage-ledger",
@@ -332,7 +333,7 @@
         "langfuse/langfuse",
         "Helicone/helicone"
       ],
-      "decision": "Implemented detailed UTC period reports and qualified comparisons, project/model/day breakdowns, timed-record statistics and categorized tool activity. The browser downloads the exact displayed aggregate report with observation time, filters, revision and coverage, while the existing CLI emits the same JSON schema; neither includes raw event rows. Unsupported workflow quality remains unavailable. Richer charts and configurable views remain planned. An explicitly selected CodeBurn v74 daily cache supplies separate replaceable local-calendar aggregates, with source-reported USD of unknown billing basis and independent read/file ages. No sessions or ledger events are invented. Separate daily provider/model views preserve absent attribution and legacy unknown counters without cross-filtering marginals or summing across days. The native Codex completed-item observations now enter Report tool categories, durations and explicit error/unknown outcome counts; the same selected historical source reached the private API and dashboard. No command or result text is retained. A bounded daily tool-category chart now uses the selected normalized tool events, with explicit error/unknown counts and latest-100-date truncation. A historical authorized Codex source supplied four tool dates reconciled to 213 records; missing days do not establish agent idleness.",
+      "decision": "Implemented detailed UTC period reports and qualified comparisons, project/model/day breakdowns, timed-record statistics and categorized tool activity. The browser downloads the exact displayed aggregate report with observation time, filters, revision and coverage, while the existing CLI emits the same JSON schema; neither includes raw event rows. Unsupported workflow quality remains unavailable. Richer charts and configurable views remain planned. An explicitly selected CodeBurn v74 daily cache supplies separate replaceable local-calendar aggregates, with source-reported USD of unknown billing basis and independent read/file ages. No sessions or ledger events are invented. Separate daily provider/model views preserve absent attribution and legacy unknown counters without cross-filtering marginals or summing across days. The native Codex completed-item observations now enter Report tool categories, durations and explicit error/unknown outcome counts; the same selected historical source reached the private API and dashboard. No command or result text is retained. A bounded daily tool-category chart now uses the selected normalized tool events, with explicit error/unknown counts and latest-100-date truncation. A historical authorized Codex source supplied four tool dates reconciled to 213 records; missing days do not establish agent idleness. A paged usage inspector now exposes disjoint token buckets, recorded-first cost provenance, dated per-bucket price calculations and separate missing-price/conversion states. HTTP paging pins owner/revision, CLI reads the selected ledger without initialization, and the browser supports cost filters and exact entity-history navigation. A real accepted 344-event backup supplied 131 historical usage records over three pages with all bucket totals matching independent source SQL and no missing/repeated records. Its costs remained unpriced. Pricing, conversion and recorded-zero paths are fixture-qualified, not provider-bill reconciliation. This reproduces the pinned ccusage stored-versus-calculated cost workflow using owned decimal accounting and retaining unknowns, rather than copying its floating-point/zero fallback or importing the product.",
       "evidence": [
         "monitoring_ai/metrics.py",
         "tests/test_monitoring.py",
@@ -349,7 +350,11 @@
         "tests/test_codeburn_breakdowns.py",
         "monitoring_ai/codex_tools.py",
         "tests/test_codex_tools.py",
-        "monitoring_ai/web/app.js"
+        "monitoring_ai/web/app.js",
+        "monitoring_ai/usage_records.py",
+        "monitoring_ai/ledger_read.py",
+        "tests/test_usage_records.py",
+        "tests/browser/usage-records.spec.mjs"
       ]
     },
     {

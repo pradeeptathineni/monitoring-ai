@@ -26,6 +26,7 @@ let reportController = null, reportRequestId = 0, reportData = null, reportDataQ
 let comparison = null, comparisonController = null, comparisonId = 0, comparisonScope = null, comparisonChoices = null;
 let comparisonMessage = "Choose two distinct sessions.";
 let sessionList = null, sessionListController = null, sessionListId = 0;
+let usageRecordPage = null, usageRecordController = null, usageRecordReadId = 0;
 let cachedRange = "all", cachedExactDate = "", cachedView = "daily";
 let cachedDimensionFilters = { providers: "", models: "" };
 let cachedUsageReceivedAt = 0, cachedFileAgeAtReceipt = null;
@@ -57,6 +58,7 @@ function showView(route) {
   if (view === next && settingsCategory === target.category && location.hash.slice(1) === target.hash) return;
   if (view === "report" && next !== "report") { cancelReport(); cancelComparison(); sessionListController?.abort(); }
   if (view === "events" && next !== "events" && entityHistory?.pending) cancelEntityHistory("Entity history read canceled because you left the Event stream. Loaded pages are retained.");
+  if (view === "usage" && next !== "usage") cancelUsageRead();
   view = next;
   settingsCategory = target.category;
   $("#metrics").hidden = next === "report" || next === "settings";
@@ -1301,7 +1303,148 @@ function renderEvents() {
   }));
 }
 
+function usageRecordScope() {
+  const params = query(); params.delete("state"); params.sort();
+  return { params, key: JSON.stringify([data?.identity, data?.currency, params.toString(), $("#usage-cost-filter").value]) };
+}
+
+function cancelUsageRead() {
+  usageRecordReadId++; usageRecordController?.abort(); usageRecordController = null;
+  if (usageRecordPage) usageRecordPage.pending = false;
+}
+
+function renderUsageRecords() {
+  const scope = usageRecordScope();
+  if (usageRecordPage && usageRecordPage.scope !== scope.key) { cancelUsageRead(); usageRecordPage = null; }
+  const state = usageRecordPage, page = state?.page, root = $("#usage-record-table");
+  const blocked = paused || snapshotReadUnavailable || !data;
+  $("#load-usage-records").textContent = page ? "Reload usage records" : "Load usage records";
+  $("#load-usage-records").disabled = blocked || !!state?.pending;
+  const changed = page && page.revision !== data.revision;
+  $("#usage-record-prev").disabled = blocked || !!state?.pending || !page || page.offset === 0 || changed;
+  $("#usage-record-next").disabled = blocked || !!state?.pending || !page || page.next_offset === null || changed;
+  let note = state?.pending ? "Loading recorded usage…" : state?.error || "Load recorded usage under the current filters.";
+  if (page) {
+    note = `Revision ${page.revision} · ${page.offset + (page.records.length ? 1 : 0)}–${page.offset + page.records.length} of ${page.total} matching records · observed ${page.observed_at}. ${page.cost_coverage.estimated} estimated amounts in ${page.currency} · ${page.cost_coverage.billed} billed amounts in ${page.currency} · ${page.cost_coverage.unpriced} unpriced · ${page.cost_coverage.unconverted} missing conversion before the cost filter.`;
+    if (state.pending) note += " Reading the requested page; prior rows remain visible.";
+    if (state.error) note += ` ${state.error}`;
+    if (changed) note += ` The ledger is now revision ${data.revision}. These rows remain at the older revision; reload before paging.`;
+    if (page.contains_synthetic_records) note += " SYNTHETIC DATA PRESENT · FICTIONAL COSTS.";
+    if (page.future_dated_records) note += ` ${page.future_dated_records} future-dated records are included for inspection, not current activity.`;
+  }
+  if (blocked) note += " Reads are paused or unavailable. Prior rows remain historical.";
+  if ($("#usage-record-status").textContent !== note) $("#usage-record-status").textContent = note;
+  root.replaceChildren();
+  if (page?.records.length) {
+    table("#usage-record-table", ["Recorded · UTC", "Provider / model", "Source / record", "Token buckets", "Before conversion", "Display cost", "Cost evidence", "Inspect"], page.records.map(row => {
+      const event = row.event, model = node("div", `${event.provider} / ${event.model}`), source = node("div", `${event.source} / ${event.id}`), tokens = node("div");
+      model.append(node("small", `${event.surface} · ${event.project}`)); source.append(node("small", `Session ${event.session}`));
+      for (const [key, value] of Object.entries(event.tokens)) tokens.append(node("div", `${bucketNames[key]} ${number.format(value)}`));
+      const button = node("button", "Inspect", "quiet usage-record-action"); button.type = "button";
+      button.setAttribute("aria-label", `Inspect usage record ${event.source}/${event.id}`);
+      button.addEventListener("click", () => { state.selected = row; renderUsageRecordDetail(); $("#usage-record-detail").focus(); });
+      const coverage = { estimated: "Estimated · display amount known", billed: "Billed · display amount known", unpriced: "Unpriced", unconverted: "Missing conversion" }[row.cost_state];
+      const method = { recorded: "Recorded cost", "price-book": "Dated price estimate", unpriced: "No cost or rate" }[row.pricing_method];
+      return [event.timestamp, model, source, tokens, usageCostText(row.native_cost), usageCostText(row.display_cost), `${coverage} · ${method}`, button];
+    }));
+  } else root.append(node("p", page ? "No recorded usage matches this scope. Missing records do not establish zero account usage." : "No usage page loaded.", "empty"));
+  renderUsageRecordDetail();
+}
+
+function usageCostText(cost) {
+  return cost === null || cost === undefined ? "Unknown" : `${cost.amount} ${cost.currency} · ${cost.basis}`;
+}
+
+function renderUsageRecordDetail() {
+  const panel = $("#usage-record-detail"), row = usageRecordPage?.selected;
+  panel.hidden = !row; panel.replaceChildren();
+  if (!row) return;
+  const event = row.event;
+  const heading = node("div", null, "panel-head"), close = node("button", "Close record detail", "quiet usage-record-action");
+  close.type = "button"; close.addEventListener("click", () => { usageRecordPage.selected = null; renderUsageRecordDetail(); });
+  heading.append(node("h3", "Usage record"), close); panel.append(heading);
+  panel.append(node("p", `${event.source} / ${event.id} · ${event.timestamp} · revision ${usageRecordPage.page.revision}`, "confidence-note"));
+  panel.append(node("p", row.explanation));
+  if (["unpriced", "unconverted"].includes(row.cost_state)) {
+    const setup = node("a", "Review price and currency setup", "process-coverage-action");
+    setup.href = "#settings/sources"; panel.append(setup);
+  }
+  for (const [key, value] of [["Provider / model", `${event.provider} / ${event.model}`], ["Surface / project", `${event.surface} / ${event.project}`],
+    ["Session / entity", `${event.session} / ${event.entity}`], ["Recorded cost", usageCostText(event.cost)],
+    ["Cost before conversion", usageCostText(row.native_cost)], ["Display cost", usageCostText(row.display_cost)],
+    ["Cost provenance", row.native_cost?.provenance || "None supplied or matched"]]) panel.append(confidenceRow(key, value));
+  if (row.rate) {
+    panel.append(node("p", `Price interval ${row.rate.from} to ${row.rate.until} (end excluded). Rates below are per 1,000,000 tokens in ${row.rate.currency}.`, "confidence-note"));
+    for (const key of Object.keys(bucketNames)) panel.append(confidenceRow(bucketNames[key], `${number.format(event.tokens[key])} tokens × ${row.rate[key]} per 1,000,000 = ${row.bucket_costs[key]} ${row.rate.currency}`));
+  } else for (const key of Object.keys(bucketNames)) panel.append(confidenceRow(`${bucketNames[key]} tokens`, number.format(event.tokens[key])));
+  const fx = usageRecordPage.page.fx;
+  panel.append(node("p", fx ? `Supplied USD-based FX book dated ${fx.as_of}, provenance ${fx.provenance}. It is a display-rate reference, not an invoice conversion rate.` : "No FX book supplied. Known amounts in another currency remain unconverted.", "confidence-note"));
+  if (row.native_cost && row.display_cost && row.native_cost.currency === row.display_cost.currency) panel.append(node("p", "The cost is already in the display currency. No conversion is needed.", "confidence-note"));
+  if (event.surface === "claude-code-result") panel.append(node("p", "Receipt-time cumulative CLI summary. Its date can differ from underlying call dates, and it is not an individual API-call count.", "confidence-note"));
+  const history = node("button", "Open entity history", "quiet usage-record-action"); history.type = "button";
+  history.disabled = paused || snapshotReadUnavailable || usageRecordPage.page.revision !== data?.revision;
+  history.addEventListener("click", () => inspect(event)); panel.append(history);
+  panel.append(node("p", "Entity history opens its own current read revision. Usage observations do not establish a running worker or a complete provider invoice.", "confidence-note"));
+}
+
+async function loadUsageRecords(after = 0, reset = false) {
+  if (paused || snapshotReadUnavailable || !data) return;
+  const scope = usageRecordScope(); cancelUsageRead();
+  if (reset || !usageRecordPage || usageRecordPage.scope !== scope.key) {
+    const retained = usageRecordPage?.scope === scope.key ? usageRecordPage.page : null;
+    usageRecordPage = { scope: scope.key, identity: data.identity, revision: data.revision, currency: data.currency, page: retained, selected: null };
+  }
+  const state = usageRecordPage, readId = usageRecordReadId, controller = new AbortController(); usageRecordController = controller;
+  state.pending = true; state.error = ""; renderUsageRecords();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    const metaResponse = await fetch("/api/v1/capabilities", { signal: controller.signal, cache: "no-store" });
+    if (!metaResponse.ok) throw new Error("Owner capabilities unavailable.");
+    const meta = await metaResponse.json();
+    if (meta.identity !== state.identity || meta.usage_records !== "/api/v1/usage-records") throw new Error("This owner has no matching usage-record capability. Review its version before loading records.");
+    const params = new URLSearchParams(scope.params); params.set("limit", "50"); params.set("after", String(after));
+    params.set("expected_revision", String(state.revision)); params.set("expected_identity", state.identity);
+    const costState = $("#usage-cost-filter").value; if (costState) params.set("cost_state", costState);
+    const response = await fetch(`/api/v1/usage-records?${params}`, { signal: controller.signal, cache: "no-store" });
+    if (response.status === 409) throw new Error("Owner or ledger changed. Reload usage records.");
+    if (!response.ok) throw new Error(`Usage records unavailable (${response.status}).`);
+    const page = await response.json();
+    const normalized = Object.fromEntries([...scope.params].map(([key, value]) => [key, ["since", "until"].includes(key) ? new Date(value.length === 10 ? value + (key === "since" ? "T00:00:00Z" : "T23:59:59.999Z") : value).toISOString() : value]));
+    const sameFilters = Object.keys(normalized).length === Object.keys(page.filters || {}).length && Object.entries(normalized).every(([key, value]) => page.filters[key] === value);
+    if (page.schema !== "monitoring.usage-records.v1" || page.identity !== state.identity || page.revision !== state.revision ||
+      page.currency !== state.currency || !sameFilters || page.cost_state !== costState || page.offset !== after || page.limit !== 50 ||
+      !Array.isArray(page.records) || page.records.length > 50 || !Number.isSafeInteger(page.total) || page.total < 0 ||
+      page.scope !== "matching-accepted-ledger-usage" || page.complete_coverage !== false || !Number.isFinite(Date.parse(page.observed_at)) ||
+      !page.cost_coverage || !["estimated", "billed", "unpriced", "unconverted"].every(key => Number.isSafeInteger(page.cost_coverage[key]) && page.cost_coverage[key] >= 0) ||
+      !Number.isSafeInteger(page.matching_usage_records) || page.total > page.matching_usage_records ||
+      Object.values(page.cost_coverage).reduce((sum, value) => sum + value, 0) !== page.matching_usage_records ||
+      !page.records.every(validUsageRecord) || (costState && page.records.some(row => row.cost_state !== costState)) ||
+      (page.next_offset !== null && page.next_offset !== after + 50)) throw new Error("Usage page did not match the requested owner, revision or scope.");
+    if (readId !== usageRecordReadId || paused || snapshotReadUnavailable || usageRecordScope().key !== scope.key) return;
+    state.page = page; state.selected = null;
+  } catch (error) {
+    if (readId === usageRecordReadId) state.error = error.name === "AbortError" ? "Usage read canceled or timed out. Load records again." : error.message;
+  } finally {
+    clearTimeout(timer);
+    if (readId === usageRecordReadId) { state.pending = false; usageRecordController = null; renderUsageRecords(); }
+  }
+}
+
+function validUsageRecord(row) {
+  const cost = value => value === null || (value && typeof value.amount === "string" && Number.isFinite(Number(value.amount)) && Number(value.amount) >= 0 &&
+    typeof value.currency === "string" && /^[A-Z]{3}$/.test(value.currency) && ["estimated", "billed"].includes(value.basis) && typeof value.provenance === "string");
+  const event = row?.event;
+  return event?.kind === "usage" && ["source", "id", "provider", "model", "surface", "project", "session", "entity"].every(key => typeof event[key] === "string") &&
+    Number.isFinite(Date.parse(event.timestamp)) && event.tokens && Object.keys(event.tokens).length === 4 && Object.keys(bucketNames).every(key => Number.isSafeInteger(event.tokens[key]) && event.tokens[key] >= 0) &&
+    (event.cost === undefined || cost(event.cost)) &&
+    ["recorded", "price-book", "unpriced"].includes(row.pricing_method) && ["estimated", "billed", "unpriced", "unconverted"].includes(row.cost_state) &&
+    typeof row.explanation === "string" && cost(row.native_cost) && cost(row.display_cost) &&
+    (row.rate === null || (row.rate && typeof row.rate.currency === "string" && Number.isFinite(Date.parse(row.rate.from)) && Number.isFinite(Date.parse(row.rate.until)) && row.bucket_costs &&
+      Object.keys(bucketNames).every(key => typeof row.rate[key] === "string" && typeof row.bucket_costs[key] === "string")));
+}
+
 function renderUsage() {
+  renderUsageRecords();
   const group = $("#group").value;
   table("#usage-table", [group, "Usage records", "Input", "Cache read", "Cache write", "Output", `Estimated · ${data.currency}`, `Billed · ${data.currency}`, "Unknown / no FX"], data.groups[group].map((row) => [
     row.key, number.format(row.calls), ...Object.values(row.tokens).map((v) => number.format(v)),
@@ -2119,6 +2262,7 @@ $("#codeburn-model-filter").addEventListener("change", () => {
 $("#pause").addEventListener("click", () => {
   paused = !paused; $("#pause").textContent = paused ? "Resume refresh" : "Pause refresh";
   if (paused) {
+    cancelUsageRead();
     cancelComparison();
     sessionListController?.abort();
     $("#connection").textContent = "Refresh paused"; $("#connection").classList.add("offline");
@@ -2209,3 +2353,7 @@ $("#clear-app-changes").addEventListener("click", () => {
 });
 $("#app-turn-alias-filter").addEventListener("input", renderAppTurns);
 $("#app-turn-state-filter").addEventListener("change", renderAppTurns);
+$("#load-usage-records").addEventListener("click", () => loadUsageRecords(0, true));
+$("#usage-record-prev").addEventListener("click", () => loadUsageRecords(Math.max(0, usageRecordPage.page.offset - 50)));
+$("#usage-record-next").addEventListener("click", () => { if (usageRecordPage?.page.next_offset !== null) loadUsageRecords(usageRecordPage.page.next_offset); });
+$("#usage-cost-filter").addEventListener("change", renderUsageRecords);

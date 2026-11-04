@@ -36,7 +36,7 @@ An in-progress turn can be waiting for a tool or approval and does not prove mod
 
 ## Optional consumer contract
 
-`/api/v1/meta` advertises `capabilities.codex_app_turns: "monitoring.codex-app-turns.v1"` only when selected. Snapshot v1 may then include `codex_app_turns` with `schema`, `source: "codex-app-read-thread"`, `scope: "selected-task-turn-pages"`, `complete_coverage: false`, `captured_at`, `tasks`, `read_at`, derived `age_seconds`/`freshness` and `read_state`. An unavailable first read has the schema, unavailable state and empty tasks. A later failure retains prior rows and capture times.
+`/api/v1/capabilities` advertises `capabilities.codex_app_turns: "monitoring.codex-app-turns.v1"` only when selected. Snapshot v1 may then include `codex_app_turns` with `schema`, `source: "codex-app-read-thread"`, `scope: "selected-task-turn-pages"`, `complete_coverage: false`, `captured_at`, `tasks`, `read_at`, derived `age_seconds`/`freshness` and `read_state`. An unavailable first read has the schema, unavailable state and empty tasks. A later failure retains prior rows and capture times.
 
 Each exported task has `alias`, `host`, `updated_at`, `observed_at`, `has_more` and `turns`. Each exported turn has `alias`, `status`, `started_at`, `completed_at`, `duration_ms` and `error_present`. Derived root freshness does not replace per-task age checks. A consumer must preserve incomplete coverage, unknown timing and the distinction between a reported turn and a worker/session lifecycle.
 

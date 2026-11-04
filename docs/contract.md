@@ -1,5 +1,7 @@
 # Monitoring owner contract v1
 
+The optional [recorded usage inspector](usage-records.md) advertises a separate `/api/v1/usage-records` endpoint. It pages accepted usage with original token buckets, recorded-first cost provenance, dated price explanations and distinct unpriced/unconverted states. Later HTTP pages require owner and revision pins. Snapshot/report v1 remain unchanged, and inspection supplies no new provider access or execution authority.
+
 Monitoring AI owns immutable usage observations, normalized token accounting, cost qualifications and their derived views. Agent runtimes own execution. Providers own authoritative billing and quota statements. Deep owns presentation and navigation.
 
 ## Input

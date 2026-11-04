@@ -66,3 +66,5 @@ main{margin-left:242px;min-height:100vh}.topbar{height:72px;padding:0 38px;borde
 #app-page-prev,#app-page-next{min-height:44px}
 
 .app-turn-focus{display:block;min-height:44px;margin-top:6px}
+
+.usage-record-action{min-height:44px}.usage-record-detail{padding:16px 0;border-top:1px solid var(--line);overflow-wrap:anywhere}.usage-record-detail .confidence-row>*{min-width:0;overflow-wrap:anywhere}.usage-record-detail:focus{outline:2px solid var(--focus-ring);outline-offset:4px}

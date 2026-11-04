@@ -1,7 +1,6 @@
 """Run the local monitoring server, import an explicit source or inspect usage in a terminal."""
 
 import argparse
-from contextlib import closing
 import json
 from pathlib import Path
 import secrets
@@ -100,6 +99,18 @@ def parser():
     report.add_argument("--json", action="store_true")
     for key in (*DIMENSIONS, "since", "until", "state"):
         report.add_argument("--" + key)
+    usage = sub.add_parser("usage-records", help="Inspect recorded token buckets and explain cost coverage")
+    usage.add_argument("--db", type=Path, required=True, help="Existing ledger, read without initialization")
+    usage.add_argument("--pricing", type=Path)
+    usage.add_argument("--fx", type=Path)
+    usage.add_argument("--currency", default="USD")
+    usage.add_argument("--limit", type=int, default=50)
+    usage.add_argument("--after", type=int, default=0)
+    usage.add_argument("--expected-revision", type=int)
+    usage.add_argument("--cost-state", choices=["estimated", "billed", "unpriced", "unconverted"], default="")
+    usage.add_argument("--json", action="store_true")
+    for key in (*DIMENSIONS, "since", "until"):
+        usage.add_argument("--" + key)
     history = sub.add_parser("history", help="Read exact entity chronology from an existing ledger")
     history.add_argument("--db", type=Path, default=Path(".monitoring-ai/events.sqlite"))
     for key in ("source", "session", "entity"):
@@ -325,22 +336,8 @@ def history_page(path, args):
                      ("source", "session", "provider", "model", "surface", "project", "since", "until")
                      if getattr(args, key)})
     entity = label(args.entity, "entity")
-    from .ledger_preview import _resolve_source, _same_file
-    target, before = _resolve_source(path)
-    try:
-        with closing(sqlite3.connect(target.as_uri() + "?mode=ro", uri=True, timeout=10)) as db:
-            db.execute("PRAGMA query_only=ON")
-            db.execute("BEGIN")
-            revision = db.execute("SELECT COALESCE(MAX(sequence),0) FROM events").fetchone()[0]
-            revision += db.execute("SELECT COUNT(*) FROM corrections").fetchone()[0]
-            rows = [validate(json.loads(payload)) for (payload,) in db.execute(
-                "SELECT payload FROM events ORDER BY timestamp, source, event_id LIMIT 100001")]
-    except (sqlite3.Error, ValueError, TypeError):
-        raise ValueError("Ledger is not a compatible Monitoring database") from None
-    if not _same_file(target, before):
-        raise ValueError("Selected ledger changed during history read")
-    if len(rows) > 100000:
-        raise ValueError("Ledger exceeds this alpha's 100,000-event read limit")
+    from .ledger_read import read_ledger
+    revision, rows = read_ledger(path)
     if args.expected_revision is not None and revision != args.expected_revision:
         raise ValueError("Ledger revision changed. Restart history at offset zero")
     matching = [row for row in rows if row["entity"] == entity and selected(row, query)]
@@ -425,6 +422,28 @@ def _print_source_preview(value):
 
 
 def run(args):
+    if args.command == "usage-records":
+        from .ledger_read import read_ledger
+        from .usage_records import usage_page
+        if args.after and args.expected_revision is None:
+            raise ValueError("Later usage pages require the first ledger revision")
+        revision, events = read_ledger(args.db)
+        if args.expected_revision is not None and (args.expected_revision < 0 or args.expected_revision != revision):
+            raise ValueError("Ledger changed. Restart usage records at offset zero")
+        scope = {key: getattr(args, key) for key in (*DIMENSIONS, "since", "until") if getattr(args, key)}
+        value = usage_page(revision, events, scope, Pricing(args.pricing), Exchange(args.currency, args.fx),
+                           limit=args.limit, after=args.after, cost_state=args.cost_state)
+        if args.json:
+            print(json.dumps(value, indent=2))
+        else:
+            print(f"Recorded usage · revision {revision} · {value['currency']} · {len(value['records'])} of {value['total']} matching records")
+            for row in value["records"]:
+                event, cost = row["event"], row["display_cost"]
+                print(f"{event['timestamp']} · {event['source']} / {event['id']} · {event['provider']} / {event['model']}")
+                print("  " + " · ".join(f"{key} {count:,}" for key, count in event["tokens"].items()))
+                print(f"  {cost['amount'] + ' ' + cost['currency'] if cost is not None else 'Unknown display cost'} · {row['cost_state']} · {row['explanation']}")
+            print(f"Next offset: {value['next_offset']}. Accepted recorded usage only; incomplete coverage, no live activity or invoice inference.")
+        return
     if args.command == "export-session":
         from .session_export import export_session
         from .result_capture import ResultPublicationUncertain
