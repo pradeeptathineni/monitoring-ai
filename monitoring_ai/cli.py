@@ -153,6 +153,9 @@ def parser():
     history.add_argument("--after", type=int, default=0, help="Oldest-first record offset")
     history.add_argument("--expected-revision", type=int, help="Pin later pages to the first ledger revision")
     history.add_argument("--json", action="store_true", help="Local metadata-only history page")
+    collector_health = sub.add_parser("inspect-collector", help="Inspect an explicitly selected finite collector checkpoint log")
+    collector_health.add_argument("--file", type=Path, required=True)
+    collector_health.add_argument("--max-age", type=int, default=125)
     evidence = sub.add_parser("inspect-codex-export", help="Compare a selected export receipt with exact normalized output bytes")
     evidence.add_argument("--receipt", type=Path, required=True)
     evidence.add_argument("--file", type=Path, required=True)
@@ -569,6 +572,11 @@ def run(args):
             raise SystemExit(2) from None
         if result["last_source_state"] == "unavailable":
             raise SystemExit(2)
+        return
+    if args.command == "inspect-collector":
+        from .collector_health import read_checkpoints
+        from .metrics import now_iso
+        print(json.dumps(read_checkpoints(args.file, now_iso(), args.max_age), indent=2))
         return
     if args.command == "inspect-codex-export":
         from .receipt_evidence import inspect_export

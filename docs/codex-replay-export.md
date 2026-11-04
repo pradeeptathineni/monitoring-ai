@@ -63,3 +63,9 @@ Following is qualified with fictional append, partial-line, parent-generation, r
 Save the export command's JSON receipt separately. Use `python3 -m monitoring_ai inspect-codex-export --receipt /path/to/receipt.json --file /path/to/usage.jsonl` to compare its digest, byte length and per-source record counts with the selected output. The command reads only those files, creates no ledger and writes no source. A mismatch exits with code 1. Malformed inputs refuse.
 
 A matching result binds the operator-supplied receipt to those exact bytes. Producer authenticity remains unverified. It does not establish actual fork compatibility, complete account coverage, billed cost or session lifecycle. This evidence remains separate from normalized events and Deep until a receiving contract is deliberately adopted.
+
+## Inspect collector checkpoints
+
+Save finite collector stdout separately from normalized usage. `python3 -m monitoring_ai inspect-collector --file /path/to/checkpoints.jsonl` reads the selected log without changing a ledger or provider. It reports collector state and last source state separately. A stopped collector can retain a final unavailable source. Stale or future checkpoints become unknown. A partial final line is reported and waits for completion. The input is bounded to 1 MiB and 5,000 records.
+
+Collector stops are not native session completion. Last successful reconciliation and original event time remain distinct. Arbitrary error text is discarded. These observations are not yet connected automatically to Deep or the downstream normalized-file owner's input health.
