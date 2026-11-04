@@ -46,7 +46,12 @@ def append_result_frame(output, frame, *, source, project):
     if not isinstance(frame, dict) or frame.get("schema") != FRAME_SCHEMA:
         raise ValueError("Invalid sanitized result frame")
     clean = capture_result(frame, frame.get("captured_at"))
-    payload = (json.dumps(clean, separators=(",", ":"), allow_nan=False) + "\n").encode()
+    append_private_frame(output, clean, lambda frames: claude_results(frames, source, project))
+
+
+def append_private_frame(output, frame, validate_history):
+    """Validate a private metadata history before append; false means exact replay."""
+    payload = (json.dumps(frame, separators=(",", ":"), allow_nan=False) + "\n").encode()
     selected = Path(output).absolute()
     target = selected.parent.resolve(strict=True) / selected.name
     fd = os.open(target, os.O_RDWR | os.O_APPEND | os.O_NONBLOCK |
@@ -71,7 +76,8 @@ def append_result_frame(output, frame, *, source, project):
         frames = parse_jsonl(content, strict=True)
         if len(frames) >= 50_000:
             raise ValueError("Result append record limit reached")
-        claude_results(frames + [clean], source, project)
+        if validate_history(frames + [frame]) is False:
+            return False
         offset = 0
         try:
             while offset < len(payload):
@@ -82,6 +88,7 @@ def append_result_frame(output, frame, *, source, project):
             os.fsync(fd)
         except OSError:
             raise ResultPublicationUncertain from None
+        return True
     finally:
         os.close(fd)
 

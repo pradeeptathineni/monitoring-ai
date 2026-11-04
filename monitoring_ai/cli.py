@@ -154,6 +154,17 @@ def parser():
     history.add_argument("--after", type=int, default=0, help="Oldest-first record offset")
     history.add_argument("--expected-revision", type=int, help="Pin later pages to the first ledger revision")
     history.add_argument("--json", action="store_true", help="Local metadata-only history page")
+    observation = sub.add_parser("observe-openai-response", help="Capture status metadata from one explicitly received API response; no API call")
+    observation.add_argument("--file", type=Path, required=True)
+    observation.add_argument("--output", type=Path, required=True)
+    observation.add_argument("--observed-at", required=True, help="Original caller receipt time")
+    observation.add_argument("--source", required=True)
+    observation.add_argument("--project", required=True)
+    observation.add_argument("--session", required=True, help="Caller-chosen grouping alias")
+    observation.add_argument("--append", action="store_true")
+    observations = sub.add_parser("openai-observations", help="Inspect selected request observation metadata; no token or lifecycle ledger")
+    observations.add_argument("--file", type=Path, required=True)
+    observations.add_argument("--max-age", type=int, default=125)
     collector_health = sub.add_parser("inspect-collector", help="Inspect an explicitly selected finite collector checkpoint log")
     collector_health.add_argument("--file", type=Path, required=True)
     collector_health.add_argument("--max-age", type=int, default=125)
@@ -573,6 +584,21 @@ def run(args):
             raise SystemExit(2) from None
         if result["last_source_state"] == "unavailable":
             raise SystemExit(2)
+        return
+    if args.command == "observe-openai-response":
+        from .openai_observations import capture_observation
+        from .result_capture import ResultPublicationUncertain
+        try:
+            print(json.dumps(capture_observation(args.file, args.output, source=args.source,
+                  project=args.project, session=args.session, observed_at=args.observed_at, append=args.append), indent=2))
+        except ResultPublicationUncertain:
+            print("Observation append outcome is uncertain. Inspect the file before any explicit retry. Do not retry the API request.", file=sys.stderr)
+            raise SystemExit(2) from None
+        return
+    if args.command == "openai-observations":
+        from .openai_observations import read_observations
+        from .metrics import now_iso
+        print(json.dumps(read_observations(args.file, now_iso(), args.max_age), indent=2))
         return
     if args.command == "inspect-collector":
         from .collector_health import read_checkpoints
