@@ -2424,6 +2424,7 @@ refresh();
 setInterval(() => {
   if (data) updateLifecycleEvidenceAges();
   refreshCollectorPanel().catch(() => {});
+  refreshOpenAIRequests().catch(() => {});
   if (data) { renderAppThreads(); renderAppTurns(); }
   if (paused && data) {
     retainInsights("Dashboard refresh is paused. Showing previously recorded quota observations.");
@@ -2485,4 +2486,54 @@ async function refreshCollectorPanel() {
   } catch {
     if (data?.identity === identity) { collectorReadFailed = true; if (collectorBook) collectorView.update(collectorBook, {paused, unavailable:true}); }
   } finally { clearTimeout(timeout); collectorReadAt = Date.now(); collectorBusy = false; }
+}
+
+// Read only the startup-selected metadata file, pinned to the displayed owner
+let requestView, requestBook = null, requestOwner = null, requestBusy = false;
+let requestReadAt = 0, requestDisabledOwner = null, requestReadFailed = false;
+async function refreshOpenAIRequests() {
+  if (!data) return;
+  if (!requestView) requestView = (await import('/openai-request-view.js')).mountOpenAIRequests($('#openai-request-panel'));
+  if (requestOwner !== data.identity) {
+    requestOwner = data.identity;
+    requestBook = null;
+    requestReadAt = 0;
+    requestDisabledOwner = null;
+    requestReadFailed = false;
+    requestView.clear();
+  }
+  if (requestBook || requestReadFailed) requestView.update(requestBook, {paused, unavailable:snapshotReadUnavailable || requestReadFailed});
+  if (requestBusy || paused || snapshotReadUnavailable || view !== 'overview' || document.hidden
+      || requestDisabledOwner === data.identity || Date.now() - requestReadAt < 10000) return;
+  requestBusy = true;
+  const identity = data.identity, controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 4000);
+  try {
+    const response = await fetch(`/api/v1/openai-requests?expected_identity=${encodeURIComponent(identity)}`, {signal:controller.signal, cache:'no-store'});
+    if (data?.identity !== identity) return;
+    if (response.status === 404) {
+      requestDisabledOwner = identity;
+      requestBook = null;
+      requestView.clear();
+      return;
+    }
+    if (!response.ok) throw new Error('Request observations unavailable');
+    const value = await response.json();
+    // A server replacement during body delivery must not restore the prior owner
+    if (data?.identity !== identity) return;
+    if (value.schema !== 'monitoring.openai-request-read.v1' || value.identity !== identity) throw new Error('Request owner changed');
+    requestReadFailed = false;
+    requestBook = value;
+    requestView.update(value, {paused, unavailable:snapshotReadUnavailable});
+  } catch {
+    if (data?.identity === identity) {
+      requestReadFailed = true;
+      requestView.update(requestBook, {paused, unavailable:true});
+    }
+  } finally {
+    clearTimeout(timeout);
+    // An old request cannot postpone the first read for a replacement owner
+    if (requestOwner === identity) requestReadAt = Date.now();
+    requestBusy = false;
+  }
 }

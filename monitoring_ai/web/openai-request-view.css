@@ -1,0 +1,29 @@
+/* Constrain the native table to a named keyboard-scrollable region */
+.openai-request-view {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0.75rem 1rem;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+  font: inherit;
+}
+.openai-request-view[hidden], .openai-request-view [hidden] { display: none; }
+.openai-request-view h3 { margin: 0 0 0.5rem; font-size: 1rem; }
+.openai-request-view p { color: var(--muted); }
+.openai-request-view label { margin-inline-end: 0.5rem; }
+.openai-request-view select { max-width: 100%; min-block-size: 2rem; font: inherit; }
+.openai-request-view .request-table-scroll {
+  overflow: auto;
+  max-inline-size: 100%;
+  max-block-size: 30rem;
+  margin-block-start: 0.75rem;
+}
+.openai-request-view :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.openai-request-view table { width: 100%; min-width: 64rem; table-layout: fixed; border-collapse: separate; border-spacing: 0; font: inherit; }
+.openai-request-view caption { text-align: start; padding-block: 0.5rem; color: var(--muted); }
+.openai-request-view th, .openai-request-view td { padding: 0.5rem; text-align: start; vertical-align: top; border-bottom: 1px solid var(--line-strong); white-space: normal; overflow-wrap: anywhere; }
+.openai-request-view thead { position: sticky; inset-block-start: 0; z-index: 1; background: var(--surface-inset); }

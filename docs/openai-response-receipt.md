@@ -71,3 +71,27 @@ Invoke this once after each ordinary response arrives. It creates a new private 
 This helper makes no provider request, reads no credentials, installs no callback or global hook and starts no thread or background process. Selecting its output in Monitoring lets the existing owner and Deep consumer refresh after later ordinary calls. Actual ongoing provider emission is unqualified until the owning application deliberately adopts the helper and observes a new authorized response. The in-memory application path has synthetic sequential-response, replay, privacy and conflict validation. The earlier actual receipts qualify saved-file capture and receiving only.
 
 `response_event` remains available for a runtime that owns its own event publication. Keep one accounting route per request scope. Deep source adoption and any persistent host installation remain separate owner/access decisions.
+
+## Observe reported request status separately
+
+`observe-openai-response` captures metadata from a response the caller has already received. It supports explicit `queued`, `in_progress`, `completed`, `failed`, `cancelled` and `incomplete` status reports. These observations create no token, cost or lifecycle records. They can describe responses that the completed-usage adapter cannot admit, including fractional creation timestamps or an absent completion time.
+
+```sh
+python3 -m monitoring_ai observe-openai-response \
+  --file /private/received-response.json --output /private/request-observations.jsonl \
+  --observed-at 2026-11-03T20:00:00Z \
+  --source api-caller --project example-project --session application-group
+python3 -m monitoring_ai openai-observations --file /private/request-observations.jsonl
+python3 -m monitoring_ai serve --db /private/api-ledger.sqlite \
+  --openai-observations /private/request-observations.jsonl
+```
+
+Supply the original caller receipt time with `--observed-at`. The example time is fictional. Add `--append` for another explicit receipt into the same private file. Exact replay writes nothing. A conflicting same-time receipt or a changed project, grouping alias, model or creation time for the same source/response identity refuses. A later explicit receipt can update that response's reported status without counting another inference. After an uncertain write, inspect the private sink before retrying observation. Never repeat the provider request to repair monitoring.
+
+For an application that already holds a response dictionary, `monitoring_ai.openai_observations.record_observation(data, output, source=..., project=..., session=..., observed_at=..., append=...)` performs the same projection and publication without a raw intermediate file. Choose the first-write or append mode explicitly. It starts no provider call, hook or background capture.
+
+The selected history is bounded to 5,000 frames, 100 source/response identities and the existing 32 MiB source-file limit. Each frame retains only the hashed response ID, explicit aliases, provider/model, reported status, original receipt time, nullable provider creation time and whether an error object was present. Raw response IDs, HTTP request IDs, content, error bodies and usage are discarded. Creation time stays separate from receipt time. An unknown creation time stays unknown.
+
+Overview shows one latest receipt per source/response identity with an ephemeral status filter. Receipt freshness is current through 125 seconds, stale afterward and future when ahead of the browser clock. A successful reread never refreshes the receipt time. Historical terminal statuses remain dated reported outcomes. Stale, future, paused or unavailable nonterminal reports leave current request state unknown. Empty evidence means none captured in the selected file, not zero account use. The panel neither joins grouping aliases to provider conversations nor establishes a live worker roster.
+
+The optional [owner-pinned read route](contract.md#optional-api-request-observations) retains the last accepted dated book after a failed file read. It adds no existing snapshot field or ledger revision. Deep adoption requires its owning workflow to review and admit this separate read contract. The standalone path has synthetic capture, replay, HTTP and browser checks. Actual ongoing provider emission and Deep presentation of this new route remain unqualified.

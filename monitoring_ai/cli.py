@@ -57,6 +57,8 @@ def parser():
             command.add_argument("--quota-history", type=Path,
                                  help="Opt-in private quota history; existing history is read-only without a quota source")
             command.add_argument("--collector-checkpoints", type=Path, help="Explicit finite collector stdout log, separate from event-file health")
+            command.add_argument("--openai-observations", type=Path,
+                                 help="Explicit metadata-only API request receipt history, separate from usage")
             command.add_argument("--port", type=int, default=5274)
             command.add_argument("--demo", action="store_true", help="Seed an empty ledger with fictional data")
             command.add_argument("--sources", type=Path, help="Explicit private source manifest, loaded once at startup")
@@ -864,6 +866,7 @@ def run(args):
         serve(Observatory(store, pricing, fx, loader, quota_loader=quota_loader(args),
                           cost_scenario_pricing=scenario, cost_scenario_label=args.scenario_label,
                           quota_history=quota_history, collector_checkpoint_file=args.collector_checkpoints,
+                          openai_observation_file=args.openai_observations,
                           source_observer=observer,
                           app_threads_loader=(lambda: read_app_threads(args.app_threads)) if args.app_threads else None,
                           app_turns_loader=(lambda: read_app_turns(args.app_turns)) if args.app_turns else None,
