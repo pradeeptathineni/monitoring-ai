@@ -8,10 +8,12 @@
   <title>Monitoring AI</title>
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/quota-history-view.css">
+  <link rel="stylesheet" href="/cost-scenario-view.css">
   <link rel="stylesheet" href="/theme/workspace-navigation.css">
   <link rel="stylesheet" href="/navigation.css">
   <script src="/quota-watch.js" defer></script>
   <script src="/quota-history-view.js" defer></script>
+  <script src="/cost-scenario-view.js" defer></script>
   <script src="/app.js" defer></script>
   <script src="/appearance.js" type="module"></script>
   <script src="/navigation.js" type="module"></script>
@@ -97,6 +99,7 @@
         <div id="report-status" class="report-status" role="status" aria-live="polite">Report has not been loaded.</div>
         <article class="panel"><div class="panel-head"><div><h2>Find recorded sessions</h2><p>Read session aliases beyond the snapshot's entity limit.</p></div></div><form id="session-list-form" class="session-compare-controls"><label>Source or session alias contains<input id="session-list-search" maxlength="160" placeholder="Optional alias fragment"></label><button class="quiet" type="submit">Find sessions</button><button id="session-list-more" class="quiet" type="button" hidden>Load next 100</button></form><p id="session-list-status" class="confidence-note" role="status">Load session choices from the accepted ledger. Shared comparison filters apply, with source/session and current state omitted.</p></article>
         <article class="panel" id="session-comparison"><div class="panel-head"><div><h2>Compare recorded sessions</h2><p>Choose two exact source/session pairs from the snapshot or loaded ledger list.</p></div></div><div class="session-compare-controls"><label>First session<select id="compare-first"></select></label><label>Second session<select id="compare-second"></select></label><button id="compare-sessions" class="quiet" type="button" disabled>Compare sessions</button></div><p id="session-compare-status" class="confidence-note" role="status">Choose two distinct sessions.</p><div id="session-compare-table" class="table-wrap"></div><p class="confidence-note">Provider, model, surface, project and date filters apply. The two selections replace source/session filters and omit current state. Use Find recorded sessions to extend choices beyond the snapshot's visible entities. Reports must share one owner and ledger revision. Missing sources can leave either session incomplete. This comparison does not establish task quality or current activity.</p></article>
+        <article id="cost-scenario-panel" class="panel" hidden></article>
         <div id="report-content" hidden>
           <div id="report-range" class="report-range"></div>
           <section id="report-metrics" class="metrics" aria-label="Report summary"></section>
@@ -164,6 +167,11 @@ python3 -m monitoring_ai serve --sources /path/to/private-sources.json --db /pat
             <p>Select a dated per-million price book when starting the owner:</p><pre><code>python3 -m monitoring_ai serve --db /path/to/private-ledger.sqlite --pricing /path/to/approved-pricing.json --currency USD</code></pre>
             <p>Use <code>examples/pricing.json</code> as a fictional format example. Supply the exact provider/model, start/end dates, four disjoint token rates and provenance. Recorded estimated or billed costs take precedence. A missing recorded cost and matching rate remains unknown. For other currencies, add <code>--fx /path/to/approved-fx.json</code> using the dated USD-based format in <code>examples/fx.json</code>. Known amounts without required conversion remain separately unconverted. These example rates are fictional and are not provider prices or invoice rates.</p>
             <p>Changing these startup selections requires a deliberate owner restart. This page does not write files, fetch rates, connect accounts or change a running owner. Recorded usage links here when a price or conversion is missing.</p>
+          </details>
+          <details class="coverage-setup navigation-disclosure"><summary>Compare a counterfactual price book</summary>
+            <p>Select an alternative dated rate book explicitly when starting the owner:</p><pre><code>python3 -m monitoring_ai serve --db /path/to/events.sqlite --scenario-pricing /path/to/alternative-pricing.json --scenario-label operator-scenario</code></pre>
+            <p>Use the existing <code>monitoring.pricing.v1</code> format with exact provider/model aliases, dated intervals, currency, provenance and four disjoint per-million token rates. At most 1,000 rates and one MiB are accepted. Optional <code>--pricing</code> supplies baseline fallback rates. Original recorded estimated and billed amounts keep baseline precedence.</p>
+            <p>Report → Cost scenario explicitly calculates the selected alternative without changing recorded costs or a running provider. Missing prices and conversion stay unknown. Differences use only records with both a known estimated baseline and known alternative; billed records never enter that difference. Cumulative Claude result receipts and future records are excluded. Tokens, tiers, discounts, contracts and billing correctness are not inferred from the chosen rates. The rate file is loaded once; restart deliberately to select another book. This page does not write files or fetch prices.</p>
           </details>
           <details class="coverage-setup navigation-disclosure"><summary>Inspect selected Codex app turns</summary>
             <p>Select an already captured private metadata export at startup:</p><pre><code>python3 -m monitoring_ai serve --db /path/to/private-ledger.sqlite --app-turns /path/to/selected-codex-turns.json</code></pre>

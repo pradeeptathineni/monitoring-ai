@@ -51,6 +51,9 @@ def parser():
             command.add_argument("--billed-cost-threshold",
                                  help="Optional current UTC-day threshold over known billed cost in display currency")
         if name == "serve":
+            command.add_argument("--scenario-pricing", type=Path,
+                                 help="Optional explicit counterfactual price book; does not replace baseline costs")
+            command.add_argument("--scenario-label", default="operator-scenario", help="Alias for the counterfactual rate book")
             command.add_argument("--quota-history", type=Path,
                                  help="Opt-in private quota history; existing history is read-only without a quota source")
             command.add_argument("--port", type=int, default=5274)
@@ -100,6 +103,17 @@ def parser():
     quota_history.add_argument("--before")
     quota_history.add_argument("--expected-revision", type=int)
     quota_history.add_argument("--json", action="store_true")
+    scenario = sub.add_parser("cost-scenario", help="Compare an explicit hypothetical price book with recorded cost evidence")
+    scenario.add_argument("--db", type=Path, required=True, help="Existing ledger, read without initialization")
+    scenario.add_argument("--scenario-pricing", type=Path, required=True)
+    scenario.add_argument("--scenario-label", default="operator-scenario")
+    scenario.add_argument("--pricing", type=Path, help="Optional baseline price book; recorded costs still take precedence")
+    scenario.add_argument("--fx", type=Path)
+    scenario.add_argument("--currency", default="USD")
+    scenario.add_argument("--expected-revision", type=int)
+    scenario.add_argument("--json", action="store_true")
+    for key in (*DIMENSIONS, "since", "until"):
+        scenario.add_argument("--" + key)
     report = sub.add_parser("report", help="Inspect qualified period and tool reports without contacting a provider")
     report.add_argument("--db", type=Path, default=Path(".monitoring-ai/events.sqlite"))
     report.add_argument("--pricing", type=Path)
@@ -431,6 +445,33 @@ def _print_source_preview(value):
 
 
 def run(args):
+    if args.command == "cost-scenario":
+        from .cost_scenarios import cost_scenario
+        from .scenario_config import read_scenario
+        from .ledger_read import read_ledger
+        if len(args.currency) != 3 or not args.currency.isupper():
+            raise ValueError("Use an uppercase three-letter currency code")
+        scenario = read_scenario(args.scenario_pricing)
+        revision, events = read_ledger(args.db)
+        if args.expected_revision is not None and args.expected_revision != revision:
+            raise ValueError("Ledger changed. Recalculate the counterfactual scenario")
+        scope = {key: getattr(args, key) for key in (*DIMENSIONS, "since", "until") if getattr(args, key)}
+        value = cost_scenario(revision, events, scope, Pricing(args.pricing), scenario,
+                              Exchange(args.currency, args.fx), label=args.scenario_label)
+        if args.json:
+            print(json.dumps(value, indent=2))
+        else:
+            def render_amount(amount):
+                """Preserve exact decimals and distinguish missing terminal amounts."""
+                return "Unknown" if amount is None else f"{amount} {value['currency']}"
+
+            print(f"COUNTERFACTUAL ESTIMATE · {value['scenario']['label']} · {value['currency']} · revision {revision}")
+            print(f"Baseline estimated: {render_amount(value['baseline']['estimated']['amount'])} · billed: {render_amount(value['baseline']['billed']['amount'])}")
+            print(f"Alternative: {render_amount(value['alternative']['amount'])} over {value['alternative']['records']} priced records")
+            print(f"Comparable estimated subset: {value['comparable']['records']} records · difference {render_amount(value['comparable']['difference'])}")
+            print("Recorded costs are unchanged. Unknown costs, missing conversion and excluded receipt/future records are not zero.")
+            print(json.dumps(value["coverage"], sort_keys=True))
+        return
     if args.command == "quota-history":
         from .quota_history import QuotaHistory
         if args.before and (args.expected_revision is None or args.series is None):
@@ -705,7 +746,14 @@ def run(args):
         if args.quota_history:
             from .quota_history import QuotaHistory
             quota_history = QuotaHistory(args.quota_history, read_only=not (args.quota_file or args.codex_quota))
+        scenario = None
+        if args.scenario_pricing:
+            from .scenario_config import read_scenario
+            scenario = read_scenario(args.scenario_pricing)
+        elif args.scenario_label != "operator-scenario":
+            raise ValueError("--scenario-label requires --scenario-pricing")
         serve(Observatory(store, pricing, fx, loader, quota_loader=quota_loader(args),
+                          cost_scenario_pricing=scenario, cost_scenario_label=args.scenario_label,
                           quota_history=quota_history,
                           source_observer=observer,
                           app_threads_loader=(lambda: read_app_threads(args.app_threads)) if args.app_threads else None,

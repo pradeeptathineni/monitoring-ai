@@ -1,0 +1,209 @@
+/* Panel frame: the existing panel has a border but no inner padding. */
+.cost-scenario-view {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+  padding: 20px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.cost-scenario-view *,
+.cost-scenario-view *::before,
+.cost-scenario-view *::after {
+  box-sizing: border-box;
+}
+
+/* Native disclosure keeps price-book inspection optional and keyboard accessible */
+.cost-scenario-view__rates { margin-top: 16px; }
+.cost-scenario-view__rates summary { min-height: 44px; padding: 12px 0; cursor: pointer; }
+.cost-scenario-view__rates summary:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+
+/* Heading and the counterfactual label. */
+.cost-scenario-view__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.cost-scenario-view__title {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.cost-scenario-view__label {
+  display: inline-block;
+  padding: 4px 8px;
+  border: 2px solid var(--brand);
+  background: var(--surface-inset);
+  color: var(--text);
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+}
+
+.cost-scenario-view__scenario,
+.cost-scenario-view__status {
+  margin: 12px 0 0;
+  color: var(--muted);
+}
+
+/* Contextual read controls: 44px targets with visible focus. */
+.cost-scenario-view__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.cost-scenario-view__button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--surface-raised);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.cost-scenario-view__button:disabled {
+  color: var(--faint);
+  cursor: not-allowed;
+}
+
+.cost-scenario-view__button:focus-visible,
+.cost-scenario-view__link:focus-visible,
+.cost-scenario-view__table-wrap:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Warnings, errors and informational notices. */
+.cost-scenario-view__messages {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cost-scenario-view__message {
+  padding: 8px 12px;
+  border-left: 4px solid var(--line-strong);
+  background: var(--surface-inset);
+}
+
+.cost-scenario-view__message.is-warn {
+  border-left-color: var(--warn);
+}
+
+.cost-scenario-view__message.is-danger {
+  border-left-color: var(--danger);
+}
+
+/* Summary and coverage metrics. */
+.cost-scenario-view__summary,
+.cost-scenario-view__coverage {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 12px;
+  margin: 16px 0 0;
+}
+
+.cost-scenario-view__metric {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-raised);
+}
+
+.cost-scenario-view__metric dt {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.cost-scenario-view__metric dd {
+  margin: 4px 0 0;
+}
+
+.cost-scenario-view__amount {
+  display: block;
+  font-variant-numeric: tabular-nums;
+}
+
+.cost-scenario-view__detail {
+  display: block;
+  color: var(--faint);
+  font-size: 0.8rem;
+}
+
+.cost-scenario-view__empty {
+  margin: 16px 0 0;
+  color: var(--muted);
+}
+
+/* Group table: scrolls inside its own container, never widens the page. */
+.cost-scenario-view__table-wrap {
+  max-width: 100%;
+  margin-top: 16px;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+}
+
+.cost-scenario-view__table {
+  width: 100%;
+  min-width: 960px;
+  border-collapse: collapse;
+  overflow-wrap: normal;
+}
+
+.cost-scenario-view__table caption {
+  padding: 8px 12px;
+  color: var(--muted);
+  text-align: left;
+}
+
+.cost-scenario-view__table th,
+.cost-scenario-view__table td {
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.cost-scenario-view__table thead th {
+  background: var(--surface-inset);
+  color: var(--muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.cost-scenario-view__table .cost-scenario-view__num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Notes and the Settings link. */
+.cost-scenario-view__notes {
+  margin: 16px 0 0;
+  padding-left: 20px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.cost-scenario-view__setup {
+  margin: 12px 0 0;
+}
+
+.cost-scenario-view__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--accent-text);
+}

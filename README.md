@@ -57,6 +57,7 @@ An optional [selected CodeBurn session-cache view](docs/codeburn-session-cache.m
 - Optional [Codex/ChatGPT app task observations](docs/app-task-observations.md) from an explicitly captured supported inventory. App-reported statuses retain source time and incomplete coverage, and become unknown when captures are stale. They supply no worker lifecycle, tokens or billing. A bounded Codex history profile adds one 50-task page with current-status/alias filtering and captured-row pagination. A tab-local change list compares fresh captures without treating page absence as completion.
 - Optional [selected Codex app turns](docs/codex-app-turns.md) from supported bounded metadata reads. Inspect reported turn status, source timing and error presence with per-task freshness. App turns remain separate from ledger sessions, processes and usage.
 - [Recorded usage inspection](docs/usage-records.md) with paged token buckets, original cost evidence, dated rate calculations and separate missing-price/conversion states. The CLI reads an existing ledger without initialization; the browser pins owner and revision before paging.
+- Optional [counterfactual cost analysis](docs/cost-scenarios.md) with an explicitly selected alternative rate book, preserved original costs, exact comparable estimated subsets, missing-price/FX counts and an inspectable dated rate book. It makes no invoice or savings claim.
 - [Completed OpenAI API receipt capture](docs/openai-response-receipt.md) projects an explicitly selected authorized response into metadata-only usage with original timing, disjoint tokens and unknown cost. Explicit append captures can refresh the same selected private source with replay/conflict checks. An opt-in Python helper records already received responses directly without an intermediate raw file. It makes no API call and provides no unattended capture.
 - Metadata-only Codex turn start/completion markers in Sessions when an explicitly selected Codex JSONL file supplies them. The markers and source-reported timing are separate from session lifecycle and OS process observations.
 - Completed Codex command, MCP and file-change item observations in Events and Report when the selected file supplies them. Commands, arguments, results and changed file paths are discarded; unknown outcomes stay unknown.
@@ -269,6 +270,7 @@ node --test tests/client.test.mjs  # Node 24 for native TypeScript stripping
 npm ci
 npx playwright install chromium
 npm run test:browser
+npm run test:cost-scenario
 ```
 
 Browser tests launch their own synthetic server and headless browser. They make no model call and do not use your foreground browser. See [the contract](docs/contract.md), [reuse findings](docs/reuse.md) and [roadmap](docs/roadmap.md). MIT licensed.

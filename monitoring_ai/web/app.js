@@ -28,6 +28,7 @@ let comparisonMessage = "Choose two distinct sessions.";
 let sessionList = null, sessionListController = null, sessionListId = 0;
 let usageRecordPage = null, usageRecordController = null, usageRecordReadId = 0;
 let quotaHistoryView = null;
+let costScenarioView = null;
 let cachedRange = "all", cachedExactDate = "", cachedView = "daily";
 let cachedDimensionFilters = { providers: "", models: "" };
 let cachedUsageReceivedAt = 0, cachedFileAgeAtReceipt = null;
@@ -92,6 +93,7 @@ function showView(route) {
   window.monitoringNavigation?.reveal(next);
   if (next === "report") loadReport();
   updateQuotaHistory();
+  updateCostScenario();
 }
 
 // Keep optional quota history independent of ledger filters and event revision
@@ -108,6 +110,28 @@ function updateQuotaHistory() {
     });
   }
   quotaHistoryView?.update();
+}
+
+// Keep counterfactual analysis scoped to the owner, rates and non-state report filters
+function updateCostScenario() {
+  if (!costScenarioView && window.MonitoringCostScenario) {
+    costScenarioView = window.MonitoringCostScenario.mount($("#cost-scenario-panel"), {
+      getContext: () => {
+        const params = query(); params.delete("state");
+        const scope = Object.fromEntries([...params].map(([key, value]) => [key, ["since", "until"].includes(key)
+          ? new Date(value.length === 10 ? value + (key === "since" ? "T00:00:00Z" : "T23:59:59.999Z") : value).toISOString() : value]));
+        return { identity: data?.identity, revision: data?.revision, currency: data?.currency,
+          query: scope, active: view === "report", paused, unavailable: snapshotReadUnavailable,
+          config: data?.cost_scenario_status || null };
+      },
+      requestJSON: async (url, options) => {
+        const response = await fetch(url, { ...options, cache: "no-store" });
+        if (!response.ok) { const error = new Error("Cost scenario read failed"); error.status = response.status; throw error; }
+        return response.json();
+      },
+    });
+  }
+  costScenarioView?.update();
 }
 
 function query() {
@@ -2138,6 +2162,7 @@ function render() {
   confidence.append(node("p", "Known amounts cover only their labeled records. Estimates and billed amounts are never added for the same event. Lifecycle evidence expires after 60 seconds.", "confidence-note"));
   renderInsights();
   updateQuotaHistory();
+  updateCostScenario();
   renderSourceCoverage();
   renderInputHealth();
   renderEntityTable();
@@ -2246,13 +2271,14 @@ async function refresh() {
 
 $$("[data-view]").forEach((button) => button.addEventListener("click", () => showView(button.dataset.view)));
 $("#filters").addEventListener("change", (event) => {
+  updateCostScenario();
   markEntityHistoryFiltersChanged();
   renderSessionComparison();
   if (event.target?.name === "since" || event.target?.name === "until") $("#report-period").value = "custom";
   refresh(); if (view === "report") loadReport();
 });
 $("#filters").addEventListener("submit", (event) => event.preventDefault());
-$("#filters").addEventListener("reset", () => { markEntityHistoryFiltersChanged(true); $("#state-filter").value = ""; setTimeout(() => { $("#report-period").value = "custom"; renderSessionComparison(); refresh(); if (view === "report") loadReport(); }, 0); });
+$("#filters").addEventListener("reset", () => { markEntityHistoryFiltersChanged(true); $("#state-filter").value = ""; setTimeout(() => { $("#report-period").value = "custom"; renderSessionComparison(); updateCostScenario(); refresh(); if (view === "report") loadReport(); }, 0); });
 $("#report-period").addEventListener("change", () => applyReportPeriod($("#report-period").value));
 $("#download-report").addEventListener("click", downloadDisplayedReport);
 $("#download-report-csv").addEventListener("click", downloadDisplayedReportCsv);

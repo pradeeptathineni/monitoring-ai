@@ -2,7 +2,10 @@
   "name": "monitoring-ai-checks",
   "private": true,
   "type": "module",
-  "scripts": { "test:browser": "playwright test" },
+  "scripts": {
+    "test:browser": "playwright test",
+    "test:cost-scenario": "playwright test --config playwright.scenario.config.mjs"
+  },
   "engines": { "node": ">=24" },
   "devDependencies": { "@playwright/test": "1.63.0" }
 }

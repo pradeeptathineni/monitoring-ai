@@ -23,13 +23,20 @@ class Observatory:
     def __init__(self, store, pricing, fx, loader=None, quota_loader=None, quota_book=None, source_observer=None,
                  cached_usage_loader=None, codeburn_activity_loader=None, session_cache_loader=None, process_observer=None,
                  token_threshold=None, cost_thresholds=None, app_threads_loader=None, app_turns_loader=None,
-                 quota_history=None):
+                 quota_history=None, cost_scenario_pricing=None, cost_scenario_label="operator-scenario"):
         if loader is not None and source_observer is not None:
             raise ValueError("Choose one input configuration")
         self.store, self.pricing, self.fx, self.loader = store, pricing, fx, loader
         self.source_observer = source_observer
         self.lock = threading.Lock()
         self.identity = str(uuid.uuid4())
+        self.cost_scenario_pricing = cost_scenario_pricing
+        self.cost_scenario_status = None
+        if cost_scenario_pricing is not None:
+            from .cost_scenarios import scenario_id
+            self.cost_scenario_status = dict(schema="monitoring.cost-scenario-status.v1",
+                id=scenario_id(cost_scenario_pricing, cost_scenario_label), label=event_label(cost_scenario_label, "scenario label"),
+                rate_count=len(cost_scenario_pricing.rates), kind="counterfactual")
         self.source_status = {"state": "static", "last_success_at": None, "error": None}
         self.quota_loader = quota_loader
         self.quota_book = validate_quota_book(quota_book) if quota_book else None
@@ -284,6 +291,8 @@ class Observatory:
                 value["cost_thresholds"] = evaluate_cost_thresholds(events, limits=self.cost_thresholds,
                     pricing=self.pricing, fx=self.fx, now=value["observed_at"])
             value["insights"]["quotas"]["read_status"] = dict(self.quota_status)
+            if self.cost_scenario_status is not None:
+                value["cost_scenario_status"] = dict(self.cost_scenario_status)
             if self.quota_history is not None:
                 value["quota_history_status"] = self.quota_history_summary()
             value.update(identity=self.identity, source_status=dict(self.source_status))
@@ -380,6 +389,8 @@ def handler(observatory):
                         capabilities["app_threads"] = "monitoring.app-threads.v1"
                     if observatory.quota_history is not None:
                         capabilities["quota_history"] = "/api/v1/quota-history"
+                    if observatory.cost_scenario_status is not None:
+                        capabilities["cost_scenario"] = "/api/v1/cost-scenario"
                     if observatory.app_turns_loader is not None:
                         capabilities["codex_app_turns"] = "monitoring.codex-app-turns.v1"
                     if observatory.process_observer is not None:
@@ -418,6 +429,24 @@ def handler(observatory):
                         page = usage_page(revision, events, query, observatory.pricing, observatory.fx,
                                           limit=limit, after=after, cost_state=cost_state)
                         self.send(200, dict(page, identity=observatory.identity))
+                elif parsed.path == "/api/v1/cost-scenario":
+                    if observatory.cost_scenario_status is None:
+                        self.send(404, {"error": "A counterfactual price book is not configured"})
+                        return
+                    from .cost_scenarios import cost_scenario
+                    identity = query.pop("expected_identity", None)
+                    expected = query.pop("expected_revision", None)
+                    scenario = query.pop("expected_scenario", None)
+                    if any(value is None for value in (identity, expected, scenario)):
+                        raise ValueError("Cost scenarios require exact owner, ledger revision and rate-book identity")
+                    with observatory.lock:
+                        revision, events = observatory.store.read()
+                        if identity != observatory.identity or int(expected) != revision or scenario != observatory.cost_scenario_status["id"]:
+                            self.send(409, {"error": "Owner, ledger or scenario changed. Review current scope and recalculate"})
+                            return
+                        value = cost_scenario(revision, events, query, observatory.pricing,
+                            observatory.cost_scenario_pricing, observatory.fx, label=observatory.cost_scenario_status["label"])
+                        self.send(200, dict(value, identity=observatory.identity))
                 elif parsed.path == "/api/v1/quota-history":
                     if observatory.quota_history is None:
                         self.send(404, {"error": "Quota history is not configured"})
@@ -502,6 +531,8 @@ def handler(observatory):
                     self.send(200, value)
                 else:
                     files = {"/": (WEB / "index.html", "text/html; charset=utf-8"),
+                             "/cost-scenario-view.js": (WEB / "cost-scenario-view.js", "text/javascript; charset=utf-8"),
+                             "/cost-scenario-view.css": (WEB / "cost-scenario-view.css", "text/css; charset=utf-8"),
                              "/quota-history-view.js": (WEB / "quota-history-view.js", "text/javascript; charset=utf-8"),
                              "/quota-history-view.css": (WEB / "quota-history-view.css", "text/css; charset=utf-8"),
                              "/quota-watch.js": (WEB / "quota-watch.js", "text/javascript; charset=utf-8"),

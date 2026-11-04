@@ -1,0 +1,29 @@
+{
+  "schema": "monitoring.pricing.v1",
+  "rates": [
+    {
+      "provider": "openai",
+      "model": "demo-reasoner",
+      "currency": "USD",
+      "from": "2026-01-01T00:00:00Z",
+      "until": "2027-01-01T00:00:00Z",
+      "provenance": "fictional-alternative",
+      "input": "1",
+      "cache_read": "0.1",
+      "cache_write": "1.2",
+      "output": "5"
+    },
+    {
+      "provider": "anthropic",
+      "model": "demo-sonnet",
+      "currency": "USD",
+      "from": "2026-01-01T00:00:00Z",
+      "until": "2027-01-01T00:00:00Z",
+      "provenance": "fictional-alternative",
+      "input": "2",
+      "cache_read": "0.2",
+      "cache_write": "2.4",
+      "output": "6"
+    }
+  ]
+}
