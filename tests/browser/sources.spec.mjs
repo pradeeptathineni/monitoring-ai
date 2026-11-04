@@ -57,3 +57,29 @@ test("selected native overlap explains the refused input without exposing raw di
   await expect(page.locator("#source-coverage")).toContainText("accepted history is retained");
   await expect(page.locator("#source-coverage")).not.toContainText("/private/");
 });
+
+// Only the known content-free refusal reaches the source panels
+test("declared Codex parent history explains incomplete source coverage", async ({ page }) => {
+  const snapshot = await (await page.request.get("/api/v1/snapshot")).json();
+  snapshot.inputs = { schema: "monitoring.inputs.v1", configured: true, healthy_inputs: 0,
+    unavailable_inputs: 1, unread_inputs: 0, inputs: [
+      { id: "selected-child", format: "codex", project: "fictional", state: "unavailable",
+        records_seen: null, added: 0, replayed: 0,
+        error: "Declared Codex parent history requires replay reconciliation. This input was not imported; accepted history is retained." },
+    ] };
+  snapshot.source_coverage = { schema: "monitoring.source-coverage.v1", observed_at: snapshot.observed_at,
+    inputs: [{ id: "selected-child", format: "codex", read_state: "unavailable", event_freshness: "unread",
+      capabilities: { usage: "native-reconstruction", lifecycle: "unsupported", tools: "completed-items" },
+      records: null, retained: false, sampled_at: null, latest_event_at: null }] };
+  await page.route("**/api/v1/snapshot?**", (route) => route.fulfill({ json: snapshot }));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await expect(page.locator("#source-coverage")).toContainText("Declared Codex parent history requires replay reconciliation");
+  await expect(page.locator("#source-coverage")).toContainText("Do not remove the parent declaration");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+  // Older owners show the input-health fallback instead of source coverage
+  delete snapshot.source_coverage;
+  await page.reload();
+  await expect(page.locator("#input-health")).toContainText("This input was not imported; accepted history is retained");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+});

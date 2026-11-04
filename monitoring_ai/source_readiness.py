@@ -7,6 +7,7 @@ from .metrics import now_iso
 from .source_coverage import source_summary
 from .sources import load_sources
 from .source_overlap import NativeOverlapError, NATIVE_FORMATS, MESSAGE
+from .codex_lineage import CodexLineageError, MESSAGE as CODEX_LINEAGE_MESSAGE
 
 SCHEMA = "monitoring.source-readiness.v1"
 MAX_PREVIEW_EVENTS = 100_000
@@ -63,6 +64,9 @@ def preview_selection(manifest, db=None):
             for source in sources:
                 try:
                     rows = source.load(live=True)
+                except CodexLineageError:
+                    inputs.append(_result(source, "rejected", error=CODEX_LINEAGE_MESSAGE))
+                    continue
                 except OSError:
                     inputs.append(_result(
                         source, "unavailable", error="Selected file is unavailable. Check its existence and read access."

@@ -836,6 +836,9 @@ function renderSourceCoverage() {
       if (health.error === "Overlapping native records in another selected source. Accepted history is retained.") {
         row.append(node("p", "Repeated native records in another selected input. This input was refused; accepted history is retained. Review the source selection before restarting it.", "source-coverage-sample"));
       }
+      if (health.error === "Declared Codex parent history requires replay reconciliation. This input was not imported; accepted history is retained.") {
+        row.append(node("p", "Declared Codex parent history requires replay reconciliation. This input was not imported; accepted history is retained. Select an independently accounted source. Do not remove the parent declaration.", "source-coverage-sample"));
+      }
     }
     if (item.format === "claude-results") {
       row.append(node("p", "Completed Claude CLI result summaries include subagent aggregate usage, but not individual calls, turn times, or worker states. The capture timestamp is the declared receipt time, not provider event time. USD costs are client-side estimates, not billed spend or subscription balance. This route is not reconciled with a Claude JSONL input.", "source-coverage-sample"));
@@ -907,6 +910,9 @@ function renderInputHealth() {
     const counts = node("p", `${inputCount(input.records_seen)} records seen · ${inputCount(input.added)} added · ${inputCount(input.replayed)} replayed`, "input-health-counts"); row.append(counts);
     if (input.error === "Overlapping native records in another selected source. Accepted history is retained.") {
       row.append(node("p", "Repeated native records in another selected input. This input was refused; accepted history is retained.", "confidence-note"));
+    }
+    if (input.error === "Declared Codex parent history requires replay reconciliation. This input was not imported; accepted history is retained.") {
+      row.append(node("p", "Declared Codex parent history requires replay reconciliation. This input was not imported; accepted history is retained.", "confidence-note"));
     }
     root.append(row);
   }

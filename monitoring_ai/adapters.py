@@ -121,8 +121,13 @@ def codex_row(row):
     if not isinstance(payload, dict):
         return {}
     if kind == "session_meta":
+        from .codex_lineage import declared_parent
         identity = payload.get("id")
-        return {"type": kind, "payload": {"id": identity}} if isinstance(identity, str) and 0 < len(identity) <= 1000 else {"type": kind}
+        # Retain only the accounting constraint, never the raw parent identity
+        kept = {"id": identity} if isinstance(identity, str) and 0 < len(identity) <= 1000 else {}
+        if declared_parent(payload):
+            kept["lineage_declared"] = True
+        return {"type": kind, "payload": kept}
     if kind == "turn_context":
         model = payload.get("model")
         return {"type": kind, "payload": {"model": safe_label(model)}}
@@ -230,6 +235,8 @@ def codex(rows, source, project):
         if not isinstance(payload, dict):
             continue
         if row.get("type") == "session_meta":
+            from .codex_lineage import require_independent
+            require_independent(payload)
             identity = payload.get("id")
             if session is not None and session != identity:
                 raise ValueError("A Codex file must contain one session")

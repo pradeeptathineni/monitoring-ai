@@ -9,6 +9,7 @@ from .metrics import now_iso
 from .sources import load_sources
 from .source_coverage import source_summary
 from .source_overlap import NATIVE_FORMATS, MESSAGE, identities
+from .codex_lineage import CodexLineageError, MESSAGE as CODEX_LINEAGE_MESSAGE
 
 
 def select_claude_stream(output, *, status_file, result_file, source_id, project):
@@ -109,6 +110,9 @@ def check_selection(path):
         except OSError:
             check = dict(id=source.id, format=source.format, state="unavailable", summary=None,
                          error="Selected file is unavailable. Check its existence and read access.")
+        except CodexLineageError:
+            check = dict(id=source.id, format=source.format, state="invalid", summary=None,
+                         error=CODEX_LINEAGE_MESSAGE)
         except ValueError:
             check = dict(id=source.id, format=source.format, state="invalid", summary=None,
                          error="Selected file does not match the format or normalized schema.")
