@@ -114,6 +114,15 @@ def parser():
     scenario.add_argument("--json", action="store_true")
     for key in (*DIMENSIONS, "since", "until"):
         scenario.add_argument("--" + key)
+    timeline = sub.add_parser("session-timeline", help="Inspect one exact recorded session's bounded status/tool/usage chronology")
+    timeline.add_argument("--db", type=Path, required=True, help="Existing ledger, read without initialization")
+    timeline.add_argument("--source", required=True)
+    timeline.add_argument("--session", required=True)
+    timeline.add_argument("--limit", type=int, default=500)
+    timeline.add_argument("--expected-revision", type=int)
+    timeline.add_argument("--json", action="store_true")
+    for key in ("provider", "model", "surface", "project", "since", "until"):
+        timeline.add_argument("--" + key)
     report = sub.add_parser("report", help="Inspect qualified period and tool reports without contacting a provider")
     report.add_argument("--db", type=Path, default=Path(".monitoring-ai/events.sqlite"))
     report.add_argument("--pricing", type=Path)
@@ -445,6 +454,24 @@ def _print_source_preview(value):
 
 
 def run(args):
+    if args.command == "session-timeline":
+        from .session_timeline import session_timeline
+        from .ledger_read import read_ledger
+        revision, events = read_ledger(args.db)
+        if args.expected_revision is not None and args.expected_revision != revision:
+            raise ValueError("Ledger changed. Read the timeline again with the new revision")
+        scope = {key: getattr(args, key) for key in (*DIMENSIONS, "since", "until") if getattr(args, key)}
+        value = session_timeline(revision, events, scope, limit=args.limit)
+        if args.json:
+            print(json.dumps(value, indent=2))
+        else:
+            print(f"Recorded session timeline · {value['source']} / {value['session']} · revision {revision}")
+            print(f"{value['coverage']['shown_records']} of {value['coverage']['matching_records']} records · {value['coverage']['shown_lanes']} lanes · incomplete coverage")
+            for marker in value["markers"]:
+                detail = marker.get("state", marker.get("tool", "usage"))
+                print(f"{marker['timestamp']} · {marker['entity']} · {marker['kind']} · {detail}")
+            print("Status intervals describe bounded producer evidence, not continuous work. Missing data is not idleness.")
+        return
     if args.command == "cost-scenario":
         from .cost_scenarios import cost_scenario
         from .scenario_config import read_scenario

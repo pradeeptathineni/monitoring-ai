@@ -372,6 +372,7 @@ def handler(observatory):
                         identity=observatory.identity, read_only=True,
                         snapshot="/api/v1/snapshot", events="/api/v1/events",
                         sessions="/api/v1/sessions",
+                        session_timeline="/api/v1/session-timeline",
                         usage_records="/api/v1/usage-records",
                         report="/api/v1/report", event_features=["tool-categories.v1"],
                         input_observations="monitoring.inputs.v1",
@@ -429,6 +430,23 @@ def handler(observatory):
                         page = usage_page(revision, events, query, observatory.pricing, observatory.fx,
                                           limit=limit, after=after, cost_state=cost_state)
                         self.send(200, dict(page, identity=observatory.identity))
+                elif parsed.path == "/api/v1/session-timeline":
+                    from .session_timeline import session_timeline
+                    identity, expected = query.pop("expected_identity", None), query.pop("expected_revision", None)
+                    limit = int(query.pop("limit", "500"))
+                    if identity is None or expected is None:
+                        raise ValueError("Session timelines require exact owner and revision pins")
+                    with observatory.lock:
+                        revision, events = observatory.store.read()
+                        if identity != observatory.identity or int(expected) != revision:
+                            self.send(409, {"error": "Owner or ledger changed. Reopen the selected session timeline"})
+                            return
+                        value = session_timeline(revision, events, query, limit=limit)
+                        inputs = observatory.input_status()
+                        status = dict(observatory.source_status)
+                        if inputs is not None:
+                            status = observatory._source_status_for_inputs(inputs, status)
+                        self.send(200, dict(value, identity=observatory.identity, source_status=status))
                 elif parsed.path == "/api/v1/cost-scenario":
                     if observatory.cost_scenario_status is None:
                         self.send(404, {"error": "A counterfactual price book is not configured"})
@@ -531,6 +549,8 @@ def handler(observatory):
                     self.send(200, value)
                 else:
                     files = {"/": (WEB / "index.html", "text/html; charset=utf-8"),
+                             "/session-timeline-view.js": (WEB / "session-timeline-view.js", "text/javascript; charset=utf-8"),
+                             "/session-timeline-view.css": (WEB / "session-timeline-view.css", "text/css; charset=utf-8"),
                              "/cost-scenario-view.js": (WEB / "cost-scenario-view.js", "text/javascript; charset=utf-8"),
                              "/cost-scenario-view.css": (WEB / "cost-scenario-view.css", "text/css; charset=utf-8"),
                              "/quota-history-view.js": (WEB / "quota-history-view.js", "text/javascript; charset=utf-8"),

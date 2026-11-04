@@ -1,3 +1,5 @@
+Optional [recorded session timelines](../../docs/session-timeline.md) use the native owner's exact source/session and owner/revision pins. Preserve status-context scope, 60-second evidence gaps, source times and omitted counts. These identities are not runtime targets. The standalone has one genuine restricted Claude invocation/tool capture and API/CLI/UI proof; managed Deep receiving of this endpoint is not implied.
+
 The optional [counterfactual cost scenario](../../docs/cost-scenarios.md) remains native-owner calculation. Discover its capability/status and pin owner, ledger revision and selected rate-book identity if receiving it. Preserve nulls, billed/estimated separation and the exact comparison subset, including dated rate/FX explanations. An explicit handoff to the existing native inspection workflow can avoid another Deep calculation. Managed source adoption and receiving are separate; this task did not change Deep.
 
 # Deep AI consumer

@@ -256,3 +256,7 @@ The `monitoring.quota-history.v1` response includes owner `identity`, independen
 ## Optional cost scenario
 
 Configured owners expose an additive counterfactual capability and snapshot configuration status, with owner/revision/rate-book pins on its dedicated read endpoint. The existing accounting and report schemas remain unchanged. See the [cost-scenario contract and interpretation](cost-scenarios.md#read-contract). No consumer should reprice original event costs or confuse the alternative estimate with a reported bill.
+
+## Recorded session timeline
+
+The additive optional timeline capability exposes a dedicated owner/revision-pinned exact-session read, retaining original marker times, supplied hierarchy and bounded status evidence without changing event accounting. Its [contract and interpretation](session-timeline.md#read-contract) distinguish marker filters, independent status context, omissions and unknown visibility. It supplies no execution authority or inferred process relationship.

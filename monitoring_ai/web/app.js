@@ -29,6 +29,7 @@ let sessionList = null, sessionListController = null, sessionListId = 0;
 let usageRecordPage = null, usageRecordController = null, usageRecordReadId = 0;
 let quotaHistoryView = null;
 let costScenarioView = null;
+let sessionTimelineView = null, timelineSelection = null;
 let cachedRange = "all", cachedExactDate = "", cachedView = "daily";
 let cachedDimensionFilters = { providers: "", models: "" };
 let cachedUsageReceivedAt = 0, cachedFileAgeAtReceipt = null;
@@ -94,6 +95,34 @@ function showView(route) {
   if (next === "report") loadReport();
   updateQuotaHistory();
   updateCostScenario();
+  updateSessionTimeline();
+}
+
+// A timeline scope is an observation identity, never an execution target
+function updateSessionTimeline() {
+  if (!sessionTimelineView && window.MonitoringSessionTimeline) {
+    sessionTimelineView = window.MonitoringSessionTimeline.mount($("#session-timeline-panel"), {
+      getContext: () => {
+        const params = query(); params.delete("state");
+        const scope = Object.fromEntries([...params].map(([key,value]) => [key, ["since","until"].includes(key)
+          ? new Date(value.length === 10 ? value + (key === "since" ? "T00:00:00Z" : "T23:59:59.999Z") : value).toISOString() : value]));
+        if (timelineSelection) Object.assign(scope, {source: timelineSelection.source, session: timelineSelection.session});
+        return {selection: timelineSelection, identity: data?.identity, revision: data?.revision,
+          observed_at: data?.observed_at, query: scope, active: view === "sessions" && document.visibilityState === "visible", paused, unavailable: snapshotReadUnavailable};
+      },
+      requestJSON: async (url, options) => {
+        const response = await fetch(url, {...options, cache:"no-store"});
+        if (!response.ok) {const error = new Error("Session timeline read failed"); error.status = response.status; throw error;}
+        return response.json();
+      },
+      onClose: () => {timelineSelection = null; updateSessionTimeline();},
+      onInspect: (marker) => {
+        if (!timelineSelection || timelineSelection.identity !== data?.identity) return;
+        inspect({source:timelineSelection.source, session:timelineSelection.session, entity:marker.entity});
+      },
+    });
+  }
+  sessionTimelineView?.update();
 }
 
 // Keep optional quota history independent of ledger filters and event revision
@@ -1116,12 +1145,18 @@ function renderEntityTable() {
     treeCell.append(title);
     const model = node("div", row.model); model.append(node("small", row.surface));
     const lastEvidence = node("span", lastEvidenceCellText(row), "last-evidence-cell");
-    const rendered = [treeCell, state(row), model, number.format(row.metrics.total_tokens), cash(row.metrics.costs.estimated.amount), cash(row.metrics.costs.billed.amount), lastEvidence];
+    const timeline = node("button", "Timeline", "quiet"); timeline.type = "button";
+    timeline.setAttribute("aria-label", `Open timeline for ${row.entity} in ${row.source} / ${row.session}`);
+    timeline.addEventListener("click", () => {
+      timelineSelection = {source:row.source, session:row.session, entity:row.entity, identity:data?.identity};
+      updateSessionTimeline(); $("#session-timeline-panel").scrollIntoView({block:"start"});
+    });
+    const rendered = [treeCell, state(row), model, number.format(row.metrics.total_tokens), cash(row.metrics.costs.estimated.amount), cash(row.metrics.costs.billed.amount), lastEvidence, timeline];
     rendered.entityKey = key;
     rendered.depth = depth;
     return rendered;
   });
-  table("#entity-table", ["Entity / hierarchy", "State", "Model / surface", "Tokens", "Estimated", "Billed", "Last evidence · UTC"], values);
+  table("#entity-table", ["Entity / hierarchy", "State", "Model / surface", "Tokens", "Estimated", "Billed", "Last evidence · UTC", "Timeline"], values);
   $$("#entity-table tbody tr").forEach((row, index) => {
     row.dataset.entityKey = values[index].entityKey;
     row.dataset.depth = String(values[index].depth);
@@ -2163,6 +2198,7 @@ function render() {
   renderInsights();
   updateQuotaHistory();
   updateCostScenario();
+  updateSessionTimeline();
   renderSourceCoverage();
   renderInputHealth();
   renderEntityTable();
@@ -2272,13 +2308,14 @@ async function refresh() {
 $$("[data-view]").forEach((button) => button.addEventListener("click", () => showView(button.dataset.view)));
 $("#filters").addEventListener("change", (event) => {
   updateCostScenario();
+  updateSessionTimeline();
   markEntityHistoryFiltersChanged();
   renderSessionComparison();
   if (event.target?.name === "since" || event.target?.name === "until") $("#report-period").value = "custom";
   refresh(); if (view === "report") loadReport();
 });
 $("#filters").addEventListener("submit", (event) => event.preventDefault());
-$("#filters").addEventListener("reset", () => { markEntityHistoryFiltersChanged(true); $("#state-filter").value = ""; setTimeout(() => { $("#report-period").value = "custom"; renderSessionComparison(); updateCostScenario(); refresh(); if (view === "report") loadReport(); }, 0); });
+$("#filters").addEventListener("reset", () => { markEntityHistoryFiltersChanged(true); $("#state-filter").value = ""; setTimeout(() => { $("#report-period").value = "custom"; renderSessionComparison(); updateCostScenario(); updateSessionTimeline(); refresh(); if (view === "report") loadReport(); }, 0); });
 $("#report-period").addEventListener("change", () => applyReportPeriod($("#report-period").value));
 $("#download-report").addEventListener("click", downloadDisplayedReport);
 $("#download-report-csv").addEventListener("click", downloadDisplayedReportCsv);
@@ -2402,3 +2439,6 @@ $("#load-usage-records").addEventListener("click", () => loadUsageRecords(0, tru
 $("#usage-record-prev").addEventListener("click", () => loadUsageRecords(Math.max(0, usageRecordPage.page.offset - 50)));
 $("#usage-record-next").addEventListener("click", () => { if (usageRecordPage?.page.next_offset !== null) loadUsageRecords(usageRecordPage.page.next_offset); });
 $("#usage-cost-filter").addEventListener("change", renderUsageRecords);
+
+// Stop optional timeline reads when this browser page is hidden
+document.addEventListener("visibilitychange", updateSessionTimeline);

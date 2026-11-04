@@ -1,0 +1,33 @@
+/* Scoped session evidence, using the unchanged shared theme tokens. */
+.session-timeline-view{padding:20px;min-width:0;overflow-wrap:anywhere;color:var(--text)}
+.session-timeline-view h2{margin:0 0 8px;font-size:1.25rem}
+.session-timeline-view h3{font-size:1rem}
+.session-timeline-view .timeline-scope,.session-timeline-view .timeline-read-status,.session-timeline-view .timeline-note,.session-timeline-view .timeline-lane-status{font-size:.9rem;line-height:1.5;color:var(--muted);margin:10px 0}
+.session-timeline-view .timeline-controls{display:flex;align-items:end;flex-wrap:wrap;gap:12px;margin:12px 0}
+.session-timeline-view label{display:flex;gap:8px;align-items:center;min-height:44px;min-width:0}
+.session-timeline-view button,.session-timeline-view select{min-height:44px;min-width:44px;max-width:100%;padding:8px 12px;font:inherit;background:var(--surface-inset);color:var(--text);border:1px solid var(--line-strong);border-radius:6px}
+.session-timeline-view select{width:220px}
+.session-timeline-view button{cursor:pointer}
+.session-timeline-view button:disabled{opacity:.5;cursor:not-allowed}
+.session-timeline-view input{width:18px;height:18px}
+.session-timeline-view :focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px}
+.session-timeline-view .timeline-chart,.session-timeline-view .timeline-table-wrap{max-width:100%;overflow:auto;border:1px solid var(--line);background:var(--surface-inset);border-radius:6px}
+.session-timeline-view .timeline-chart{max-height:430px}
+.session-timeline-view svg{display:block;width:100%;min-width:900px;height:auto}
+.session-timeline-view svg text{fill:var(--muted);font-size:13px;font-family:inherit}
+.session-timeline-view .timeline-grid{stroke:var(--line);stroke-width:1}
+.session-timeline-view .timeline-band{fill:var(--brand);opacity:.26}
+.session-timeline-view .timeline-waiting{fill:var(--warn)}
+.session-timeline-view .timeline-blocked{fill:var(--danger)}
+.session-timeline-view .timeline-mark{stroke:var(--panel);stroke-width:1;fill:var(--accent-text)}
+.session-timeline-view .timeline-usage{fill:var(--brand)}
+.session-timeline-view .timeline-tool{fill:var(--warn)}
+.session-timeline-view table{width:100%;min-width:760px;table-layout:fixed;border-collapse:collapse;font-size:.9rem}
+.session-timeline-view th,.session-timeline-view td{padding:10px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line);min-width:6rem;overflow-wrap:anywhere;white-space:normal}
+.session-timeline-view .timeline-detail{padding:16px;margin-top:16px;border:1px solid var(--line-strong);background:var(--surface-raised);border-radius:6px}
+.session-timeline-view dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:12px}
+.session-timeline-view dt{font-size:.85rem;color:var(--muted)}
+.session-timeline-view dd{margin:4px 0 0}
+
+/* Keep observed aliases and details readable without hiding the inspection action */
+.session-timeline-view th:nth-child(1){width:19%}.session-timeline-view th:nth-child(2){width:19%}.session-timeline-view th:nth-child(3){width:8%}.session-timeline-view th:nth-child(4){width:42%}.session-timeline-view th:nth-child(5){width:12%}
