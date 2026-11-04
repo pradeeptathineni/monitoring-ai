@@ -2479,13 +2479,19 @@ async function refreshCollectorPanel() {
     if (response.status === 404) { collectorDisabledOwner = identity; collectorBook = null; collectorView.clear(); return; }
     if (!response.ok) throw new Error("Collector read unavailable");
     const value = await response.json();
+    // A previous owner's body must not restore evidence after replacement
+    if (data?.identity !== identity) return;
     if (value.schema !== "monitoring.collector-health-read.v1" || value.identity !== identity) throw new Error("Collector owner changed");
     collectorReadFailed = false;
     collectorBook = value;
     collectorView.update(value, {paused, unavailable: snapshotReadUnavailable});
   } catch {
     if (data?.identity === identity) { collectorReadFailed = true; if (collectorBook) collectorView.update(collectorBook, {paused, unavailable:true}); }
-  } finally { clearTimeout(timeout); collectorReadAt = Date.now(); collectorBusy = false; }
+  } finally {
+    clearTimeout(timeout);
+    if (collectorOwner === identity) collectorReadAt = Date.now();
+    collectorBusy = false;
+  }
 }
 
 // Read only the startup-selected metadata file, pinned to the displayed owner

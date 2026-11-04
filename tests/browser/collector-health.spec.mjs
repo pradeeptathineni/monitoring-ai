@@ -48,3 +48,53 @@ test("failed reads retain dates and stay unknown on later redraw", async ({page}
   await expect(panel).toContainText(book.health.last_checkpoint_at);
   await expect(panel).not.toContainText("PRIVATE-ERROR");
 });
+
+// A replaced owner may return headers before its old JSON body finishes
+test("replacement owner rejects a delayed prior-owner body", async ({page}) => {
+  await page.clock.install();
+  const book = await envelope(page);
+  const snapshot = await (await page.request.get('/api/v1/snapshot')).json();
+  let replaced = false;
+  await page.route('**/api/v1/snapshot?**', route => route.fulfill({json:{...snapshot, identity:replaced ? 'replacement-owner' : snapshot.identity}}));
+  await page.route('**/api/v1/collector-health?**', route => route.fulfill({json:{...book,
+    identity:new URL(route.request().url()).searchParams.get('expected_identity')}}));
+  await page.addInitScript(() => {
+    const fetchOriginal = window.fetch;
+    let delayed = false;
+    window.fetch = async (...args) => {
+      const response = await fetchOriginal(...args);
+      if (String(args[0]).includes('/api/v1/snapshot?')) {
+        const json = response.json.bind(response);
+        response.json = async () => {
+          const value = await json();
+          window.latestSnapshotIdentity = value.identity;
+          return value;
+        };
+      }
+      if (String(args[0]).includes('/api/v1/collector-health?') && !delayed) {
+        delayed = true;
+        const json = response.json.bind(response);
+        response.json = async () => {
+          const value = await json();
+          window.oldCollectorWaiting = true;
+          await new Promise(resolve => { window.releaseOldCollector = resolve; });
+          window.oldCollectorBodyReturned = true;
+          return value;
+        };
+      }
+      return response;
+    };
+  });
+  await page.goto('/');
+  await expect.poll(() => page.evaluate(() => window.oldCollectorWaiting)).toBe(true);
+  replaced = true;
+  await expect.poll(async () => {
+    await page.clock.runFor(2000);
+    return page.evaluate(() => window.latestSnapshotIdentity);
+  }).toBe('replacement-owner');
+  await page.evaluate(() => window.releaseOldCollector());
+  await expect.poll(() => page.evaluate(() => window.oldCollectorBodyReturned)).toBe(true);
+  await expect(page.locator('#collector-health-panel')).not.toContainText(book.identity);
+  await page.clock.runFor(2000);
+  await expect(page.locator('#collector-health-panel')).toContainText('replacement-owner');
+});
