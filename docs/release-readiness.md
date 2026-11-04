@@ -4,6 +4,8 @@ Public versions use `vX.Y.Z`. Python package metadata and the read API use `X.Y.
 
 Earlier source declarations such as `0.8.0a1` remain in published history. They have not been renamed or retagged. No Git tags existed when this policy was reconciled on 2026-11-03. Minor numbers will not advance for each development checkpoint. Version selection follows the scope of an accepted change, with compatibility and maturity stated separately.
 
+The selected Codex family export now qualifies exact complete cumulative-prefix reconciliation through fictional files, private export, normalized ingestion and the supplied strict Deep reader. It preserves new child usage and later parent work, with source staleness and unknown costs. This is a finite workflow. Real fork compatibility, compaction-bearing histories, incomplete parents and sustained family following remain unqualified. The native follower's conservative guard is unchanged.
+
 `v1.0.0` means the first complete, confident delivery of the recorded Monitoring vision. Passing a demo, adding an adapter or reaching a particular iteration count does not satisfy it. The release decision requires the following acceptance evidence.
 
 | Feature set or boundary | Required for v1.0.0 | Current gap |

@@ -91,7 +91,7 @@ python3 -m monitoring_ai serve --file /path/to/authorized-events.jsonl --db /tmp
 
 Two native transcript adapters are included. Only use files you own or are authorized to read. Select one explicit Claude Code JSONL file for [bounded live following](docs/claude-native.md), or a complete [Codex session JSONL file](docs/codex-native.md). There is no home-directory scan, credential reader, hook installation or account connection.
 
-Codex files with declared fork or spawned-parent history currently refuse, because copied usage cannot yet be reconciled safely. Source checks explain the refusal; other selected inputs continue and accepted history is retained. See [parent-history limits](docs/codex-native.md#declared-parent-histories).
+The native follower refuses Codex files with declared fork or spawned-parent history. A separate [selected-family export](docs/codex-replay-export.md) removes only proven complete copied prefixes into a new normalized usage file. Missing parents, ambiguous histories and compaction refuse. Source checks explain native refusals while retaining accepted history. See [parent-history limits](docs/codex-native.md#declared-parent-histories).
 
 For a Claude CLI invocation you explicitly run with structured stdout, [capture its live start and reported end](docs/claude-cli-stream.md) into a private normalized event file. Matched tool-use/result frames in that stream also yield metadata-only tool outcomes. Unanswered requests remain unknown. This supplies invocation and tool observations without reading saved transcripts or assuming that the whole conversation closed. The event file records no tokens or cost, so it does not duplicate the separate native usage ledger.
 

@@ -48,12 +48,12 @@ class SessionExportTests(unittest.TestCase):
             self.assertEqual(output.read_bytes(), b"keep"); output.unlink()
             with self.assertRaises(ValueError):
                 export_session(source.path, output, source="fixture", session="chosen", expected_revision=1)
-            with patch("monitoring_ai.session_export.MAX_EXPORT_EVENTS", 1), self.assertRaises(ValueError):
+            with patch("monitoring_ai.event_export.MAX_EXPORT_EVENTS", 1), self.assertRaises(ValueError):
                 export_session(source.path, output, source="fixture", session="chosen")
-            with patch("monitoring_ai.session_export.MAX_BYTES", 1), self.assertRaises(ValueError):
+            with patch("monitoring_ai.event_export.MAX_BYTES", 1), self.assertRaises(ValueError):
                 export_session(source.path, output, source="fixture", session="chosen")
             self.assertFalse(output.exists())
-            with patch("monitoring_ai.session_export._sync_directory", side_effect=OSError), self.assertRaises(ResultPublicationUncertain):
+            with patch("monitoring_ai.event_export._sync_directory", side_effect=OSError), self.assertRaises(ResultPublicationUncertain):
                 export_session(source.path, output, source="fixture", session="chosen")
             self.assertEqual(len(load(output, "normalized")), 2)
             self.assertFalse(list(root.glob(".monitoring-export-*")))

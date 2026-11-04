@@ -153,6 +153,9 @@ def parser():
     history.add_argument("--after", type=int, default=0, help="Oldest-first record offset")
     history.add_argument("--expected-revision", type=int, help="Pin later pages to the first ledger revision")
     history.add_argument("--json", action="store_true", help="Local metadata-only history page")
+    replay_export = sub.add_parser("export-codex-family", help="Reconcile selected complete Codex parent histories into new private usage JSONL")
+    replay_export.add_argument("--sources", type=Path, required=True, help="Explicit Codex-only selection containing every declared parent")
+    replay_export.add_argument("--output", type=Path, required=True, help="New private normalized usage file; existing targets refuse")
     session_export = sub.add_parser("export-session", help="Export one exact recorded session as new private normalized JSONL")
     session_export.add_argument("--db", type=Path, required=True)
     session_export.add_argument("--output", type=Path, required=True, help="New 0600 file; existing paths refuse")
@@ -539,6 +542,16 @@ def run(args):
                 print(f"  Before conversion: {native['amount'] + ' ' + native['currency'] + ' · ' + native['basis'] + ' · ' + native['provenance'] if native is not None else 'Unknown'}")
                 print(f"  {cost['amount'] + ' ' + cost['currency'] if cost is not None else 'Unknown display cost'} · {row['cost_state']} · {row['explanation']}")
             print(f"Next offset: {value['next_offset']}. Accepted recorded usage only; incomplete coverage, no live activity or invoice inference.")
+        return
+    if args.command == "export-codex-family":
+        from .codex_replay_export import export_codex_family
+        from .result_capture import ResultPublicationUncertain
+        try:
+            result = export_codex_family(args.sources, args.output)
+        except ResultPublicationUncertain:
+            print("Export file exists, but durability is uncertain. Verify it before retrying.", file=sys.stderr)
+            raise SystemExit(2) from None
+        print(json.dumps(result, indent=2))
         return
     if args.command == "export-session":
         from .session_export import export_session
