@@ -441,6 +441,8 @@ def run(args):
                 event, cost = row["event"], row["display_cost"]
                 print(f"{event['timestamp']} · {event['source']} / {event['id']} · {event['provider']} / {event['model']}")
                 print("  " + " · ".join(f"{key} {count:,}" for key, count in event["tokens"].items()))
+                native = row["native_cost"]
+                print(f"  Before conversion: {native['amount'] + ' ' + native['currency'] + ' · ' + native['basis'] + ' · ' + native['provenance'] if native is not None else 'Unknown'}")
                 print(f"  {cost['amount'] + ' ' + cost['currency'] if cost is not None else 'Unknown display cost'} · {row['cost_state']} · {row['explanation']}")
             print(f"Next offset: {value['next_offset']}. Accepted recorded usage only; incomplete coverage, no live activity or invoice inference.")
         return

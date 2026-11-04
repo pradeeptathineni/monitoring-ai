@@ -80,7 +80,7 @@ class UsageRecordsTests(unittest.TestCase):
     def test_read_only_cli_pages_beyond_snapshot_window_without_changing_source(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder); path = root / "ledger.sqlite"
-            Store(path).ingest([event(f"record-{i:03}",model="missing")for i in range(125)])
+            Store(path).ingest([event(f"record-{i:03}",model="missing")for i in range(125)] + [event("foreign",cost=cost("2","EUR"))])
             before = hashlib.sha256(path.read_bytes()).hexdigest()
             command = [sys.executable,"-m","monitoring_ai","usage-records","--db",str(path),"--json","--cost-state","unpriced","--limit","50"]
             first = json.loads(subprocess.run(command,capture_output=True,text=True,check=True).stdout)
@@ -88,6 +88,9 @@ class UsageRecordsTests(unittest.TestCase):
             self.assertEqual(first["total"],125)
             self.assertEqual(len(later["records"]),25)
             self.assertIsNone(later["next_offset"])
+            human = subprocess.run(command[:6]+["--cost-state","unconverted"],capture_output=True,text=True,check=True).stdout
+            self.assertIn("Before conversion: 2 EUR · billed · synthetic-cost",human)
+            self.assertIn("Unknown display cost",human)
             self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(),before)
             missing = root / "missing.sqlite"
             self.assertNotEqual(subprocess.run(command[:5]+[str(missing),"--json"],capture_output=True).returncode,0)
