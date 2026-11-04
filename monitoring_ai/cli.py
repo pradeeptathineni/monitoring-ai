@@ -420,6 +420,7 @@ def quota_loader(args):
 
 
 def _print_source_check(value):
+    from .source_actions import source_actions
     print("MONITORING AI INPUT CHECK · explicit selected files only")
     for row in value["checks"]:
         print(f"\n{row['id']} · {row['format']} · {row['state']}")
@@ -440,6 +441,10 @@ def _print_source_check(value):
             print("No complete supported records yet. Check the selected format and producer output.")
     print("\n" + value["note"])
     print("A recent file read does not prove a live session. Missing evidence means coverage is unknown, not idle.")
+
+    guidance = source_actions(value)
+    for item in guidance["items"]:
+        print(f"  Next for {item['id']}: {item['action']}")
 
 
 def _print_source_preview(value):
