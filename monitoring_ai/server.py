@@ -23,13 +23,16 @@ class Observatory:
     def __init__(self, store, pricing, fx, loader=None, quota_loader=None, quota_book=None, source_observer=None,
                  cached_usage_loader=None, codeburn_activity_loader=None, session_cache_loader=None, process_observer=None,
                  token_threshold=None, cost_thresholds=None, app_threads_loader=None, app_turns_loader=None,
-                 quota_history=None, cost_scenario_pricing=None, cost_scenario_label="operator-scenario"):
+                 quota_history=None, cost_scenario_pricing=None, cost_scenario_label="operator-scenario",
+                 collector_checkpoint_file=None):
         if loader is not None and source_observer is not None:
             raise ValueError("Choose one input configuration")
         self.store, self.pricing, self.fx, self.loader = store, pricing, fx, loader
         self.source_observer = source_observer
         self.lock = threading.Lock()
         self.identity = str(uuid.uuid4())
+        self.collector_checkpoint_file = collector_checkpoint_file
+        self.collector_health_cache = None
         self.cost_scenario_pricing = cost_scenario_pricing
         self.cost_scenario_status = None
         if cost_scenario_pricing is not None:
@@ -411,6 +414,26 @@ def handler(observatory):
                             getattr(observatory.loader, "supports_turns", False)):
                         capabilities["codex_turns"] = "monitoring.codex-turns.v1"
                     self.send(200, capabilities)
+                elif parsed.path == "/api/v1/collector-health":
+                    if observatory.collector_checkpoint_file is None:
+                        self.send(404, {"error": "Collector checkpoints are not configured"})
+                        return
+                    if query != {"expected_identity": observatory.identity}:
+                        self.send(409, {"error": "Select the current Monitoring owner"})
+                        return
+                    from .collector_health import read_checkpoints
+                    from .metrics import now_iso
+                    observed = now_iso()
+                    with observatory.lock:
+                        state = "available"
+                        try:
+                            observatory.collector_health_cache = read_checkpoints(observatory.collector_checkpoint_file, observed)
+                        except (OSError, ValueError):
+                            state = "unavailable"
+                        self.send(200, dict(schema="monitoring.collector-health-read.v1",
+                                            identity=observatory.identity, observed_at=observed,
+                                            max_age_seconds=125, read_status=state,
+                                            health=observatory.collector_health_cache))
                 elif parsed.path == "/api/v1/snapshot":
                     self.send(200, observatory.read(query))
                 elif parsed.path == "/api/v1/report":
@@ -549,6 +572,8 @@ def handler(observatory):
                     self.send(200, value)
                 else:
                     files = {"/": (WEB / "index.html", "text/html; charset=utf-8"),
+                             "/collector-health-view.js": (WEB / "collector-health-view.js", "text/javascript; charset=utf-8"),
+                             "/collector-health-view.css": (WEB / "collector-health-view.css", "text/css; charset=utf-8"),
                              "/session-timeline-view.js": (WEB / "session-timeline-view.js", "text/javascript; charset=utf-8"),
                              "/session-timeline-view.css": (WEB / "session-timeline-view.css", "text/css; charset=utf-8"),
                              "/cost-scenario-view.js": (WEB / "cost-scenario-view.js", "text/javascript; charset=utf-8"),

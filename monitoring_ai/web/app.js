@@ -2423,6 +2423,7 @@ showView(location.hash.slice(1) || "overview");
 refresh();
 setInterval(() => {
   if (data) updateLifecycleEvidenceAges();
+  refreshCollectorPanel().catch(() => {});
   if (data) { renderAppThreads(); renderAppTurns(); }
   if (paused && data) {
     retainInsights("Dashboard refresh is paused. Showing previously recorded quota observations.");
@@ -2460,3 +2461,28 @@ $("#usage-cost-filter").addEventListener("change", renderUsageRecords);
 
 // Stop optional timeline reads when this browser page is hidden
 document.addEventListener("visibilitychange", updateSessionTimeline);
+
+// Read explicitly selected collector evidence without changing the event snapshot
+let collectorView, collectorBook = null, collectorReadAt = 0, collectorBusy = false, collectorDisabledOwner = null, collectorReadFailed = false, collectorOwner = null;
+async function refreshCollectorPanel() {
+  if (!data) return;
+  if (!collectorView) collectorView = (await import("/collector-health-view.js")).mountCollectorHealth($("#collector-health-panel"));
+  if (collectorOwner !== data.identity) { collectorOwner = data.identity; collectorBook = null; collectorReadAt = 0; collectorReadFailed = false; collectorDisabledOwner = null; collectorView.clear(); }
+  if (collectorBook) collectorView.update(collectorBook, {paused, unavailable: snapshotReadUnavailable || collectorReadFailed});
+  if (collectorBusy || paused || snapshotReadUnavailable || view !== "overview" || document.hidden || collectorDisabledOwner === data.identity || Date.now() - collectorReadAt < 10000) return;
+  collectorBusy = true;
+  const identity = data.identity, controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 4000);
+  try {
+    const response = await fetch(`/api/v1/collector-health?expected_identity=${encodeURIComponent(identity)}`, {signal: controller.signal, cache:"no-store"});
+    if (data?.identity !== identity) return;
+    if (response.status === 404) { collectorDisabledOwner = identity; collectorBook = null; collectorView.clear(); return; }
+    if (!response.ok) throw new Error("Collector read unavailable");
+    const value = await response.json();
+    if (value.schema !== "monitoring.collector-health-read.v1" || value.identity !== identity) throw new Error("Collector owner changed");
+    collectorReadFailed = false;
+    collectorBook = value;
+    collectorView.update(value, {paused, unavailable: snapshotReadUnavailable});
+  } catch {
+    if (data?.identity === identity) { collectorReadFailed = true; if (collectorBook) collectorView.update(collectorBook, {paused, unavailable:true}); }
+  } finally { clearTimeout(timeout); collectorReadAt = Date.now(); collectorBusy = false; }
+}

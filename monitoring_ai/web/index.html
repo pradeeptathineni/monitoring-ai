@@ -7,6 +7,7 @@
   <meta name="theme-color" content="#0a1118">
   <title>Monitoring AI</title>
   <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/collector-health-view.css">
   <link rel="stylesheet" href="/quota-history-view.css">
   <link rel="stylesheet" href="/cost-scenario-view.css">
   <link rel="stylesheet" href="/session-timeline-view.css">
@@ -77,6 +78,7 @@
         <article class="panel"><div class="panel-head"><div><h2>Ledger changes in this browser</h2><p>Added or revised records visible after this page began watching.</p></div><span class="tag">RECORDED</span></div><p id="ledger-changes-status" class="confidence-note" role="status"></p><ol id="ledger-changes" class="ledger-changes"></ol><p class="confidence-note">Compares only the latest 100 records under the current filters. Source time can precede observation time. Missing changes or a recent record do not establish worker activity or complete source coverage.</p></article>
         <div class="two-column"><article class="panel"><div class="panel-head"><div><h2>Source freshness</h2><p>Observed event age by explicitly supplied source</p></div><span class="tag">EVIDENCE</span></div><div id="freshness"></div></article><article class="panel"><div class="panel-head"><div><h2>Usage rate</h2><p>Selected-window rate and a linear projection</p></div><span class="tag">PACE</span></div><div id="pace"></div></article></div>
         <article class="panel"><div class="panel-head"><div><h2>Connected data coverage</h2><p>Capabilities and event kinds from explicitly selected inputs</p></div><span class="tag">SOURCES</span></div>
+          <div id="collector-health-panel"></div>
           <div id="source-coverage-status" class="source-coverage-status" role="status"></div>
           <div id="source-coverage" class="source-coverage-list"></div>
           <div id="input-inventory-fallback" hidden><div id="input-health-status" class="input-health-status" role="status"></div><div id="input-health" class="input-health-list"></div></div>
@@ -147,6 +149,7 @@
 python3 -m monitoring_ai sources preview --sources /path/to/private-sources.json
 python3 -m monitoring_ai serve --sources /path/to/private-sources.json --db /path/to/private-ledger.sqlite</code></pre></li></ol>
             <p>Preview uses a disposable ledger copy. Add <code>--db</code> only to inspect an existing ledger. The default is an empty base. Repeated native records across selected Claude files or across selected Codex files are refused; other collector overlap may remain. Files can change afterward. See README.md sections “Connect your data” and “Detailed reports” for command details. Manifests and input files stay on your machine.</p>
+            <p>Optional collector evidence: deliberately restart the owner with <code>--collector-checkpoints /path/to/private-checkpoints.jsonl</code>. This is separate from normalized-file health and does not grant source access or start a collector.</p>
           </details>
           <details class="coverage-setup navigation-disclosure"><summary>Read an existing CodeBurn daily cache</summary>
             <p>Select an authorized v74 daily cache in the startup command:</p><pre><code>python3 -m monitoring_ai serve --db /path/to/private-ledger.sqlite --codeburn-cache /path/to/selected/daily-cache.v74.json</code></pre>

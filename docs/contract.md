@@ -260,3 +260,11 @@ Configured owners expose an additive counterfactual capability and snapshot conf
 ## Recorded session timeline
 
 The additive optional timeline capability exposes a dedicated owner/revision-pinned exact-session read, retaining original marker times, supplied hierarchy and bounded status evidence without changing event accounting. Its [contract and interpretation](session-timeline.md#read-contract) distinguish marker filters, independent status context, omissions and unknown visibility. It supplies no execution authority or inferred process relationship.
+
+## Optional collector checkpoints
+
+An owner started with `--collector-checkpoints FILE` exposes `GET /api/v1/collector-health?expected_identity=OWNER`. Unconfigured owners return 404. Missing, changed or extra owner parameters return 409. The route reads only the startup-selected bounded checkpoint file, creates no ledger events and takes no provider action. No existing snapshot or capability field changes.
+
+The `monitoring.collector-health-read.v1` envelope contains owner identity, read `observed_at`, `max_age_seconds:125`, `read_status:available|unavailable`, and nullable `health`. The projected `monitoring.collector-health.v1` book separates collector state, last source state, supplied checkpoint/read/event times and accepted record count. It retains incomplete coverage, stale/future/empty evidence and a partial-tail flag. Read failures retain the last accepted dated book with unavailable read status. No file paths or raw error bodies are returned. These are collector observations, not provider-session lifecycle.
+
+The standalone panel ages checkpoint time independently of HTTP read time and retains unknown state while paused or disconnected. It is independent of event filters. Deep has not admitted or rendered this separate route by this change. Its owner must review the additive read contract before using it. Existing selected sources and managed owners are unchanged.
