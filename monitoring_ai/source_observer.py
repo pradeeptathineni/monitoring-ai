@@ -4,6 +4,7 @@ import threading
 
 from .claude_follow import ClaudeFollower
 from .codex_follow import CodexFollower
+from .claude_lineage import ClaudeForkHistoryError, MESSAGE as CLAUDE_FORK_MESSAGE
 from .codex_lineage import (CodexLineageError, MESSAGE as CODEX_LINEAGE_MESSAGE,
                             UnsupportedHistoryError, UNQUALIFIED_MESSAGE)
 from .metrics import now_iso
@@ -57,6 +58,8 @@ class SourceObserver:
             return "Input unavailable."
         if isinstance(error, NativeOverlapError):
             return MESSAGE
+        if isinstance(error, ClaudeForkHistoryError):
+            return CLAUDE_FORK_MESSAGE
         if isinstance(error, UnsupportedHistoryError):
             return UNQUALIFIED_MESSAGE
         if isinstance(error, CodexLineageError):

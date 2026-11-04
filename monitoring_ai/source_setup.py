@@ -9,6 +9,7 @@ from .metrics import now_iso
 from .sources import load_sources
 from .source_coverage import source_summary
 from .source_overlap import NATIVE_FORMATS, MESSAGE, identities
+from .claude_lineage import ClaudeForkHistoryError, MESSAGE as CLAUDE_FORK_MESSAGE
 from .codex_lineage import (CodexLineageError, MESSAGE as CODEX_LINEAGE_MESSAGE,
                             UnsupportedHistoryError, UNQUALIFIED_MESSAGE)
 
@@ -111,6 +112,9 @@ def check_selection(path):
         except OSError:
             check = dict(id=source.id, format=source.format, state="unavailable", summary=None,
                          error="Selected file is unavailable. Check its existence and read access.")
+        except ClaudeForkHistoryError:
+            check = dict(id=source.id, format=source.format, state="invalid", summary=None,
+                         error=CLAUDE_FORK_MESSAGE)
         except UnsupportedHistoryError:
             check = dict(id=source.id, format=source.format, state="invalid", summary=None,
                          error=UNQUALIFIED_MESSAGE)

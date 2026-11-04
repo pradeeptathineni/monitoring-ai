@@ -87,7 +87,10 @@ def claude_block(block):
 def claude_row(row):
     # Keep only what claude() and claude_tool_events() read so prompts, text, tool inputs and results never accumulate.
     # Non-string labels already read as absent there, so omitting them keeps output identical
+    from .claude_lineage import declared_fork
     kept = {key: row[key] for key in CLAUDE_FIELDS if key in row}
+    if declared_fork(row):
+        kept["fork_declared"] = True
     if isinstance(row.get("type"), str):
         kept["type"] = row["type"]
     if row.get("type") == "system" and row.get("subtype") == "stop_hook_summary":
@@ -189,6 +192,8 @@ def count(value):
 
 
 def claude(rows, source, project, *, versions=False):
+    from .claude_lineage import require_independent
+    require_independent(rows)
     events = {} if not versions else []
     for row in rows:
         message = row.get("message")

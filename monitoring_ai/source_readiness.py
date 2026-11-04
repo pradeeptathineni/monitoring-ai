@@ -7,6 +7,7 @@ from .metrics import now_iso
 from .source_coverage import source_summary
 from .sources import load_sources
 from .source_overlap import NativeOverlapError, NATIVE_FORMATS, MESSAGE
+from .claude_lineage import ClaudeForkHistoryError, MESSAGE as CLAUDE_FORK_MESSAGE
 from .codex_lineage import (CodexLineageError, MESSAGE as CODEX_LINEAGE_MESSAGE,
                             UnsupportedHistoryError, UNQUALIFIED_MESSAGE)
 
@@ -65,6 +66,9 @@ def preview_selection(manifest, db=None):
             for source in sources:
                 try:
                     rows = source.load(live=True)
+                except ClaudeForkHistoryError:
+                    inputs.append(_result(source, "rejected", error=CLAUDE_FORK_MESSAGE))
+                    continue
                 except UnsupportedHistoryError:
                     inputs.append(_result(source, "rejected", error=UNQUALIFIED_MESSAGE))
                     continue

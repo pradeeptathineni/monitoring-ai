@@ -836,6 +836,9 @@ function renderSourceCoverage() {
       if (health.error === "Overlapping native records in another selected source. Accepted history is retained.") {
         row.append(node("p", "Repeated native records in another selected input. This input was refused; accepted history is retained. Review the source selection before restarting it.", "source-coverage-sample"));
       }
+      if (health.error === "Declared Claude fork history requires separate accounting qualification. This input was not imported; accepted history is retained.") {
+        row.append(node("p", "Declared Claude fork history requires separate accounting qualification. This input was not imported; accepted history is retained.", "source-coverage-sample"));
+      }
       if (health.error === "Declared Codex history metadata requires separate accounting qualification. This input was not imported; accepted history is retained.") {
         row.append(node("p", "Declared Codex history metadata requires separate accounting qualification. This input was not imported; accepted history is retained.", "source-coverage-sample"));
       }
@@ -913,6 +916,9 @@ function renderInputHealth() {
     const counts = node("p", `${inputCount(input.records_seen)} records seen · ${inputCount(input.added)} added · ${inputCount(input.replayed)} replayed`, "input-health-counts"); row.append(counts);
     if (input.error === "Overlapping native records in another selected source. Accepted history is retained.") {
       row.append(node("p", "Repeated native records in another selected input. This input was refused; accepted history is retained.", "confidence-note"));
+    }
+    if (input.error === "Declared Claude fork history requires separate accounting qualification. This input was not imported; accepted history is retained.") {
+      row.append(node("p", "Declared Claude fork history requires separate accounting qualification. This input was not imported; accepted history is retained.", "confidence-note"));
     }
     if (input.error === "Declared Codex history metadata requires separate accounting qualification. This input was not imported; accepted history is retained.") {
       row.append(node("p", "Declared Codex history metadata requires separate accounting qualification. This input was not imported; accepted history is retained.", "confidence-note"));
