@@ -23,8 +23,10 @@ test("observed UTC-day threshold is visible in Usage and configured in Settings"
   await expect(page.locator("#token-threshold-status")).toContainText("retained snapshot; current use unknown");
   await page.locator("#pause").click();
   await page.goto("/#settings/thresholds");
-  await expect(page.locator('#settings [data-settings-category="thresholds"]')).toBeVisible();
-  await expect(page.locator('#settings [data-settings-category="thresholds"]')).toContainText("--token-threshold 100000");
+  const thresholdSettings = page.locator('#settings [data-settings-category="thresholds"]')
+    .filter({ has: page.getByRole("heading", { name: "Thresholds", exact: true }) });
+  await expect(thresholdSettings).toBeVisible();
+  await expect(thresholdSettings).toContainText("--token-threshold 100000");
   await expect(page.locator("#breadcrumb")).toHaveText("Settings / Thresholds");
 });
 

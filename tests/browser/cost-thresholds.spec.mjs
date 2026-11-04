@@ -29,7 +29,9 @@ test("separate cost thresholds show coverage and retained-state limits", async (
   await page.locator("#pause").click();
   await expect(page.locator("#cost-threshold-status")).toContainText("retained snapshot; current use unknown");
   await page.goto("/#settings/thresholds");
-  await expect(page.locator('#settings [data-settings-category="thresholds"]')).toContainText("--estimated-cost-threshold 10");
+  const thresholdSettings = page.locator('#settings [data-settings-category="thresholds"]')
+    .filter({ has: page.getByRole("heading", { name: "Thresholds", exact: true }) });
+  await expect(thresholdSettings).toContainText("--estimated-cost-threshold 10");
 });
 
 test("owners without cost thresholds keep the optional panel hidden", async ({ page }) => {
