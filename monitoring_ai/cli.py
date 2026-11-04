@@ -51,6 +51,8 @@ def parser():
             command.add_argument("--billed-cost-threshold",
                                  help="Optional current UTC-day threshold over known billed cost in display currency")
         if name == "serve":
+            command.add_argument("--quota-history", type=Path,
+                                 help="Opt-in private quota history; existing history is read-only without a quota source")
             command.add_argument("--port", type=int, default=5274)
             command.add_argument("--demo", action="store_true", help="Seed an empty ledger with fictional data")
             command.add_argument("--sources", type=Path, help="Explicit private source manifest, loaded once at startup")
@@ -91,6 +93,13 @@ def parser():
     quota.add_argument("--source-id", default="codex-quota")
     quota.add_argument("--account", default="default")
     quota.add_argument("--executable", type=Path)
+    quota_history = sub.add_parser("quota-history", help="Read dated quota observations without contacting a provider")
+    quota_history.add_argument("--db", type=Path, required=True, help="Existing private quota history, not the event ledger")
+    quota_history.add_argument("--series")
+    quota_history.add_argument("--limit", type=int, default=200)
+    quota_history.add_argument("--before")
+    quota_history.add_argument("--expected-revision", type=int)
+    quota_history.add_argument("--json", action="store_true")
     report = sub.add_parser("report", help="Inspect qualified period and tool reports without contacting a provider")
     report.add_argument("--db", type=Path, default=Path(".monitoring-ai/events.sqlite"))
     report.add_argument("--pricing", type=Path)
@@ -422,6 +431,23 @@ def _print_source_preview(value):
 
 
 def run(args):
+    if args.command == "quota-history":
+        from .quota_history import QuotaHistory
+        if args.before and (args.expected_revision is None or args.series is None):
+            raise ValueError("Older quota pages require the selected series and first revision")
+        value = QuotaHistory(args.db, read_only=True).view(args.series, limit=args.limit,
+            before=args.before, expected_revision=args.expected_revision)
+        if args.json:
+            print(json.dumps(value, indent=2))
+        else:
+            print(f"Recorded quota observations · revision {value['revision']} · current allowance unknown")
+            for scope in value["series"]:
+                print(f"{scope['key']} · {scope['source']} / {scope['provider']} / {scope['account']} / {scope['id']} · {scope['observations']} observations")
+            for point in value["points"]:
+                percent = "unknown" if point["used_percent"] is None else str(point["used_percent"]) + "% used"
+                print(f"{point['captured_at']} · {percent} · recorded {point['recorded_at']} · breaks {', '.join(point['break_reasons']) or 'none'}")
+            print(f"Next before: {value['next_before']}. Incomplete recorded history, not tokens, costs or current account use.")
+        return
     if args.command == "usage-records":
         from .ledger_read import read_ledger
         from .usage_records import usage_page
@@ -675,7 +701,12 @@ def run(args):
             process_observer = ProcessObserver(interval_seconds=args.process_interval if args.process_interval is not None else 5)
         from .app_threads import read_app_threads
         from .app_turns import read_app_turns
+        quota_history = None
+        if args.quota_history:
+            from .quota_history import QuotaHistory
+            quota_history = QuotaHistory(args.quota_history, read_only=not (args.quota_file or args.codex_quota))
         serve(Observatory(store, pricing, fx, loader, quota_loader=quota_loader(args),
+                          quota_history=quota_history,
                           source_observer=observer,
                           app_threads_loader=(lambda: read_app_threads(args.app_threads)) if args.app_threads else None,
                           app_turns_loader=(lambda: read_app_turns(args.app_turns)) if args.app_turns else None,

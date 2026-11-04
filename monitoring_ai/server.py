@@ -22,7 +22,8 @@ WEB = Path(__file__).with_name("web")
 class Observatory:
     def __init__(self, store, pricing, fx, loader=None, quota_loader=None, quota_book=None, source_observer=None,
                  cached_usage_loader=None, codeburn_activity_loader=None, session_cache_loader=None, process_observer=None,
-                 token_threshold=None, cost_thresholds=None, app_threads_loader=None, app_turns_loader=None):
+                 token_threshold=None, cost_thresholds=None, app_threads_loader=None, app_turns_loader=None,
+                 quota_history=None):
         if loader is not None and source_observer is not None:
             raise ValueError("Choose one input configuration")
         self.store, self.pricing, self.fx, self.loader = store, pricing, fx, loader
@@ -33,6 +34,9 @@ class Observatory:
         self.quota_loader = quota_loader
         self.quota_book = validate_quota_book(quota_book) if quota_book else None
         self.quota_status = dict(state="static" if quota_book else "unconfigured", last_success_at=None, error=None)
+        self.quota_history = quota_history
+        self.quota_history_status = dict(state="recorded-only" if quota_history and quota_history.read_only else "unread",
+                                         error=None, last_saved_at=None)
         self.cached_usage_loader = cached_usage_loader
         self.cached_usage = None
         self.cached_usage_status = dict(state="unread", last_success_at=None, error=None)
@@ -166,10 +170,52 @@ class Observatory:
             with self.lock:
                 self.quota_book = book
                 self.quota_status = dict(state="following", last_success_at=now_iso(), error=None)
+                # A history failure must not invalidate an accepted current quota book
+                if self.quota_history is not None and not self.quota_history.read_only:
+                    try:
+                        self.quota_history.record(book, self.identity)
+                        self.quota_history_status = dict(state="recording", error=None, last_saved_at=now_iso())
+                    except (ValueError, OSError, sqlite3.Error) as error:
+                        from .quota_history import QuotaHistoryFull
+                        self.quota_history.mark_gap()
+                        self.quota_history_status.update(
+                            state="capacity" if isinstance(error, QuotaHistoryFull) else "unavailable",
+                            error="History recording stopped. Earlier observations are retained.")
         except (ValueError, OSError):
             with self.lock:
                 self.quota_status = dict(state="unavailable", last_success_at=self.quota_status["last_success_at"],
                                          error="Quota source unavailable. Last supplied observations are retained.")
+                if self.quota_history is not None and not self.quota_history.read_only:
+                    self.quota_history.mark_gap()
+                    self.quota_history_status.update(state="waiting-source", error="Waiting for a successful quota source read.")
+
+    def quota_history_summary(self):
+        """Keep recorder health separate from live source health and usage totals."""
+        try:
+            summary = self.quota_history.summary()
+        except (ValueError, OSError, sqlite3.Error):
+            summary = dict(schema="monitoring.quota-history-status.v1", revision=None, observations=None,
+                           series_count=None, capacity=self.quota_history.max_samples,
+                           series_capacity=self.quota_history.max_series, read_only=self.quota_history.read_only)
+            self.quota_history_status.update(state="unavailable", error="Quota history is unavailable.")
+        return dict(summary, state=self.quota_history_status["state"], source_state=self.quota_status["state"])
+
+    def read_quota_history(self, **query):
+        """Return dated history and a separately matched current source observation."""
+        from .quota_history import samples, window_key
+        from .insights import _quota_view
+        from .metrics import seconds
+        page = self.quota_history.view(**query)
+        selected = page["selected"]
+        current = None
+        if self.quota_book is not None:
+            keys = [window_key(row) for row in samples(self.quota_book)]
+            windows = _quota_view(self.quota_book, seconds(page["observed_at"]))["windows"]
+            current = next((row for key, row in zip(keys, windows) if key == selected), None)
+        scope = next((row for row in page["series"] if row["key"] == selected), None)
+        return dict(page, identity=self.identity, recording_status=dict(self.quota_history_status),
+                    source_read_state=self.quota_status["state"], current_window=current,
+                    synthetic_selected=bool(scope and scope["source"].startswith("synthetic")))
 
     def refresh(self):
         if self.source_observer is not None:
@@ -238,6 +284,8 @@ class Observatory:
                 value["cost_thresholds"] = evaluate_cost_thresholds(events, limits=self.cost_thresholds,
                     pricing=self.pricing, fx=self.fx, now=value["observed_at"])
             value["insights"]["quotas"]["read_status"] = dict(self.quota_status)
+            if self.quota_history is not None:
+                value["quota_history_status"] = self.quota_history_summary()
             value.update(identity=self.identity, source_status=dict(self.source_status))
             self._include_cached_usage(value)
             self._include_codeburn_activity(value)
@@ -330,6 +378,8 @@ def handler(observatory):
                     )
                     if observatory.app_threads_loader is not None:
                         capabilities["app_threads"] = "monitoring.app-threads.v1"
+                    if observatory.quota_history is not None:
+                        capabilities["quota_history"] = "/api/v1/quota-history"
                     if observatory.app_turns_loader is not None:
                         capabilities["codex_app_turns"] = "monitoring.codex-app-turns.v1"
                     if observatory.process_observer is not None:
@@ -368,6 +418,30 @@ def handler(observatory):
                         page = usage_page(revision, events, query, observatory.pricing, observatory.fx,
                                           limit=limit, after=after, cost_state=cost_state)
                         self.send(200, dict(page, identity=observatory.identity))
+                elif parsed.path == "/api/v1/quota-history":
+                    if observatory.quota_history is None:
+                        self.send(404, {"error": "Quota history is not configured"})
+                        return
+                    if set(query) - {"series", "limit", "before", "expected_revision", "expected_identity"}:
+                        raise ValueError("Unsupported quota history query")
+                    identity, expected = query.pop("expected_identity", None), query.pop("expected_revision", None)
+                    if query.get("before") and (identity is None or expected is None or not query.get("series")):
+                        raise ValueError("Older quota pages require exact series, owner and revision")
+                    with observatory.lock:
+                        revision = observatory.quota_history.summary()["revision"]
+                        if (identity is not None and identity != observatory.identity) or (expected is not None and int(expected) != revision):
+                            self.send(409, {"error": "Owner or quota history changed. Reload latest observations"})
+                            return
+                        # Pin the database read too, including against another explicit writer
+                        try:
+                            value = observatory.read_quota_history(series=query.get("series"),
+                                limit=int(query.get("limit", "200")), before=query.get("before"), expected_revision=revision)
+                        except ValueError:
+                            if observatory.quota_history.summary()["revision"] != revision:
+                                self.send(409, {"error": "Quota history changed. Reload latest observations"})
+                                return
+                            raise
+                        self.send(200, value)
                 elif parsed.path == "/api/v1/sessions":
                     limit = int(query.pop("limit", "100"))
                     after = int(query.pop("after", "0"))
@@ -428,6 +502,8 @@ def handler(observatory):
                     self.send(200, value)
                 else:
                     files = {"/": (WEB / "index.html", "text/html; charset=utf-8"),
+                             "/quota-history-view.js": (WEB / "quota-history-view.js", "text/javascript; charset=utf-8"),
+                             "/quota-history-view.css": (WEB / "quota-history-view.css", "text/css; charset=utf-8"),
                              "/quota-watch.js": (WEB / "quota-watch.js", "text/javascript; charset=utf-8"),
                              "/app.js": (WEB / "app.js", "text/javascript; charset=utf-8"),
                              "/appearance.js": (WEB / "appearance.js", "text/javascript; charset=utf-8"),

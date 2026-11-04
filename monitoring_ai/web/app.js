@@ -27,6 +27,7 @@ let comparison = null, comparisonController = null, comparisonId = 0, comparison
 let comparisonMessage = "Choose two distinct sessions.";
 let sessionList = null, sessionListController = null, sessionListId = 0;
 let usageRecordPage = null, usageRecordController = null, usageRecordReadId = 0;
+let quotaHistoryView = null;
 let cachedRange = "all", cachedExactDate = "", cachedView = "daily";
 let cachedDimensionFilters = { providers: "", models: "" };
 let cachedUsageReceivedAt = 0, cachedFileAgeAtReceipt = null;
@@ -90,6 +91,23 @@ function showView(route) {
   window.dispatchEvent(new CustomEvent("monitoring:navigate", { detail: { view: next } }));
   window.monitoringNavigation?.reveal(next);
   if (next === "report") loadReport();
+  updateQuotaHistory();
+}
+
+// Keep optional quota history independent of ledger filters and event revision
+function updateQuotaHistory() {
+  if (!quotaHistoryView && window.MonitoringQuotaHistory) {
+    quotaHistoryView = window.MonitoringQuotaHistory.mount($("#quota-history-panel"), {
+      getContext: () => ({ identity: data?.identity, active: view === "usage", paused,
+        unavailable: snapshotReadUnavailable, summary: data?.quota_history_status || null }),
+      requestJSON: async (url, options) => {
+        const response = await fetch(url, { ...options, cache: "no-store" });
+        if (!response.ok) { const error = new Error("Quota history read failed"); error.status = response.status; throw error; }
+        return response.json();
+      },
+    });
+  }
+  quotaHistoryView?.update();
 }
 
 function query() {
@@ -2119,6 +2137,7 @@ function render() {
   }
   confidence.append(node("p", "Known amounts cover only their labeled records. Estimates and billed amounts are never added for the same event. Lifecycle evidence expires after 60 seconds.", "confidence-note"));
   renderInsights();
+  updateQuotaHistory();
   renderSourceCoverage();
   renderInputHealth();
   renderEntityTable();
