@@ -14,6 +14,7 @@ from monitoring_ai.codex_lineage import UnsupportedHistoryError, UNQUALIFIED_MES
 from monitoring_ai.codex_replay_export import export_codex_family
 from monitoring_ai.source_setup import check_selection, create_selection
 from monitoring_ai.store import Store
+from monitoring_ai.receipt_evidence import inspect_export
 
 
 def meta(session, minute=0, parent=None):
@@ -61,6 +62,15 @@ class ReplayExportTests(unittest.TestCase):
                               "--sources", str(self.manifest), "--output", str(self.output)],
                              capture_output=True, text=True, check=True)
         receipt = json.loads(run.stdout)
+        receipt_path = self.root / "receipt.json"
+        receipt_path.write_text(json.dumps(receipt))
+        evidence = inspect_export(receipt_path, self.output)
+        self.assertEqual(evidence["consistency"], "matching")
+        self.assertEqual(evidence["producer_authenticity"], "unverified")
+        original_output = self.output.read_bytes()
+        self.output.write_bytes(original_output + b"\n")
+        self.assertEqual(inspect_export(receipt_path, self.output)["consistency"], "mismatch")
+        self.output.write_bytes(original_output)
         self.assertEqual(receipt["events"], 3)
         self.assertEqual(receipt["sources"][0]["copied_usage_records"], 2)
         self.assertFalse(receipt["complete_coverage"])

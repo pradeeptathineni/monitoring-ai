@@ -153,6 +153,9 @@ def parser():
     history.add_argument("--after", type=int, default=0, help="Oldest-first record offset")
     history.add_argument("--expected-revision", type=int, help="Pin later pages to the first ledger revision")
     history.add_argument("--json", action="store_true", help="Local metadata-only history page")
+    evidence = sub.add_parser("inspect-codex-export", help="Compare a selected export receipt with exact normalized output bytes")
+    evidence.add_argument("--receipt", type=Path, required=True)
+    evidence.add_argument("--file", type=Path, required=True)
     replay_export = sub.add_parser("export-codex-family", help="Reconcile selected complete Codex parent histories into new private usage JSONL")
     replay_export.add_argument("--sources", type=Path, required=True, help="Explicit Codex-only selection containing every declared parent")
     replay_export.add_argument("--output", type=Path, required=True, help="New private normalized usage file; existing targets refuse")
@@ -566,6 +569,13 @@ def run(args):
             raise SystemExit(2) from None
         if result["last_source_state"] == "unavailable":
             raise SystemExit(2)
+        return
+    if args.command == "inspect-codex-export":
+        from .receipt_evidence import inspect_export
+        result = inspect_export(args.receipt, args.file)
+        print(json.dumps(result, indent=2))
+        if result["consistency"] != "matching":
+            raise SystemExit(1)
         return
     if args.command == "export-codex-family":
         from .codex_replay_export import export_codex_family

@@ -57,3 +57,9 @@ To deliberately resume an existing owned mode-0600 output, supply `--append`. Th
 The downstream normalized-file owner observes the emitted records and their original timestamps. It does not automatically receive the collector's stdout failures or final stop. Retain those checkpoints separately. Likewise, the export receipt's copied-prefix proof is not embedded in `monitoring.event.v1` or automatically visible in Deep. Preserved source/event identity and unknown costs are not proof that every provider call was observed.
 
 Following is qualified with fictional append, partial-line, parent-generation, restore, replay, explicit-resume and finite-process workflows. The existing selected historical Codex `0.162.0-alpha.17.2` header has no declared parent. It cannot qualify a real fork. No denied fresh-session directory was read, and no genuine Maestro feed was present in the inspected source selections.
+
+## Inspect a retained receipt
+
+Save the export command's JSON receipt separately. Use `python3 -m monitoring_ai inspect-codex-export --receipt /path/to/receipt.json --file /path/to/usage.jsonl` to compare its digest, byte length and per-source record counts with the selected output. The command reads only those files, creates no ledger and writes no source. A mismatch exits with code 1. Malformed inputs refuse.
+
+A matching result binds the operator-supplied receipt to those exact bytes. Producer authenticity remains unverified. It does not establish actual fork compatibility, complete account coverage, billed cost or session lifecycle. This evidence remains separate from normalized events and Deep until a receiving contract is deliberately adopted.
