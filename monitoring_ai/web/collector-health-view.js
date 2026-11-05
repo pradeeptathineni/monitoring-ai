@@ -13,6 +13,7 @@ const SOURCE_LABEL = { following: 'Following', unavailable: 'Unavailable', unrea
 // Fixed reason codes only; anything else is dropped (never rendered).
 const REASON_HELP = new Map([
   ['ok', 'The selected checkpoint reported no problem.'],
+  ['collector-following', 'The collector reconciled its fixed selection. Coverage remains incomplete.'],
   ['not_configured', 'No checkpoint source is selected.'],
   ['no-checkpoints', 'No checkpoint has been recorded yet.'],
   ['collection-source-unavailable', 'The selected family was unavailable or could not be reconciled at that checkpoint.'],
@@ -101,12 +102,18 @@ export function mountCollectorHealth(root) {
   heading.textContent = 'Collector checkpoints';
   const scope = el('p', 'collector-health-scope');
   scope.textContent =
-    'Checkpoint reports from the selected collector. Provider sessions require separate evidence. Event filters do not apply.';
+    'Checkpoint reports from the selected collector, separate from event-file read health. A readable output is not an upstream heartbeat or worker evidence. Event filters do not apply.';
   const status = el('div', 'collector-health-status');
   status.setAttribute('aria-live', 'polite');
   status.setAttribute('aria-atomic', 'true');
   const notes = el('ul', 'collector-health-notes');
   const dl = el('dl', 'collector-health-facts');
+  // Native disclosure keeps internal owner identity out of the primary flow
+  const details = el('details', 'collector-health-details');
+  const summary = el('summary');
+  summary.textContent = 'Collector evidence';
+  details.append(summary, dl);
+  const recovery = el('p', 'collector-health-recovery');
 
   const ROWS = [
     ['owner', 'Owner'],
@@ -133,7 +140,8 @@ export function mountCollectorHealth(root) {
   section.appendChild(scope);
   section.appendChild(status);
   section.appendChild(notes);
-  section.appendChild(dl);
+  section.appendChild(recovery);
+  section.appendChild(details);
   section.hidden = true;
   root.appendChild(section);
 
@@ -159,12 +167,15 @@ export function mountCollectorHealth(root) {
 
   function reset() {
     identity = null;
+    details.open = false;
     statusText = '';
     status.textContent = '';
     notes.textContent = '';
     noteItems = [];
     for (const k of Object.keys(dds)) dds[k].textContent = '';
     dl.hidden = true;
+    details.hidden = true;
+    recovery.textContent = '';
   }
 
   function render(statusMsg, noteList, facts, tone) {
@@ -176,9 +187,11 @@ export function mountCollectorHealth(root) {
     setNotes(noteList);
     if (!facts) {
       dl.hidden = true;
+      details.hidden = true;
       return;
     }
     dl.hidden = false;
+    details.hidden = false;
     for (const [key] of ROWS) setText(dds[key], facts[key]);
     dds.state.setAttribute('data-tone', tone);
   }
@@ -209,6 +222,7 @@ export function mountCollectorHealth(root) {
 
     const h = env.health;
     const degraded = paused || unavailable || env.readStatus === 'unavailable';
+    setText(recovery, 'Review the original selected-source refusal before resuming. Restore supported input or deliberately select another source, preview against retained history, then restart the finite collector explicitly. Do not remove history declarations to make an input pass.');
     const notesList = [];
     if (paused) notesList.push('Updates are paused. Dated facts are from the last supplied read; current collection state is unknown.');
     if (unavailable || env.readStatus === 'unavailable') {

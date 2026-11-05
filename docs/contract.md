@@ -269,6 +269,8 @@ The `monitoring.collector-health-read.v1` envelope contains owner identity, read
 
 The standalone panel ages checkpoint time independently of HTTP read time and retains unknown state while paused or disconnected. It is independent of event filters. Deep has not admitted or rendered this separate route by this change. Its owner must review the additive read contract before using it. Existing selected sources and managed owners are unchanged.
 
+The panel keeps owner identity, accepted counts and original reconciliation/event times under the keyboard-accessible **Collector evidence** disclosure. Its primary text explains output readability and safe recovery. The selected checkpoint file is operator-supplied evidence, not an authenticated binding to a selected normalized file. A following output-file reader cannot override an unavailable, stopped or expired collector observation.
+
 ## Optional API request observations
 
 `serve --openai-observations FILE` selects one metadata-only request observation history at startup. `GET /api/v1/openai-requests?expected_identity=OWNER` reads that file through the existing loopback Host/Origin boundary. An unconfigured owner returns 404. Missing, changed or extra identity parameters return 409. Repeated query parameters return 400. No HTTP mutation, source discovery, provider retrieval or existing snapshot/capability change is added.

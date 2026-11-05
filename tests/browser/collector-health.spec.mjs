@@ -22,6 +22,15 @@ test("collector stop retains source failure and remains readable on phone", asyn
   await expect(panel).toContainText("Unavailable");
   await expect(panel).toContainText("The latest incomplete checkpoint waits");
   await expect(panel).toContainText("Unknown");
+  const disclosure = panel.locator('summary', {hasText:'Collector evidence'});
+  await expect(panel.locator('details')).not.toHaveAttribute('open');
+  await expect(panel).toContainText('A readable output is not an upstream heartbeat');
+  await expect(panel).toContainText('Do not remove history declarations');
+  await disclosure.focus();
+  await page.keyboard.press('Enter');
+  await expect(panel.locator('details')).toHaveAttribute('open', '');
+  await expect(panel.locator('dl')).toBeVisible();
+  await expect(disclosure).toBeFocused();
   await panel.screenshot({path:"/tmp/monitoring-collector-desktop.png"});
   await page.setViewportSize({width:390,height:844});
   await page.emulateMedia({colorScheme:"light"});

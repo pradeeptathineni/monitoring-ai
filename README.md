@@ -66,6 +66,8 @@ An optional [selected CodeBurn session-cache view](docs/codeburn-session-cache.m
 
 ## Connect your data
 
+Follow the [bounded observation journey](docs/bounded-observation.md) to inspect one selected source, explain freshness and collector failures, then reopen retained history without changing a managed owner.
+
 On macOS, add `--processes` to `serve` to observe matching local AI executable names without reading command arguments or environment. The default sample interval is five seconds; `--process-interval 2` through `60` adjusts it. Overview and Sessions keep those OS samples separate from recorded usage and entities. See [coverage and limits](docs/os-processes.md).
 
 For an existing CodeBurn v74 daily cache, use the [explicit cached-usage view](docs/codeburn-cache.md). Its replaceable daily totals and source-reported USD amounts stay separate from event accounting. The cache cannot establish live workers or billing evidence.
@@ -262,11 +264,11 @@ The main navigation can collapse to an icon rail while keeping named destination
 
 ## Limits
 
-Cloud producers can write normalized metadata through an authorized export or collector. Cloud account adapters, remote authentication, OpenTelemetry receivers, hardware/process sampling, budget alerts and execution controls remain planned. Quota collection currently supports the installed Codex account interface and explicit normalized files. Subscription quotas and API-equivalent costs are different measures. This alpha does not derive one from the other.
+Cloud producers can write normalized metadata through an authorized export or collector. Cloud account adapters, remote authentication, OpenTelemetry receivers, broader hardware sampling, external budget alerts and execution controls remain planned. Local macOS process samples are opt-in and separate from session lifecycle. Quota collection currently supports the installed Codex account interface and explicit normalized files. Subscription quotas and API-equivalent costs are different measures. This alpha does not derive one from the other.
 
 The server binds to loopback and rejects cross-origin browser reads. It has no write API. The local ledger is private operational data, not encrypted storage. Use a private working directory with appropriate filesystem permissions. Never commit your ledger, source files or real session exports. The repository contains only fictional examples and screenshots.
 
-Each source is limited to 32 MiB and 50,000 records per import. Snapshot reads are limited to 100,000 stored events and 500 displayed entities. File following rereads the bounded file and deduplicates it. This is suitable for a small local observatory, not a high-throughput ingestion service. The limits fail visibly instead of silently omitting usage. Ordinary Events mode shows the snapshot's latest 100 records. Selecting an entity opens chronological history in pages of 100, scoped to its source and session and pinned to one ledger revision. Current usage/date filters still apply. A changed ledger requires an explicit restart, and loaded history is not live-worker evidence.
+Each source is limited to 32 MiB and 50,000 records per import. Snapshot reads are limited to 100,000 stored events and 500 displayed entities. Normalized following rereads the bounded file and deduplicates it. Native Claude and Codex followers use complete-line in-memory cursors after their first scan and rescan on restart. This is suitable for a small local observatory, not a high-throughput ingestion service. The limits fail visibly instead of silently omitting usage. Ordinary Events mode shows the snapshot's latest 100 records. Selecting an entity opens chronological history in pages of 100, scoped to its source and session and pinned to one ledger revision. Current usage/date filters still apply. A changed ledger requires an explicit restart, and loaded history is not live-worker evidence.
 
 ## Development
 

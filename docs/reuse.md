@@ -178,3 +178,7 @@ Inspected the official Python Claude Agent SDK's [_build_fork_lines](https://git
 ## API request status observations
 
 Official openai-python `0f8e5f382861120809b1d149a18c744f725746a0` response-status definitions and actual Apache-2.0 license were inspected. The owned projection recognizes supported wire values without importing or copying SDK implementation. It reuses existing identity hashing, label/time validation and private metadata append behavior. Claude Sonnet supplied pure projection/latest-selection source and synthetic tests from a new restricted contract. Lead corrected project interfaces, hash/time/count bounds, linear identity binding and explicit private capture/replay workflow. Request status stays separate from usage and conversation lifecycle. No actual provider call or billing evidence is claimed.
+
+## Bounded observation qualification
+
+The existing Monitoring candidate `b4d4d3c` already owns collector checkpoint inspection, receipt consistency, native history refusals and the standalone panel. Qualification reuses those implementations and existing native followers rather than introducing another receipt schema or store. The small panel extension uses native `details`/`summary`, existing theme tokens and plain text for recovery. No external source, assets, dependency or license obligation is added. Revisit the separate operator-selected checkpoint contract only when a receiving owner needs an authenticated output binding.
