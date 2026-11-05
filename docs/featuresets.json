@@ -288,6 +288,65 @@
         "tests/test_app_turns.py",
         "tests/browser/app-turns.spec.mjs",
         "integrations/codex-app/selected-turns.js"
+      ],
+      "research_updates": [
+        {
+          "reconciliation_id": "interface-research-20261105",
+          "status": "proposed_research_only",
+          "items": [
+            {
+              "research_item": "agent-evidence-presentation",
+              "research_ids": [
+                "IFX-03",
+                "IFX-03-R1",
+                "IFX-15",
+                "IFX-16"
+              ],
+              "status": "conditional_reuse_of_usage_analytics_patterns; no duplicate feature set",
+              "priority": "P2 after demonstrated observatory task",
+              "benefit": "Apply the same readable evidence/selection conventions where an agent-history task needs them.",
+              "reuse_from_feature_set": "usage-analytics",
+              "reuse_research_items": [
+                "usage-investigation-ui",
+                "quiet-status-announcements",
+                "bounded-output-find"
+              ],
+              "preserve": [
+                "Existing process-table filter/order, process samples, session comparison, exact entity history, retained-refresh warnings and source coverage",
+                "Observed process, session, app task and worker identity remain distinct; no liveness inference from UI selection"
+              ],
+              "controls_and_boundaries": [
+                "No second table/selection engine",
+                "No multi-row selection unless a useful native-supported task requires it",
+                "Optional narration, viewport following and browser refresh pause remain separate",
+                "No copied native records or cross-owner lifecycle state"
+              ],
+              "acceptance_case_ids": [
+                "table-column-identity",
+                "table-keyboard-order",
+                "table-sort-scope",
+                "table-export-scope",
+                "table-narrow-layout",
+                "table-schema-change",
+                "announce-dedup",
+                "announce-polite",
+                "announce-history",
+                "announce-no-focus-theft",
+                "announce-paused-semantics",
+                "announce-owner-switch",
+                "announce-at-qualification",
+                "select-native-identity",
+                "select-page-scope",
+                "select-stale-binding",
+                "select-hidden-count",
+                "select-hierarchy",
+                "select-export-contract",
+                "select-no-actions",
+                "select-keyboard"
+              ]
+            }
+          ]
+        }
       ]
     },
     {
@@ -355,6 +414,197 @@
         "monitoring_ai/ledger_read.py",
         "tests/test_usage_records.py",
         "tests/browser/usage-records.spec.mjs"
+      ],
+      "research_updates": [
+        {
+          "reconciliation_id": "interface-research-20261105",
+          "status": "proposed_research_only",
+          "items": [
+            {
+              "research_item": "usage-investigation-ui",
+              "research_ids": [
+                "IFX-01",
+                "IFX-02",
+                "IFX-03",
+                "IFX-03-R1"
+              ],
+              "status": "proposed_not_implemented",
+              "priority": "P1; selection remains P2 and conditional",
+              "benefit": "Reopen a precise usage investigation, move from a supported chart segment to exact evidence, and arrange readable evidence columns.",
+              "sequence": [
+                "Save local named filters with fixed versus relative period semantics",
+                "Select a supported chart segment and inspect its exact native scope",
+                "Choose/order/size existing columns with a native keyboard route",
+                "Add explicit visible-row selection only if a demonstrated task needs it"
+              ],
+              "preserve": [
+                "Existing period reports, record paging, session comparison and JSON/CSV report downloads",
+                "Owner/revision/filter binding, unknown cost/FX states and exact source identity",
+                "Current vanilla frontend; no React or dashboard-framework migration"
+              ],
+              "controls_and_boundaries": [
+                "Saved view stores allowlisted presentation/filter fields, not source configuration, private records or executable commands",
+                "A view re-reads the owner; it is not a frozen report snapshot",
+                "Missing filter/owner never silently broadens the scope",
+                "Chart interactions require supported native filters; no inferred process/session joins",
+                "Sorting and selection declare visible-page versus loaded versus complete-query scope",
+                "Stable native row/column IDs, not positions or titles",
+                "No automatic descendant/cross-page selection or all-page fetching",
+                "Existing full-report export remains distinct from any future selected-row export; selection grants no mutation/sharing permission"
+              ],
+              "source_repositories": [
+                "jupyterlab/jupyterlab",
+                "TanStack/table",
+                "apache/echarts",
+                "grafana/grafana",
+                "metabase/metabase"
+              ],
+              "acceptance_case_ids": [
+                "fixed-relative-period",
+                "view-owner-change",
+                "view-schema-version",
+                "view-storage-failure",
+                "view-scope-isolation",
+                "view-reset-no-data-change",
+                "drill-scope-exact",
+                "drill-unsupported-filter",
+                "drill-revision-change",
+                "drill-keyboard-parity",
+                "drill-return-context",
+                "drill-cost-qualifiers",
+                "table-column-identity",
+                "table-keyboard-order",
+                "table-sort-scope",
+                "table-export-scope",
+                "table-narrow-layout",
+                "table-schema-change",
+                "select-native-identity",
+                "select-page-scope",
+                "select-stale-binding",
+                "select-hidden-count",
+                "select-hierarchy",
+                "select-export-contract",
+                "select-no-actions",
+                "select-keyboard"
+              ]
+            },
+            {
+              "research_item": "display-time-zone",
+              "research_ids": [
+                "IFX-07"
+              ],
+              "status": "proposed_not_implemented",
+              "priority": "P2",
+              "benefit": "Read observation timestamps in a chosen IANA zone without changing accounting meaning.",
+              "controls_and_boundaries": [
+                "Display-only zone preference; retain canonical UTC intervals and export timestamps",
+                "Do not reinterpret UTC day buckets, quotas, source times or thresholds as local-calendar calculations",
+                "DST folds/gaps and invalid zones stay explicit"
+              ],
+              "acceptance_case_ids": [
+                "time-dst-fold-gap",
+                "time-bucket-stability",
+                "time-source-vs-read",
+                "time-invalid-zone",
+                "time-export-canonical"
+              ]
+            },
+            {
+              "research_item": "appearance-and-clarity-qualification",
+              "research_ids": [
+                "IFX-08",
+                "IFX-09",
+                "IFX-10"
+              ],
+              "status": "qualification_of_existing_ui; no new theme engine",
+              "priority": "P1 qualification",
+              "benefit": "Make the same investigation readable across existing palettes, density, reduced-motion/material fallbacks and input methods.",
+              "controls_and_boundaries": [
+                "Existing six-theme/shared resolver work is retained; no duplicate theme-listener fix",
+                "Keep outcome, limitation and next action readable; essential qualifiers remain visible",
+                "Use existing local synthetic fixtures first; Storybook is optional, not a new required dependency",
+                "No external screenshot service, analytics or automatic upload",
+                "Full-page keyboard/AT/landmark checks remain distinct from isolated component checks"
+              ],
+              "source_repositories": [
+                "storybookjs/storybook",
+                "adobe/react-spectrum"
+              ],
+              "acceptance_case_ids": [
+                "material-opaque-fallback",
+                "theme-all-six-states",
+                "theme-no-cross-app-sync",
+                "gallery-same-state-baseline",
+                "gallery-full-page-landmarks",
+                "gallery-manual-at",
+                "gallery-no-external-network",
+                "gallery-stale-vs-current"
+              ],
+              "acceptance_scope_note": "These shared presentation cases must be run against Monitoring-specific fixtures; prior Deep source or tests do not pass them."
+            },
+            {
+              "research_item": "quiet-status-announcements",
+              "research_ids": [
+                "IFX-15"
+              ],
+              "status": "proposed_refinement; current live regions already exist",
+              "priority": "P1 after actual AT assessment",
+              "benefit": "Hear important milestones without every refresh/token or old history being announced as new.",
+              "controls_and_boundaries": [
+                "Nonurgent updates explicitly polite; deduplicate by owner/request/event",
+                "Optional narration setting never pauses owner work or browser refresh",
+                "Visible errors and retained-history qualifications remain available",
+                "No focus theft, remote notifications, sound permission or hidden payload exposure"
+              ],
+              "source_repositories": [
+                "adobe/react-spectrum"
+              ],
+              "acceptance_case_ids": [
+                "announce-dedup",
+                "announce-polite",
+                "announce-history",
+                "announce-no-focus-theft",
+                "announce-paused-semantics",
+                "announce-owner-switch",
+                "announce-at-qualification"
+              ]
+            },
+            {
+              "research_item": "bounded-output-find",
+              "research_ids": [
+                "IFX-16"
+              ],
+              "status": "conditional_consumer_extension; first trial belongs to Deep Mission reader",
+              "priority": "P2 for Monitoring after core investigation workflow",
+              "benefit": "Find a passage in one already loaded evidence body without exporting or fetching unrelated history.",
+              "controls_and_boundaries": [
+                "Compare ordinary browser Find first; add control only for a demonstrated task benefit",
+                "Literal search over labeled loaded/revealable text only, not the full ledger",
+                "Exact owner/record/revision identity preserved; matches are not evidence support or source locators",
+                "Accessibility narration and visible searchable text are different projections; avoid ghost hits",
+                "No regex, private global index, execution, mutation, source discovery or implicit paging",
+                "No wholesale editor framework; preserve original byte/digest and owner disclosure boundaries"
+              ],
+              "source_repositories": [
+                "microsoft/vscode"
+              ],
+              "acceptance_case_ids": [
+                "reader-scope",
+                "reader-identity",
+                "reader-visible-projection",
+                "reader-whitespace",
+                "reader-unicode",
+                "reader-stream-anchor",
+                "reader-truncation",
+                "reader-no-regex",
+                "reader-focus",
+                "reader-read-only",
+                "reader-qualification"
+              ],
+              "acceptance_scope_note": "Reader cases are conditional, not a claim Monitoring currently has the proposed reader; adapt setup to one admitted native evidence body."
+            }
+          ]
+        }
       ]
     },
     {
@@ -487,6 +737,198 @@
       "scope": "app/dashboard",
       "reason": "app/LICENSE is Elastic License 2.0 despite root README MIT wording. Not permissive dashboard reuse.",
       "url": "https://github.com/AgentOps-AI/agentops/blob/main/app/LICENSE"
+    }
+  ],
+  "research_reconciliations": [
+    {
+      "id": "interface-research-20261105",
+      "observed_at": "2026-11-05",
+      "status": "proposed_research_only",
+      "canonical_feature_sets_added": 0,
+      "scope": "UI usability/configuration refinements nested under the existing six feature sets. Existing decisions/evidence are unchanged. Native and Planning catalogs preserve their distinct original histories.",
+      "source_level": "Published source inspection and maintained OSS research; no implementation, installation, application tests or UAT performed by this research.",
+      "registry": {
+        "repository": "pradeeptathineni/planning-ai",
+        "item": "research/prior-art/items/ai-systems-feature-reconciliation-20261105.md",
+        "record": "research/prior-art/records/ai-systems-feature-reconciliation-20261105.json",
+        "sources": "research/prior-art/records/ai-systems-feature-reconciliation-20261105-sources.json",
+        "acceptance": "research/prior-art/records/ai-systems-feature-reconciliation-20261105-acceptance.json",
+        "publication_note": "Research reconciliation is published in Planning at this exact revision; proposed application behavior remains unimplemented and untested.",
+        "revision": "a06bf50bf838ecc95bb10702c2ee5d0543092761",
+        "url": "https://github.com/pradeeptathineni/planning-ai/blob/a06bf50bf838ecc95bb10702c2ee5d0543092761/research/prior-art/items/ai-systems-feature-reconciliation-20261105.md"
+      },
+      "source_pins": {
+        "monitoring-ai": "93ac8f622b5f35194616d0a697851a49d85b764d",
+        "deep-ai": "563278829daad1e9961651e1f117e47ec4711297"
+      },
+      "sources": [
+        {
+          "repo": "TanStack/table",
+          "revision": "c14e0221b1e656c7bb35e7b3d4cdf188719a3599",
+          "stars": 28546,
+          "pushed_at": "2026-11-02T21:34:42Z",
+          "archived": false,
+          "observed_at": "2026-11-04/05 UTC source-inspection snapshot",
+          "license": "MIT",
+          "license_url": "https://github.com/TanStack/table/blob/c14e0221b1e656c7bb35e7b3d4cdf188719a3599/LICENSE",
+          "reuse_decision": "Eligible narrow source/test reuse with notices; no frontend migration.",
+          "verification": "Exact selected license/source files inspected; no application code or assets integrated; no donor runtime qualification."
+        },
+        {
+          "repo": "adobe/react-spectrum",
+          "revision": "1842a2a9f96e63dd880bca322779e2a8302b70c0",
+          "stars": 16012,
+          "pushed_at": "2026-11-04T23:43:17Z",
+          "archived": false,
+          "observed_at": "2026-11-04/05 UTC source-inspection snapshot",
+          "license": "Apache-2.0",
+          "license_url": "https://github.com/adobe/react-spectrum/blob/1842a2a9f96e63dd880bca322779e2a8302b70c0/LICENSE",
+          "reuse_decision": "Accessible interaction pattern; explicit polite announcements and application-owned deduplication.",
+          "verification": "Exact selected license/source files inspected; no application code or assets integrated; no donor runtime qualification."
+        },
+        {
+          "repo": "apache/echarts",
+          "revision": "34f4d927eafe251f26f63afd3aeefa30f2feba30",
+          "stars": 67680,
+          "pushed_at": "2026-10-13T09:27:20Z",
+          "archived": false,
+          "observed_at": "2026-11-04/05 UTC source-inspection snapshot",
+          "license": "Apache-2.0",
+          "license_url": "https://github.com/apache/echarts/blob/34f4d927eafe251f26f63afd3aeefa30f2feba30/LICENSE",
+          "reuse_decision": "Optional chart mechanism only; generated ARIA is not full interactive accessibility.",
+          "verification": "Exact selected license/source files inspected; no application code or assets integrated; no donor runtime qualification."
+        },
+        {
+          "repo": "grafana/grafana",
+          "revision": "1678a37997a443938acc19bf63ee5fb9d346a375",
+          "stars": 77695,
+          "pushed_at": "2026-11-04T23:32:03Z",
+          "archived": false,
+          "observed_at": "2026-11-04/05 UTC source-inspection snapshot",
+          "license": "AGPL-3.0",
+          "license_url": "https://github.com/grafana/grafana/blob/1678a37997a443938acc19bf63ee5fb9d346a375/LICENSE",
+          "reuse_decision": "Interaction inspiration only; no application code imported.",
+          "verification": "Exact selected license/source files inspected; no application code or assets integrated; no donor runtime qualification."
+        },
+        {
+          "repo": "jupyterlab/jupyterlab",
+          "revision": "a40eab09314c978a50e354e04a0f2630de90fa72",
+          "stars": 15390,
+          "pushed_at": "2026-11-04T20:47:12Z",
+          "archived": false,
+          "observed_at": "2026-11-04/05 UTC source-inspection snapshot",
+          "license": "BSD-3-Clause",
+          "license_url": "https://github.com/jupyterlab/jupyterlab/blob/a40eab09314c978a50e354e04a0f2630de90fa72/LICENSE",
+          "reuse_decision": "Workspace state pattern only; exclude command-driven restoration.",
+          "verification": "Exact selected license/source files inspected; no application code or assets integrated; no donor runtime qualification."
+        },
+        {
+          "repo": "metabase/metabase",
+          "revision": "767e0982b29de2a7a9b43612690e6378d1ce33f3",
+          "stars": 50164,
+          "pushed_at": "2026-11-04T23:49:17Z",
+          "archived": false,
+          "observed_at": "2026-11-04/05 UTC source-inspection snapshot",
+          "license": "AGPL outside enterprise; enterprise commercial terms",
+          "license_url": "https://github.com/metabase/metabase/blob/767e0982b29de2a7a9b43612690e6378d1ce33f3/LICENSE.txt",
+          "reuse_decision": "Interaction inspiration only; no code or paid embedding feature assumed.",
+          "verification": "Exact selected license/source files inspected; no application code or assets integrated; no donor runtime qualification."
+        },
+        {
+          "repo": "microsoft/vscode",
+          "revision": "29cbaa8b1b3253948f001fd7234243111fb5a687",
+          "stars": 194634,
+          "pushed_at": "2026-11-05T00:09:15Z",
+          "archived": false,
+          "observed_at": "2026-11-04/05 UTC source-inspection snapshot",
+          "license": "MIT source",
+          "license_url": "https://github.com/microsoft/vscode/blob/29cbaa8b1b3253948f001fd7234243111fb5a687/LICENSE.txt",
+          "reuse_decision": "Bounded reader/Find patterns; branded distribution and hosted Copilot excluded.",
+          "verification": "Exact selected license/source files inspected; no application code or assets integrated; no donor runtime qualification."
+        },
+        {
+          "repo": "storybookjs/storybook",
+          "revision": "f6d12ac3ddd01e7880ebd7e36d3751b32907778d",
+          "stars": 91458,
+          "pushed_at": "2026-11-04T23:43:02Z",
+          "archived": false,
+          "observed_at": "2026-11-04/05 UTC source-inspection snapshot",
+          "license": "MIT core",
+          "license_url": "https://github.com/storybookjs/storybook/blob/f6d12ac3ddd01e7880ebd7e36d3751b32907778d/LICENSE",
+          "reuse_decision": "Local QA pattern; no hosted upload. Extra dependencies require separate review.",
+          "verification": "Exact selected license/source files inspected; no application code or assets integrated; no donor runtime qualification."
+        }
+      ],
+      "validation": {
+        "status": "proposed_not_run",
+        "case_count": 57,
+        "case_ids": [
+          "announce-at-qualification",
+          "announce-dedup",
+          "announce-history",
+          "announce-no-focus-theft",
+          "announce-owner-switch",
+          "announce-paused-semantics",
+          "announce-polite",
+          "drill-cost-qualifiers",
+          "drill-keyboard-parity",
+          "drill-return-context",
+          "drill-revision-change",
+          "drill-scope-exact",
+          "drill-unsupported-filter",
+          "fixed-relative-period",
+          "gallery-full-page-landmarks",
+          "gallery-manual-at",
+          "gallery-no-external-network",
+          "gallery-same-state-baseline",
+          "gallery-stale-vs-current",
+          "material-opaque-fallback",
+          "reader-focus",
+          "reader-identity",
+          "reader-no-regex",
+          "reader-qualification",
+          "reader-read-only",
+          "reader-scope",
+          "reader-stream-anchor",
+          "reader-truncation",
+          "reader-unicode",
+          "reader-visible-projection",
+          "reader-whitespace",
+          "select-export-contract",
+          "select-hidden-count",
+          "select-hierarchy",
+          "select-keyboard",
+          "select-native-identity",
+          "select-no-actions",
+          "select-page-scope",
+          "select-stale-binding",
+          "table-column-identity",
+          "table-export-scope",
+          "table-keyboard-order",
+          "table-narrow-layout",
+          "table-schema-change",
+          "table-sort-scope",
+          "theme-all-six-states",
+          "theme-no-cross-app-sync",
+          "time-bucket-stability",
+          "time-dst-fold-gap",
+          "time-export-canonical",
+          "time-invalid-zone",
+          "time-source-vs-read",
+          "view-owner-change",
+          "view-reset-no-data-change",
+          "view-schema-version",
+          "view-scope-isolation",
+          "view-storage-failure"
+        ],
+        "record": "research/prior-art/records/ai-systems-feature-reconciliation-20261105-acceptance.json",
+        "note": "Catalog JSON/consumer validation does not pass any application acceptance case."
+      },
+      "not_added": [
+        "No new feature-set IDs, adopted capability claims, settings authority, remote notifications or source access",
+        "No duplicate existing refresh pause, theme resolver, report export, table filtering, session comparison or history paging",
+        "No Deep layout presets added; current Mission full-width behavior and inspector toggle already exist"
+      ]
     }
   ]
 }
